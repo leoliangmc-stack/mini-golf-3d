@@ -6,6 +6,8 @@ A browser mini golf game: 6 worlds, 18 holes, each world built around one mechan
 TypeScript, Three.js and Rapier; a static site with no backend. Requirements live in
 [SPEC.md](SPEC.md), which is the source of truth for scope and milestones.
 
+**Play it: https://mini-golf-3d-self.vercel.app**
+
 ## Run
 
 ```bash
@@ -27,7 +29,7 @@ and pinch the camera; on a desktop, right-drag and the wheel do the same.
 | M2 Desert Ruins + Sky Island, stars, challenges, stroke limit | done |
 | M3 Pirate Island: moving parts, cannon | done |
 | M4 Magnetic Fields + Gravity Shift | done |
-| M5 menus, saves, languages, audio, quality tiers, analytics hook | done, **not deployed** |
+| M5 menus, saves, languages, audio, quality tiers, analytics hook, deployment | done |
 | M6 friends playtest | not started |
 
 Not yet verified on real devices: frame rate, touch feel, first-load time on 4G, and
@@ -35,14 +37,17 @@ audio on iOS. Everything so far was checked in a desktop browser and in headless
 
 ### Open decisions
 
-- **Deployment.** The build is a plain static site (`npm run build`, output `dist/`);
-  Vercel and Netlify both detect Vite with no configuration. Nothing has been pushed
-  or deployed.
 - **Analytics provider.** `src/app/analytics.ts` forwards events to Plausible or Umami
   if their script is on the page. Pick one and add its script tag to `index.html`.
 - **Tuning by feel.** Shot power, camera, surface values and every par were set by
   calculation and by a search script, not by playing on a phone. The dev panel exists
   to tune them.
+
+### Deployment
+
+The site is a plain static build (`npm run build`, output `dist/`) hosted on Vercel as
+the project `mini-golf-3d`. The project is connected to this repository: every push to
+`main` builds and goes live by itself, and other branches get preview URLs.
 
 ### Where this differs from SPEC v1.0
 
