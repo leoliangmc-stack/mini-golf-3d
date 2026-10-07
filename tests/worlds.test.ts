@@ -1,30 +1,63 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { WORLDS } from '../src/data/worlds';
+import { CHAPTERS } from '../src/data/chapters';
 import { TEST_WORLD } from '../src/data/worlds/test';
 import { verifyDeterminism } from '../src/game/replay';
+import { cupTrack } from '../src/game/cup';
 import { Session } from '../src/game/session';
+import { stagesOf } from '../src/level/chapters';
+import { headingVector, tunnelEnds, tunnelRadius } from '../src/physics/zones/tunnel';
 import { getTheme } from '../src/render/theme';
 import { runUntilSettled, setupEngine, stepTicks } from './helpers';
 
 beforeAll(setupEngine);
 
-const holes = [...WORLDS, TEST_WORLD].flatMap((world) => world.holes.map((hole) => ({ world, hole })));
+const stages = CHAPTERS.flatMap(stagesOf);
+const holes = [...stages, TEST_WORLD].flatMap((world) => world.holes.map((hole) => ({ world, hole })));
 
 describe('world data', () => {
-  it('has three holes per world, unique ids and a registered theme', () => {
+  it('has three holes per world, one per finale, unique ids and registered themes', () => {
     const ids = holes.map((h) => h.hole.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const world of WORLDS) {
-      expect(world.holes).toHaveLength(3);
-      expect(() => getTheme(world.theme)).not.toThrow();
+    for (const chapter of CHAPTERS) {
+      for (const world of chapter.worlds) expect(world.holes).toHaveLength(3);
+      expect(chapter.finale.holes).toHaveLength(1);
+      for (const stage of stagesOf(chapter)) expect(() => getTheme(stage.theme)).not.toThrow();
     }
+  });
+
+  it('is the game SPEC v2 2.1 describes: 18 + 1 holes, then 12 + 1', () => {
+    expect(CHAPTERS.map((chapter) => chapter.worlds.map((world) => world.id))).toEqual([
+      ['ice', 'desert', 'sky', 'pirate', 'magnet', 'gravity'],
+      ['forest', 'city', 'moving', 'bomb'],
+    ]);
+    expect(CHAPTERS.map((chapter) => stagesOf(chapter).flatMap((stage) => stage.holes).length)).toEqual([19, 13]);
   });
 
   it.each(holes)('$hole.id is well formed', ({ hole }) => {
     const session = new Session(hole);
     const { ground } = session.compiled;
-    expect(ground!.surfaceAt({ x: hole.cup.position[0], y: hole.cup.position[1], z: hole.cup.position[2] })).not.toBeNull();
+    // The cup is on the ground, and stays on it wherever its track takes it.
+    for (const point of cupTrack(hole.cup)) {
+      expect(point.y).toBe(hole.cup.position[1]);
+      expect(ground!.surfaceAt(point)).not.toBeNull();
+    }
     expect(hole.zones.some((zone) => zone.type === 'outOfBounds')).toBe(true);
+
+    // A tunnel mouth must not point straight at its partner (SPEC v2 2.3): a ball coming
+    // out of one would roll right back into the other.
+    for (const zone of hole.zones.filter((z) => z.type === 'tunnelPair')) {
+      const ends = tunnelEnds(zone);
+      for (const [from, to] of [ends, [ends[1], ends[0]]]) {
+        const out = headingVector(from.facing);
+        const into = headingVector(to.facing);
+        const dx = to.at[0] - from.at[0];
+        const dz = to.at[2] - from.at[2];
+        const along = dx * out.x + dz * out.z;
+        const aside = Math.abs(dx * out.z - dz * out.x);
+        const aimedAt = along > 0 && aside < tunnelRadius(zone) + 0.5 && out.x * into.x + out.z * into.z < 0;
+        expect(aimedAt).toBe(false);
+      }
+    }
 
     // The ball rests on the tee: it is on ground and does not drift or fall.
     const start = { ...session.ball.position() };
@@ -39,7 +72,7 @@ describe('world data', () => {
 
 describe('replay', () => {
   it('reproduces a recorded round exactly, through the same API the dev panel uses', () => {
-    const hole = WORLDS[0].holes[1];
+    const hole = CHAPTERS[0].worlds[0].holes[1];
     const session = new Session(hole);
     stepTicks(session, 20);
     session.shoot({ x: 0.05, y: 0, z: -1 }, 0.62);

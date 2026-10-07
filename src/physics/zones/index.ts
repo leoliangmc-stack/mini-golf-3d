@@ -25,6 +25,10 @@ export interface ZoneContext {
   emit(event: ZoneEvent): void;
   /** Call every step while the zone is holding the ball, so it is not judged as stopped. */
   busy(): void;
+  /** Call on a step where the zone put the ball somewhere else by hand, so the jump is not drawn as motion. */
+  snap(): void;
+  /** Adds seconds to the hole's countdown. Does nothing on a hole without one. */
+  addTime(seconds: number): void;
 }
 
 /** Reads a number from a zone's params. */
@@ -44,6 +48,8 @@ export function vectorParam(def: ZoneDef, name: string): Vec3 {
 
 export interface Zone {
   preStep(ctx: ZoneContext): void;
+  /** True once a single-use zone has been used up, for its view to show. */
+  readonly spent?: boolean;
 }
 
 export type ZoneFactory = (def: ZoneDef) => Zone;

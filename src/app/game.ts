@@ -1,26 +1,40 @@
 import * as THREE from 'three';
 import type { XYZ } from '../core/types';
+import { cupAnchor, cupLidOpenness } from '../game/cup';
 import { RULES } from '../game/rules';
 import { Session, type SessionEvent, type ShotRecord } from '../game/session';
 import { attachCameraGestures } from '../input/cameraGestures';
 import { attachSlingshot, type Pull } from '../input/slingshot';
-import type { HoleDef, WorldDef } from '../level/schema';
+import { chapterOf, holeNumber } from '../level/chapters';
+import type { ChapterDef, HoleDef, WorldDef } from '../level/schema';
 import { DEFAULT_BALL } from '../physics/ball';
 import { AimIndicator } from '../render/aimIndicator';
 import { BallView } from '../render/ballView';
 import { FollowCamera } from '../render/camera';
-import { buildHoleView, disposeHoleView } from '../render/holeView';
+import { Explosion } from '../render/explosion';
+import { buildHoleView, disposeHoleView, type HoleView } from '../render/holeView';
 import { buildMoverView, updateMoverView } from '../render/moverView';
+import { OcclusionFader } from '../render/occlusion';
 import type { Stage } from '../render/scene';
 import { getTheme } from '../render/theme';
-import { buildZoneView } from '../render/zoneViews';
+import { buildZoneView, type ZoneView } from '../render/zoneViews';
 
 export type GameEvent =
   | SessionEvent
   /** A hole was loaded. `intro` is false when the same hole is merely rebuilt. */
   | { type: 'hole'; intro: boolean }
   /** The player is dragging to aim (power 0..1), or stopped (null). */
-  | { type: 'aim'; power: number | null };
+  | { type: 'aim'; power: number | null }
+  /** The countdown has kept running out on this hole: the player is offered a way on (SPEC v2 2.6). */
+  | { type: 'stuck' };
+
+/** Ticks between the countdown running out and the hole starting over: long enough to see the blast. */
+const RESTART_TICKS = 50;
+/** How many times in a row the countdown may run out before the player is offered a way on. */
+const EXPLOSIONS_BEFORE_OFFER = 3;
+
+/** What a zone cue does to the picture of the ball. */
+const BALL_CUES: Record<string, 'vanish' | 'appear'> = { tunnelEnter: 'vanish', tunnelExit: 'appear' };
 
 /**
  * Glue between the simulation and the screen: owns the current hole's session and
@@ -33,14 +47,25 @@ export class Game {
   session!: Session;
   /** Set by UI that is covering the course and must not let a stroke through. */
   inputBlocked = false;
-  /** Freezes the simulation, moving parts included. */
+  /** Freezes the simulation, moving parts and countdown included. */
   paused = false;
 
   private readonly ballView = new BallView(DEFAULT_BALL.radius);
   private readonly aim = new AimIndicator();
-  private holeView: THREE.Group | null = null;
+  private readonly explosion = new Explosion();
+  private readonly fader = new OcclusionFader();
+  private holeView: HoleView | null = null;
   private moverViews: THREE.Object3D[] = [];
+  /** One entry per zone of the hole, in order; null for zones that have nothing to show. */
+  private zoneViews: (ZoneView | null)[] = [];
   private pull: Pull | null = null;
+  /** Where the camera frames the cup: a point that stays put even when the cup does not. */
+  private anchor: XYZ = { x: 0, y: 0, z: 0 };
+  private readonly cupPoint = new THREE.Vector3();
+  /** Times in a row the countdown has run out on this hole. */
+  private explosions = 0;
+  /** Ticks until the hole starts over after the countdown ran out; 0 when it is not about to. */
+  private restartIn = 0;
   private readonly listeners = new Set<(event: GameEvent) => void>();
   private readonly frameListeners = new Set<() => void>();
   private readonly projected = new THREE.Vector3();
@@ -48,9 +73,11 @@ export class Game {
   constructor(
     readonly stage: Stage,
     canvas: HTMLCanvasElement,
+    readonly chapters: readonly ChapterDef[],
+    /** Everything that can be loaded, in play order: the chapters' worlds and finales, plus any extras. */
     readonly worlds: readonly WorldDef[],
   ) {
-    stage.scene.add(this.ballView.object, this.aim.object);
+    stage.scene.add(this.ballView.object, this.aim.object, this.explosion.object);
     stage.onResize((w, h) => this.camera.setViewport(w, h));
     attachCameraGestures(canvas, this.camera);
     attachSlingshot(canvas, {
@@ -73,6 +100,22 @@ export class Game {
     return this.holeIndex >= this.world.holes.length - 1;
   }
 
+  /** The chapter the current hole is part of, or null for the dev sandbox. */
+  get chapter(): ChapterDef | null {
+    return chapterOf(this.chapters, this.world);
+  }
+
+  /** True when the current hole is the one that closes its chapter. */
+  get isFinale(): boolean {
+    return this.chapter?.finale === this.world;
+  }
+
+  /** The number the current hole goes by: its place in the chapter for a finale, in its world otherwise. */
+  get holeNumber(): number {
+    const chapter = this.chapter;
+    return chapter && this.isFinale ? holeNumber(chapter, this.world, this.holeIndex) : this.holeIndex + 1;
+  }
+
   on(listener: (event: GameEvent) => void): void {
     this.listeners.add(listener);
   }
@@ -85,25 +128,27 @@ export class Game {
   loadHole(world: WorldDef, index: number, intro = true): void {
     this.session?.dispose();
     if (this.holeView) {
-      this.stage.scene.remove(this.holeView);
-      disposeHoleView(this.holeView);
+      this.stage.scene.remove(this.holeView.group);
+      disposeHoleView(this.holeView.group);
     }
     this.world = world;
     this.holeIndex = index;
     const hole = this.hole;
     this.session = new Session(hole);
     this.session.on((event) => this.onSessionEvent(event));
-    this.holeView = buildHoleView(this.session.compiled, hole.cup);
+    this.holeView = buildHoleView(this.session.compiled, hole);
+    const { group } = this.holeView;
     this.moverViews = (hole.movers ?? []).map(buildMoverView);
-    for (const view of this.moverViews) this.holeView.add(view);
-    for (const zone of hole.zones) {
-      const view = buildZoneView(zone);
-      if (view) this.holeView.add(view);
-    }
-    this.stage.scene.add(this.holeView);
+    for (const view of this.moverViews) group.add(view);
+    this.zoneViews = hole.zones.map(buildZoneView);
+    for (const view of this.zoneViews) if (view) group.add(view.object);
+    this.stage.scene.add(group);
+    this.fader.setOccluders(this.holeView.occluders);
     this.stage.applyTheme(getTheme(world.theme));
     this.stage.fitShadows(this.session.compiled.bounds);
     this.camera.configure(hole.camera);
+    this.anchor = cupAnchor(hole.cup);
+    this.explosions = 0;
     this.resetView();
     this.emit({ type: 'hole', intro });
   }
@@ -117,9 +162,9 @@ export class Game {
     this.session.reset();
   }
 
-  /** Goes to the next hole, or back to the first one after the last. */
-  nextHole(): void {
-    this.loadHole(this.world, this.isLastHole ? 0 : this.holeIndex + 1);
+  /** Ends the hole at the stroke limit: the way on from a hole whose countdown keeps running out. */
+  concede(): void {
+    this.session.concede();
   }
 
   replay(shots: readonly ShotRecord[]): void {
@@ -127,7 +172,16 @@ export class Game {
   }
 
   step(): void {
-    if (!this.paused) this.session.step();
+    if (this.paused) return;
+    this.session.step();
+    if (this.restartIn > 0 && --this.restartIn === 0) {
+      if (this.explosions >= EXPLOSIONS_BEFORE_OFFER) {
+        this.explosions = 0;
+        this.emit({ type: 'stuck' });
+      } else {
+        this.session.reset();
+      }
+    }
   }
 
   /**
@@ -152,10 +206,17 @@ export class Game {
 
   render(alpha: number, frameDt: number): void {
     const { session } = this;
-    // The session rebuilds its movers on every retry, so look them up afresh.
+    // The session rebuilds its movers and zones on every retry, so look them up afresh.
     this.moverViews.forEach((view, i) => updateMoverView(view, session.movers[i], alpha));
-    const ball = this.ballView.update(session.pose, alpha, frameDt, session.hole.cup);
-    this.camera.update(ball, this.cupPoint, frameDt);
+    this.zoneViews.forEach((view, i) => view?.update?.(session.zones[i]));
+    const { prevPosition: was, position: now } = session.cup;
+    this.cupPoint.set(was.x + (now.x - was.x) * alpha, was.y + (now.y - was.y) * alpha, was.z + (now.z - was.z) * alpha);
+    this.holeView?.cup.update(this.cupPoint, cupLidOpenness(session.hole.cup, session.world.tick));
+
+    const ball = this.ballView.update(session.pose, alpha, frameDt, this.cupPoint);
+    this.camera.update(ball, this.anchor, frameDt);
+    this.fader.update(this.camera.camera.position, ball, frameDt);
+    this.explosion.update(frameDt);
     const pull = this.pull;
     const radius = session.ball.props.radius;
     if (session.phase !== 'aiming' || session.replaying) this.aim.hide();
@@ -171,11 +232,6 @@ export class Game {
     return { x: ((p.x + 1) / 2) * window.innerWidth, y: ((1 - p.y) / 2) * window.innerHeight };
   }
 
-  private get cupPoint(): XYZ {
-    const [x, y, z] = this.hole.cup.position;
-    return { x, y, z };
-  }
-
   private canAim(): boolean {
     return !this.inputBlocked && !this.paused && !this.session.replaying && this.session.phase === 'aiming';
   }
@@ -185,13 +241,40 @@ export class Game {
   }
 
   private resetView(): void {
+    this.restartIn = 0;
+    this.explosion.stop();
     this.ballView.reset();
-    this.camera.snapTo(this.session.pose.position, this.cupPoint);
+    this.camera.snapTo(this.session.pose.position, this.anchor);
   }
 
   private onSessionEvent(event: SessionEvent): void {
-    if (event.type === 'holed') this.ballView.startSink();
-    if (event.type === 'reset') this.resetView();
+    switch (event.type) {
+      case 'holed':
+        this.ballView.startSink();
+        break;
+      case 'finished':
+        this.explosions = 0;
+        this.ballView.setAlert(false);
+        break;
+      case 'reset':
+        this.resetView();
+        break;
+      case 'cue': {
+        const effect = BALL_CUES[event.name];
+        if (effect) this.ballView[effect]();
+        else if (event.name === 'timerWarn') this.ballView.setAlert(true);
+        break;
+      }
+      case 'timeAdded':
+        this.ballView.setAlert(false);
+        break;
+      case 'exploded':
+        this.explosions++;
+        this.restartIn = RESTART_TICKS;
+        this.explosion.start(this.ballView.object.position);
+        this.ballView.hide();
+        break;
+    }
     this.emit(event);
   }
 

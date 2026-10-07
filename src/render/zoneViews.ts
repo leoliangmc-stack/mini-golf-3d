@@ -1,9 +1,17 @@
 import * as THREE from 'three';
-import type { ZoneDef } from '../physics/zones';
+import type { Zone, ZoneDef } from '../physics/zones';
 import { numberParam, vectorParam } from '../physics/zones';
+import { headingVector, tunnelColor, tunnelEnds, tunnelRadius } from '../physics/zones/tunnel';
 
-/** Builds what the player sees of a zone. Zones without a registered view are invisible. */
-export type ZoneViewBuilder = (def: ZoneDef) => THREE.Object3D;
+/** What the player sees of a zone. */
+export interface ZoneView {
+  object: THREE.Object3D;
+  /** Called every frame with the live zone, by views that show its state. */
+  update?(zone: Zone): void;
+}
+
+/** Builds the view of a zone. Zones without a registered view are invisible. */
+export type ZoneViewBuilder = (def: ZoneDef) => ZoneView;
 
 const registry = new Map<string, ZoneViewBuilder>();
 
@@ -11,14 +19,27 @@ export function registerZoneView(type: string, build: ZoneViewBuilder): void {
   registry.set(type, build);
 }
 
-export function buildZoneView(def: ZoneDef): THREE.Object3D | null {
+export function buildZoneView(def: ZoneDef): ZoneView | null {
   return registry.get(def.type)?.(def) ?? null;
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
 
+/** A flat chevron in the XY plane, pointing along +Y. Lay it down to point it along the ground. */
+function chevronGeometry(): THREE.ShapeGeometry {
+  const chevron = new THREE.Shape();
+  chevron.moveTo(-0.3, -0.25);
+  chevron.lineTo(0, 0.05);
+  chevron.lineTo(0.3, -0.25);
+  chevron.lineTo(0.3, -0.05);
+  chevron.lineTo(0, 0.25);
+  chevron.lineTo(-0.3, -0.05);
+  chevron.closePath();
+  return new THREE.ShapeGeometry(chevron);
+}
+
 /** A cannon: a barrel from the mouth on the ground up to the point the ball is fired from. */
-function launcherView(def: ZoneDef): THREE.Object3D {
+function launcherView(def: ZoneDef): ZoneView {
   const group = new THREE.Group();
   const mouth = new THREE.Vector3(...def.shape.center);
   const exit = new THREE.Vector3(...vectorParam(def, 'exit'));
@@ -46,14 +67,14 @@ function launcherView(def: ZoneDef): THREE.Object3D {
     mesh.castShadow = true;
     group.add(mesh);
   }
-  return group;
+  return { object: group };
 }
 
 const RED = 0xe5484d;
 const BLUE = 0x3b82f6;
 
 /** Rings on the ground out to the edge of the field: red pulls, blue pushes. */
-function magnetView(def: ZoneDef): THREE.Object3D {
+function magnetView(def: ZoneDef): ZoneView {
   const group = new THREE.Group();
   const reach = def.shape.kind === 'sphere' ? def.shape.radius : 1;
   const attracts = numberParam(def, 'strength') > 0;
@@ -70,13 +91,13 @@ function magnetView(def: ZoneDef): THREE.Object3D {
     group.add(ring);
   }
   group.position.set(def.shape.center[0], def.shape.center[1] + 0.02, def.shape.center[2]);
-  return group;
+  return { object: group };
 }
 
 /** A tinted volume with arrows on its floor showing which way things fall inside it. */
-function gravityView(def: ZoneDef): THREE.Object3D {
+function gravityView(def: ZoneDef): ZoneView {
   const group = new THREE.Group();
-  if (def.shape.kind !== 'box') return group;
+  if (def.shape.kind !== 'box') return { object: group };
   const [gx, gy, gz] = vectorParam(def, 'gravity');
   const sideways = Math.hypot(gx, gz);
   // Pink and cyan for the two sideways pulls, green for "lighter than normal".
@@ -100,16 +121,7 @@ function gravityView(def: ZoneDef): THREE.Object3D {
     side: THREE.DoubleSide,
     depthWrite: false,
   });
-  // A flat chevron in the XZ plane, pointing along +Z.
-  const chevron = new THREE.Shape();
-  chevron.moveTo(-0.3, -0.25);
-  chevron.lineTo(0, 0.05);
-  chevron.lineTo(0.3, -0.25);
-  chevron.lineTo(0.3, -0.05);
-  chevron.lineTo(0, 0.25);
-  chevron.lineTo(-0.3, -0.05);
-  chevron.closePath();
-  const arrowGeometry = new THREE.ShapeGeometry(chevron);
+  const arrowGeometry = chevronGeometry();
   // Arrows lie on the course floor (y = 0 in the world), wherever the box is centred.
   const floorY = 0.03 - def.shape.center[1];
   const heading = sideways < 0.5 ? null : Math.atan2(gx, gz);
@@ -129,11 +141,119 @@ function gravityView(def: ZoneDef): THREE.Object3D {
     }
   }
   group.position.set(...def.shape.center);
-  return group;
+  return { object: group };
+}
+
+/**
+ * Both mouths of a tunnel: a dark hollow with a frame in the pair's colour, so the
+ * player can tell which two belong together, and chevrons on the ground pointing the
+ * way a ball comes out.
+ */
+function tunnelView(def: ZoneDef): ZoneView {
+  const group = new THREE.Group();
+  const radius = tunnelRadius(def);
+  const color = tunnelColor(def);
+  const dark = new THREE.MeshBasicMaterial({ color: 0x120e0b });
+  const frameMaterial = new THREE.MeshLambertMaterial({ color });
+  const arrowMaterial = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.8,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const arrowGeometry = chevronGeometry();
+
+  for (const end of tunnelEnds(def)) {
+    const dir = headingVector(end.facing);
+    // Local +Z is the way the mouth faces.
+    const mouth = new THREE.Group();
+    mouth.position.set(end.at[0], end.at[1], end.at[2]);
+    mouth.rotation.y = Math.atan2(dir.x, dir.z);
+
+    // An arch reaching back into whatever the mouth is set in.
+    const hollow = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius * 0.8, radius * 0.8, 0.5, 20, 1, false, Math.PI / 2, Math.PI),
+      dark,
+    );
+    hollow.rotation.x = Math.PI / 2;
+    hollow.position.z = -0.21;
+    const frame = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.84, 0.07, 8, 20, Math.PI), frameMaterial);
+    frame.position.z = 0.05;
+    frame.castShadow = true;
+    mouth.add(hollow, frame);
+
+    for (const out of [0.6, 1.05]) {
+      const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+      arrow.rotation.x = Math.PI / 2;
+      arrow.position.set(0, 0.03, out);
+      arrow.scale.setScalar(0.85);
+      mouth.add(arrow);
+    }
+    group.add(mouth);
+  }
+  return { object: group };
+}
+
+const CLOCK_GREEN = 0x2fbf71;
+const CLOCK_SPENT = 0x9aa3ad;
+
+/** A clock face on the ground with a small one floating over it. Both go grey once it has been used. */
+function timeBonusView(def: ZoneDef): ZoneView {
+  const group = new THREE.Group();
+  const radius = def.shape.kind === 'sphere' ? def.shape.radius : Math.min(def.shape.halfExtents[0], def.shape.halfExtents[2]);
+  const accent = new THREE.MeshBasicMaterial({ color: CLOCK_GREEN });
+  const face = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92, depthWrite: false });
+  const ink = new THREE.MeshBasicMaterial({ color: 0x1d2b3a });
+  const flatOn = (mesh: THREE.Mesh, y: number): THREE.Mesh => {
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = y;
+    return mesh;
+  };
+
+  const dial = flatOn(new THREE.Mesh(new THREE.CircleGeometry(radius * 0.86, 32), face), 0.02);
+  const rim = flatOn(new THREE.Mesh(new THREE.RingGeometry(radius * 0.86, radius, 32), accent), 0.022);
+  const hands = new THREE.Group();
+  const minute = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.01, radius * 0.62), ink);
+  minute.position.set(0, 0.03, -radius * 0.31);
+  const hour = new THREE.Mesh(new THREE.BoxGeometry(radius * 0.42, 0.01, 0.06), ink);
+  hour.position.set(radius * 0.21, 0.03, 0);
+  hands.add(minute, hour);
+
+  // Something upright as well, so the clock reads from a low camera.
+  const floating = new THREE.Group();
+  const orb = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 10), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.04, 8, 20), accent);
+  floating.add(orb, band);
+  floating.position.y = 0.75;
+
+  group.add(dial, rim, hands, floating);
+  group.position.set(def.shape.center[0], def.shape.center[1], def.shape.center[2]);
+
+  let spent: boolean | null = null;
+  return {
+    object: group,
+    update(zone) {
+      const now = zone.spent ?? false;
+      if (now !== spent) {
+        spent = now;
+        accent.color.setHex(now ? CLOCK_SPENT : CLOCK_GREEN);
+        face.opacity = now ? 0.45 : 0.92;
+        floating.visible = !now;
+      }
+      if (!now) {
+        const t = performance.now() / 1000;
+        floating.position.y = 0.75 + 0.08 * Math.sin(t * 2.4);
+        floating.rotation.y = t * 1.6;
+      }
+    },
+  };
 }
 
 export function registerBuiltinZoneViews(): void {
   registerZoneView('launcher', launcherView);
   registerZoneView('magnet', magnetView);
   registerZoneView('gravity', gravityView);
+  registerZoneView('tunnelPair', tunnelView);
+  registerZoneView('timeBonus', timeBonusView);
 }

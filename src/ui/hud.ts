@@ -17,6 +17,8 @@ export interface HudActions {
   nextLabel(): string;
   /** Heading above the result, e.g. "World complete!". */
   resultHeading(): string;
+  /** The countdown kept running out and the player picked how to go on. */
+  onStuckChoice(choice: 'retry' | 'concede'): void;
 }
 
 /** Binds the in-game overlay to the game: HUD, rule card, tutorial hint and result panel. */
@@ -30,6 +32,8 @@ export function createHud(game: Game, actions: HudActions): void {
   const card = byId('card');
   const result = byId('result');
   const resultNext = byId<HTMLButtonElement>('result-next');
+  const timer = byId('timer');
+  const stuck = byId('stuck');
 
   let toastTimer = 0;
   let resultTimer = 0;
@@ -46,12 +50,32 @@ export function createHud(game: Game, actions: HudActions): void {
     toastTimer = window.setTimeout(() => toast.classList.remove('show'), 1600);
   };
 
+  const setStuck = (open: boolean) => {
+    stuck.hidden = !open;
+    game.inputBlocked = open || cardOpen;
+  };
+
   const hideTransient = () => {
     window.clearTimeout(toastTimer);
     window.clearTimeout(resultTimer);
     toast.classList.remove('show');
     result.hidden = true;
     lastOutcome = null;
+    setStuck(false);
+  };
+
+  /** The countdown: tenths of a second, loud once it is nearly out. Touches the page only when it changes. */
+  let timerShown: string | null = null;
+  const drawTimer = () => {
+    const ticks = game.session.timeLeft;
+    const seconds = ticks === null ? 0 : ticks * FIXED_DT;
+    const low = ticks !== null && seconds <= 3 && game.session.playing && game.session.strokes > 0;
+    const shown = ticks === null ? null : `${seconds.toFixed(1)}${low ? '!' : ''}`;
+    if (shown === timerShown) return;
+    timerShown = shown;
+    timer.hidden = ticks === null;
+    timer.textContent = seconds.toFixed(1);
+    timer.classList.toggle('low', low);
   };
 
   const fillResult = (outcome: Outcome) => {
@@ -81,7 +105,7 @@ export function createHud(game: Game, actions: HudActions): void {
     }
     card.hidden = !open;
     cardOpen = open;
-    game.inputBlocked = open;
+    game.inputBlocked = open || !stuck.hidden;
   };
 
   /** Everything whose text depends on the language or on the hole. */
@@ -96,7 +120,11 @@ export function createHud(game: Game, actions: HudActions): void {
     byId('card-tap').textContent = TEXT.tapToStart();
     byId('hint-label').textContent = TEXT.hintSlingshot();
     byId('rotate-text').textContent = TEXT.rotate();
-    holeName.textContent = TEXT.holeTitle(tr(game.world.name), game.holeIndex + 1);
+    byId('stuck-title').textContent = TEXT.stuckTitle();
+    byId('stuck-body').textContent = TEXT.stuckBody();
+    byId('stuck-retry').textContent = TEXT.tryAgain();
+    byId('stuck-limit').textContent = TEXT.takeLimit();
+    holeName.textContent = TEXT.holeTitle(tr(game.world.name), game.holeNumber);
     byId('rule-tag').textContent = tr(game.world.ruleTag);
     byId('challenge').textContent = game.hole.challenge ? TEXT.challenge(tr(game.hole.challenge.text)) : '';
     if (cardOpen) setCard(true);
@@ -130,6 +158,15 @@ export function createHud(game: Game, actions: HudActions): void {
       case 'outOfBounds':
         showToast(TEXT.outOfBounds());
         break;
+      case 'timeAdded':
+        showToast(TEXT.timeBonus(event.seconds));
+        break;
+      case 'exploded':
+        showToast(TEXT.timeUp());
+        break;
+      case 'stuck':
+        setStuck(true);
+        break;
       case 'finished':
         resultTimer = window.setTimeout(showResult, RESULT_DELAY_MS, event.outcome);
         break;
@@ -141,6 +178,7 @@ export function createHud(game: Game, actions: HudActions): void {
   });
 
   game.onFrame(() => {
+    drawTimer();
     if (!hint.classList.contains('show')) return;
     const p = game.ballScreenPosition();
     hint.style.transform = `translate(${p.x}px, ${p.y}px)`;
@@ -151,6 +189,14 @@ export function createHud(game: Game, actions: HudActions): void {
   card.addEventListener('pointerdown', () => {
     setCard(false);
     refresh();
+  });
+  byId('stuck-retry').addEventListener('click', () => {
+    setStuck(false);
+    actions.onStuckChoice('retry');
+  });
+  byId('stuck-limit').addEventListener('click', () => {
+    setStuck(false);
+    actions.onStuckChoice('concede');
   });
   byId('pause').addEventListener('click', () => actions.onPause());
   byId('retry').addEventListener('click', () => actions.onRetry());

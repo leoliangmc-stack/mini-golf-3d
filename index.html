@@ -25,6 +25,7 @@
         <span id="strokes"></span>
       </div>
       <div id="challenge"></div>
+      <div id="timer" role="timer" hidden></div>
 
       <button id="retry" class="round" type="button">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5v5h5M5.6 14a7 7 0 1 0 1.5-7.3L5 10" /></svg>
@@ -77,6 +78,17 @@
         <div class="actions">
           <button id="result-retry" type="button"></button>
           <button id="result-next" type="button" class="primary"></button>
+        </div>
+      </div>
+    </div>
+
+    <div id="stuck" class="overlay" hidden>
+      <div class="panel">
+        <h1 id="stuck-title"></h1>
+        <p id="stuck-body"></p>
+        <div class="actions">
+          <button id="stuck-limit" type="button"></button>
+          <button id="stuck-retry" type="button" class="primary"></button>
         </div>
       </div>
     </div>

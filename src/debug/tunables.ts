@@ -85,6 +85,15 @@ export function collectTunables(game: Game): TunableGroup[] {
       ],
     },
     { title: 'Physics', items: [gravity] },
+    // The countdown of a timed hole is meant to be set by playing it on a phone (SPEC v2 2.6).
+    ...(hole.timer
+      ? [
+          {
+            title: `Countdown (${hole.id})`,
+            items: [field(`timer.${hole.id}.seconds`, 'seconds', hole.timer, 'seconds', [5, 60, 1], true)],
+          },
+        ]
+      : []),
     {
       title: `Cup (${hole.id})`,
       items: [

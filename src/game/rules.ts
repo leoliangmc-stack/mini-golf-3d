@@ -37,12 +37,16 @@ export class StopDetector {
   }
 }
 
-/** True when a ball at `position` moving at `speed` drops into the cup. Cups sit on level ground. */
-export function cupCaptures(cup: CupDef, position: XYZ, speed: number, ballRadius: number): boolean {
+/**
+ * True when a ball at `position` drops into the cup, which is at `at` right now.
+ * `speed` is the ball's speed measured against the cup, not against the world: a cup
+ * coming the other way makes a slow ball fast. Cups sit on level ground.
+ */
+export function cupCaptures(cup: CupDef, at: XYZ, position: XYZ, speed: number, ballRadius: number): boolean {
   if (speed > cup.captureSpeed) return false;
-  const dx = position.x - cup.position[0];
-  const dy = position.y - cup.position[1];
-  const dz = position.z - cup.position[2];
+  const dx = position.x - at.x;
+  const dy = position.y - at.y;
+  const dz = position.z - at.z;
   // The ball must be on the ground at the cup, not flying over it.
   if (Math.abs(dy - ballRadius) > ballRadius) return false;
   return Math.hypot(dx, dz) <= cup.radius;

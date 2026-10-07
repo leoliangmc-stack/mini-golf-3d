@@ -1,6 +1,6 @@
 import { FIXED_DT } from '../core/loop';
 import type { Vec3, XYZ } from '../core/types';
-import type { CycleDef, MoverDef } from '../level/schema';
+import type { CycleDef, MotionDef, MoverDef } from '../level/schema';
 import type { Ball } from './ball';
 import { RAPIER } from './rapier';
 import { getSurface, type GroundCarrier, type SurfaceMap } from './surfaces';
@@ -19,7 +19,7 @@ const SOLID = 0xffffffff;
 const GHOST = 0x00020000;
 
 /** Position within a cycle, 0..1, at a given tick. Periods are whole ticks so cycles repeat exactly. */
-function cyclePhase(tick: number, period: number, phase = 0): number {
+export function cyclePhase(tick: number, period: number, phase = 0): number {
   const ticks = Math.max(2, Math.round(period / FIXED_DT));
   const u = (tick % ticks) / ticks + phase;
   return u - Math.floor(u);
@@ -37,11 +37,13 @@ export function cycleValue(tick: number, def: CycleDef): number {
   return ease((1 - u) / move);
 }
 
-/** Where a mover is at a given tick. A pure function of the tick: this is what makes timing reproducible. */
-export function moverPose(def: MoverDef, tick: number): MoverPose {
-  const [x, y, z] = def.position;
-  const yaw = (def.yaw ?? 0) * RAD;
-  const { motion } = def;
+/**
+ * Where something that starts at `position`, turned by `yaw` radians, has got to at a
+ * given tick. A pure function of the tick: this is what makes timing reproducible, and
+ * it is the one schedule every moving thing in the game runs on (moving parts, the cup).
+ */
+export function motionPose(position: Vec3, yaw: number, motion: MotionDef, tick: number): MoverPose {
+  const [x, y, z] = position;
   if (motion.type === 'slide') {
     const s = cycleValue(tick, motion);
     return {
@@ -62,6 +64,11 @@ export function moverPose(def: MoverDef, tick: number): MoverPose {
     position: { x: px + dx * cos + dz * sin, y, z: pz - dx * sin + dz * cos },
     yaw: yaw + angle,
   };
+}
+
+/** Where a mover is at a given tick. */
+export function moverPose(def: MoverDef, tick: number): MoverPose {
+  return motionPose(def.position, (def.yaw ?? 0) * RAD, def.motion, tick);
 }
 
 /** Maps a point fixed to the mover in one pose to where it is in another pose. */

@@ -466,3 +466,48 @@ body:not([data-mode='play']) #hud {
 #rotate {
   z-index: 100;
 }
+
+/* Countdown of a timed hole. Big, top centre, and impossible to miss when nearly out. */
+#timer {
+  width: fit-content;
+  min-width: 3.4em;
+  margin: 8px auto 0;
+  padding: 2px 14px;
+  border-radius: 14px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 900;
+  font-size: clamp(24px, 8vh, 38px);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  text-align: center;
+}
+
+#timer[hidden] {
+  display: none;
+}
+
+#timer.low {
+  background: #e5342b;
+  animation: timer-flash 0.5s steps(2, jump-none) infinite;
+}
+
+@keyframes timer-flash {
+  50% {
+    background: #fff;
+    color: #e5342b;
+  }
+}
+
+#stuck .panel p {
+  max-width: 30em;
+  margin: 6px auto 0;
+  line-height: 1.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #timer.low {
+    animation: none;
+  }
+}

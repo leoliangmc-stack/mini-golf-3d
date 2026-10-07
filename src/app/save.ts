@@ -1,0 +1,97 @@
+export type Quality = 'auto' | 'low' | 'medium' | 'high';
+
+export interface Settings {
+  /** Null follows the browser language. */
+  lang: 'en' | 'zh' | null;
+  sfx: boolean;
+  music: boolean;
+  quality: Quality;
+}
+
+export interface HoleRecord {
+  stars: 1 | 2 | 3;
+  strokes: number;
+}
+
+/** Version of the save format this build writes. Bump it together with a new entry in MIGRATIONS. */
+export const SAVE_VERSION = 2;
+
+export interface SaveData {
+  version: typeof SAVE_VERSION;
+  holes: Record<string, HoleRecord>;
+  settings: Settings;
+  /** Id of the hole last played, for PLAY to resume from. */
+  last: string | null;
+  /**
+   * Set when this save was carried over from an older version and that has not been
+   * reported to analytics yet: the version it came from.
+   */
+  migratedFrom?: number;
+}
+
+export const DEFAULT_SETTINGS: Settings = { lang: null, sfx: true, music: true, quality: 'auto' };
+
+export const freshSave = (): SaveData => ({
+  version: SAVE_VERSION,
+  holes: {},
+  settings: { ...DEFAULT_SETTINGS },
+  last: null,
+});
+
+type Loose = Record<string, unknown>;
+
+/**
+ * One step per version: MIGRATIONS[n] turns a version-n save into a version n+1 save.
+ * A save is brought up to date by running every step from its own version onward.
+ * Steps only reshape data. They never drop a score.
+ */
+const MIGRATIONS: Record<number, (save: Loose) => Loose> = {
+  // 1 -> 2, Chapter 2. Hole ids did not change, and what is unlocked is worked out from
+  // the records rather than stored, so every star and best score carries over as it is.
+  // The Chapter 1 finale and all of Chapter 2 have no record yet, which is what locked
+  // means: the finale opens by itself for a player who had finished all 18 holes.
+  1: (save) => ({ ...save, version: 2 }),
+};
+
+export interface LoadedSave {
+  data: SaveData;
+  /** Version the stored save was written by, if it had to be migrated. */
+  migratedFrom: number | null;
+}
+
+/**
+ * Parses a stored save of any known version into the current format. Returns null for
+ * anything unusable: nothing stored, broken JSON, or a version this build does not know.
+ * Records for holes that do not exist, and records that make no sense, are dropped.
+ */
+export function readSave(raw: string | null | undefined, knownHoles: ReadonlySet<string>): LoadedSave | null {
+  if (!raw) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
+  let save = parsed as Loose;
+  const stored = save.version;
+  if (typeof stored !== 'number' || !Number.isInteger(stored) || stored < 1 || stored > SAVE_VERSION) return null;
+  for (let version = stored; version < SAVE_VERSION; version++) save = MIGRATIONS[version](save);
+
+  const data = freshSave();
+  const holes = typeof save.holes === 'object' && save.holes !== null ? (save.holes as Loose) : {};
+  for (const [id, value] of Object.entries(holes)) {
+    const record = value as Partial<HoleRecord> | null;
+    const stars = record?.stars;
+    const strokes = record?.strokes;
+    const valid = (stars === 1 || stars === 2 || stars === 3) && typeof strokes === 'number' && Number.isFinite(strokes);
+    if (knownHoles.has(id) && valid) data.holes[id] = { stars, strokes };
+  }
+  if (typeof save.settings === 'object' && save.settings !== null) {
+    data.settings = { ...DEFAULT_SETTINGS, ...(save.settings as Partial<Settings>) };
+  }
+  data.last = typeof save.last === 'string' ? save.last : null;
+  if (stored < SAVE_VERSION) data.migratedFrom = stored;
+  else if (typeof save.migratedFrom === 'number') data.migratedFrom = save.migratedFrom;
+  return { data, migratedFrom: stored < SAVE_VERSION ? stored : null };
+}

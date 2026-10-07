@@ -3,10 +3,28 @@ import type { ZoneDef } from '../physics/zones';
 import type { ZoneShape } from '../physics/zones/shape';
 
 /**
+ * A chapter: a run of worlds closed by one finale hole. Chapters unlock in order, each
+ * one when the finale of the chapter before it has been finished.
+ */
+export interface ChapterDef {
+  id: string;
+  name: I18nText;
+  worlds: readonly WorldDef[];
+  finale: FinaleDef;
+}
+
+/**
+ * The hole that closes a chapter, combining its mechanics. It belongs to no world, but
+ * it is presented the way a world is, with a name, a look and a rule card of its own,
+ * so it has the shape of a world with exactly one hole.
+ */
+export interface FinaleDef extends Omit<WorldDef, 'holes'> {
+  holes: readonly [HoleDef];
+}
+
+/**
  * World and hole data format. Every hole in the game is an instance of this; adding
  * a hole must never require touching engine code.
- *
- * `decor` from SPEC 2.12 is not here yet: nothing needs it until real models are added.
  */
 export interface WorldDef {
   id: string;
@@ -32,6 +50,13 @@ export interface HoleDef {
   zones: readonly ZoneDef[];
   /** Moving parts. They keep moving while the player aims. */
   movers?: readonly MoverDef[];
+  /** Scenery. It has no collision and no rules. */
+  decor?: readonly DecorDef[];
+  /**
+   * Countdown for the whole hole, started by the first stroke and running while the
+   * player aims. When it runs out the hole restarts from the tee.
+   */
+  timer?: { seconds: number };
   /** Where the ball goes after an out-of-bounds penalty. */
   outOfBounds: 'lastPosition' | 'tee';
   /** Extra condition for the third star. Without one, par alone earns it. */
@@ -54,6 +79,10 @@ export interface ChallengeDef {
   surface?: string;
   strokes?: number;
   shape?: ZoneShape;
+  /** Name of a zone cue, e.g. `tunnelEnter`. */
+  cue?: string;
+  count?: number;
+  seconds?: number;
 }
 
 /** Per-hole camera settings; anything left out uses the default. Angles in degrees. */
@@ -65,11 +94,41 @@ export interface CameraOverride {
 }
 
 export interface CupDef {
-  /** Point on the ground at the center of the cup. */
+  /** Point on the ground at the center of the cup; where its cycle starts if it moves. */
   position: Vec3;
   radius: number;
-  /** The ball drops in only when moving slower than this, in m/s. */
+  /** The ball drops in only when moving slower than this, in m/s, measured against the cup. */
   captureSpeed: number;
+  /**
+   * Makes the cup travel on a fixed schedule, with the same motions moving parts use.
+   * Everything it passes over must be level ground at the height of `position`.
+   */
+  motion?: MotionDef;
+  /** A lid that opens and shuts on a fixed schedule. Shut, the cup is plain ground. */
+  hidden?: LidDef;
+}
+
+export interface LidDef {
+  /** Seconds for one open-and-shut cycle. */
+  period: number;
+  /** Share of the cycle the cup is open, from the start of the cycle. */
+  openRatio: number;
+  /** Where in the cycle the lid starts, 0..1. */
+  phase?: number;
+}
+
+/**
+ * A piece of scenery: a registered model (see render/decor.ts) placed in the world.
+ * `size` and `color` mean whatever that model says they mean.
+ */
+export interface DecorDef {
+  type: string;
+  /** Where the model stands. */
+  at: Vec3;
+  /** Rotation about the vertical axis, in degrees. */
+  yaw?: number;
+  size?: Vec3;
+  color?: number;
 }
 
 export type PieceDef = FloorPiece | RampPiece | WallPiece | PillarPiece;

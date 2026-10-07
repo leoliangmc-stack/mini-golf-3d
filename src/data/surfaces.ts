@@ -29,4 +29,28 @@ export function registerSurfaces(): void {
   registerSurface('padded', { restitution: 0.25, rollingResistance: 0.5, drag: 0.7, color: 0x8a6cff });
   registerSurface('stone', { restitution: 0.8, rollingResistance: 0.5, drag: 0.7, color: 0x9b948a });
   registerSurface('iceWall', { restitution: 0.85, rollingResistance: 0.3, drag: 0.12, color: 0x4fa8d8 });
+
+  // --- Chapter 2 ---
+  // Forest
+  registerSurface('moss', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x74b25c });
+  registerSurface('boardwalk', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xc79c6b });
+  registerSurface('log', { restitution: 0.6, rollingResistance: 0.5, drag: 0.7, color: 0x9c7044 });
+  registerSurface('bark', { restitution: 0.45, rollingResistance: 0.5, drag: 0.7, color: 0x7a5536 });
+  registerSurface('boulder', { restitution: 0.8, rollingResistance: 0.5, drag: 0.7, color: 0x8d939a });
+  registerSurface('stem', { restitution: 0.6, rollingResistance: 0.5, drag: 0.7, color: 0xf0e2c8 });
+  // Rooftops. The sides of a building take the colour of its roof.
+  registerSurface('rooftop', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xb3b8bd });
+  registerSurface('tar', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x767f8c });
+  registerSurface('terracotta', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xc98263 });
+  registerSurface('parapet', { restitution: 0.6, rollingResistance: 0.5, drag: 0.7, color: 0xe2dccf });
+  registerSurface('duct', { restitution: 0.6, rollingResistance: 0.5, drag: 0.7, color: 0x8f9aa3 });
+  // Moving hole
+  registerSurface('felt', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x2f8f63 });
+  // A slick metal plate: rolls like ice.
+  registerSurface('polished', { restitution: 0.2, rollingResistance: 0.3, drag: 0.12, color: 0xdcc68e });
+  registerSurface('brass', { restitution: 0.7, rollingResistance: 0.5, drag: 0.7, color: 0xc9a24b });
+  // Bomb ball
+  registerSurface('basalt', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x5d5566 });
+  registerSurface('hazard', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0xe6b422 });
+  registerSurface('obsidian', { restitution: 0.7, rollingResistance: 0.5, drag: 0.7, color: 0x2e2a36 });
 }

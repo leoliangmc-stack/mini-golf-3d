@@ -25,7 +25,7 @@ export function renderThumbnail(
 ): string | null {
   const hole = world.holes[0];
   const theme = getTheme(world.theme);
-  const view = buildHoleView(compileHole(hole), hole.cup);
+  const view = buildHoleView(compileHole(hole), hole).group;
   for (const mover of hole.movers ?? []) {
     const mesh = buildMoverView(mover);
     mesh.position.set(...mover.position);
@@ -34,7 +34,7 @@ export function renderThumbnail(
   }
   for (const zone of hole.zones) {
     const zoneView = buildZoneView(zone);
-    if (zoneView) view.add(zoneView);
+    if (zoneView) view.add(zoneView.object);
   }
 
   const scene = new THREE.Scene();

@@ -63,6 +63,15 @@ export function mountDebugPanel(game: Game, progress: Progress): void {
     shotStatus.classList.toggle('bad', !identical);
   });
 
+  // The round so far, exact to the last digit: what tests/solutions.test.ts records.
+  const copyShotsButton = el('button', { type: 'button', textContent: 'COPY STROKES' });
+  copyShotsButton.addEventListener('click', () => {
+    const shots = JSON.stringify(game.session.shots);
+    navigator.clipboard?.writeText(shots).catch(() => {});
+    shotStatus.textContent = shots;
+    shotStatus.classList.remove('bad');
+  });
+
   const refreshShots = () => {
     shotList.replaceChildren(
       ...game.session.shots.map((shot) =>
@@ -158,7 +167,7 @@ export function mountDebugPanel(game: Game, progress: Progress): void {
       {},
       el('h2', { textContent: 'Strokes this round' }),
       shotList,
-      el('div', { className: 'dev-row' }, replayButton, checkButton),
+      el('div', { className: 'dev-row' }, replayButton, checkButton, copyShotsButton),
       shotStatus,
     ),
     el(

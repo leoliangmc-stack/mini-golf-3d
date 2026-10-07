@@ -1,16 +1,33 @@
 import * as THREE from 'three';
-import type { CompiledBody, CompiledGround, CompiledHole } from '../level/compile';
-import type { CupDef } from '../level/schema';
+import type { XYZ } from '../core/types';
+import { cupTrack } from '../game/cup';
+import type { CompiledHole } from '../level/compile';
+import type { CupDef, HoleDef } from '../level/schema';
 import { getSurface } from '../physics/surfaces';
+import { buildDecor } from './decor';
+import type { Occluder } from './occlusion';
 
 /** How much darker the sides of the ground are than its top. */
 const SIDE_SHADE = 0.68;
 
+/** The visible course of one hole. */
+export interface HoleView {
+  group: THREE.Group;
+  cup: CupView;
+  /** Everything that could stand between the camera and the ball. */
+  occluders: Occluder[];
+}
+
 /** Builds the visible course from the same compiled geometry the physics uses. */
-export function buildHoleView(compiled: CompiledHole, cup: CupDef): THREE.Group {
+export function buildHoleView(compiled: CompiledHole, hole: HoleDef): HoleView {
   const group = new THREE.Group();
-  if (compiled.ground) group.add(buildGround(compiled.ground));
-  if (compiled.bodies.length > 0) group.add(buildBodies(compiled.bodies));
+  const occluders: Occluder[] = [];
+  const add = (object: THREE.Object3D): void => {
+    group.add(object);
+    occluders.push({ object, bounds: new THREE.Box3().setFromObject(object) });
+  };
+
+  for (const block of buildBlocks(compiled)) add(block);
   for (const box of compiled.boxes) {
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(box.halfExtents[0] * 2, box.halfExtents[1] * 2, box.halfExtents[2] * 2),
@@ -20,7 +37,7 @@ export function buildHoleView(compiled: CompiledHole, cup: CupDef): THREE.Group 
     mesh.quaternion.set(box.rotation[0], box.rotation[1], box.rotation[2], box.rotation[3]);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    group.add(mesh);
+    add(mesh);
   }
   for (const c of compiled.cylinders) {
     const mesh = new THREE.Mesh(
@@ -30,16 +47,21 @@ export function buildHoleView(compiled: CompiledHole, cup: CupDef): THREE.Group 
     mesh.position.set(c.center[0], c.center[1], c.center[2]);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    group.add(mesh);
+    add(mesh);
   }
-  group.add(buildCup(cup));
-  return group;
+  for (const decor of hole.decor ?? []) add(buildDecor(decor));
+
+  const track = buildTrack(hole.cup);
+  if (track) group.add(track);
+  const cup = new CupView(hole.cup);
+  group.add(cup.object);
+  return { group, cup, occluders };
 }
 
 /** Frees the GPU resources of a view built by buildHoleView. */
-export function disposeHoleView(group: THREE.Group): void {
+export function disposeHoleView(group: THREE.Object3D): void {
   group.traverse((object) => {
-    if (!(object instanceof THREE.Mesh)) return;
+    if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.Line)) return;
     object.geometry.dispose();
     for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
       material.dispose();
@@ -47,44 +69,38 @@ export function disposeHoleView(group: THREE.Group): void {
   });
 }
 
-function buildGround(ground: CompiledGround): THREE.Mesh {
-  const { vertices, indices, triangleSurfaces } = ground;
-  const positions: number[] = [];
-  const colors: number[] = [];
+/**
+ * One mesh per ground piece: its share of the playing surface, its sides and its
+ * underside. The physics rolls the ball on a single merged mesh; the picture is split
+ * up so that one piece (a building, an island) can be faded without the others.
+ */
+function buildBlocks(compiled: CompiledHole): THREE.Mesh[] {
+  const { ground, bodies } = compiled;
+  if (!ground) return [];
+  const { vertices, indices, triangleSurfaces, trianglePieces } = ground;
   const color = new THREE.Color();
 
-  for (let tri = 0; tri < triangleSurfaces.length; tri++) {
-    const corners = [0, 1, 2].map((k) => {
-      const v = indices[tri * 3 + k] * 3;
-      return [vertices[v], vertices[v + 1], vertices[v + 2]] as const;
-    });
-    // Two-tone checker (1 m squares) so the eye can read ball speed on a flat colour.
-    const cx = (corners[0][0] + corners[1][0] + corners[2][0]) / 3;
-    const cz = (corners[0][2] + corners[1][2] + corners[2][2]) / 3;
-    const dark = (Math.floor(cx) + Math.floor(cz)) & 1;
-    color.setHex(getSurface(triangleSurfaces[tri]).color).multiplyScalar(dark ? 0.93 : 1);
-    for (const c of corners) {
-      positions.push(c[0], c[1], c[2]);
-      colors.push(color.r, color.g, color.b);
+  return bodies.map((body, piece) => {
+    const positions: number[] = [];
+    const colors: number[] = [];
+
+    for (let tri = 0; tri < triangleSurfaces.length; tri++) {
+      if (trianglePieces[tri] !== piece) continue;
+      const corners = [0, 1, 2].map((k) => {
+        const v = indices[tri * 3 + k] * 3;
+        return [vertices[v], vertices[v + 1], vertices[v + 2]] as const;
+      });
+      // Two-tone checker (1 m squares) so the eye can read ball speed on a flat colour.
+      const cx = (corners[0][0] + corners[1][0] + corners[2][0]) / 3;
+      const cz = (corners[0][2] + corners[1][2] + corners[2][2]) / 3;
+      const dark = (Math.floor(cx) + Math.floor(cz)) & 1;
+      color.setHex(getSurface(triangleSurfaces[tri]).color).multiplyScalar(dark ? 0.93 : 1);
+      for (const c of corners) {
+        positions.push(c[0], c[1], c[2]);
+        colors.push(color.r, color.g, color.b);
+      }
     }
-  }
 
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geometry.computeVertexNormals();
-  const mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true }));
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
-/** Sides and underside of every ground piece, as one mesh. The ground mesh is the top. */
-function buildBodies(bodies: readonly CompiledBody[]): THREE.Mesh {
-  const positions: number[] = [];
-  const colors: number[] = [];
-  const color = new THREE.Color();
-
-  for (const body of bodies) {
     color.setHex(getSurface(body.surface).color).multiplyScalar(SIDE_SHADE);
     const top = body.top;
     const bottom = top.map((p) => [p[0], body.bottomY, p[2]] as const);
@@ -99,21 +115,81 @@ function buildBodies(bodies: readonly CompiledBody[]): THREE.Mesh {
       quad(top[i], bottom[i], bottom[j], top[j]);
     }
     quad(bottom[0], bottom[3], bottom[2], bottom[1]);
-  }
 
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.computeVertexNormals();
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  });
+}
+
+/** A line on the ground along the path a moving cup follows, so the player can see where it is going. */
+function buildTrack(cup: CupDef): THREE.Mesh | null {
+  const points = cupTrack(cup);
+  if (points.length < 2) return null;
+  const half = 0.035;
+  const positions: number[] = [];
+  for (let i = 0; i + 1 < points.length; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const length = Math.hypot(b.x - a.x, b.z - a.z);
+    if (length < 1e-6) continue;
+    // Sideways from the direction of travel, to give the line its width.
+    const sx = (-(b.z - a.z) / length) * half;
+    const sz = ((b.x - a.x) / length) * half;
+    positions.push(
+      a.x - sx, a.y, a.z - sz, a.x + sx, a.y, a.z + sz, b.x + sx, b.y, b.z + sz,
+      a.x - sx, a.y, a.z - sz, b.x + sx, b.y, b.z + sz, b.x - sx, b.y, b.z - sz,
+    );
+  }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geometry.computeVertexNormals();
   const mesh = new THREE.Mesh(
     geometry,
-    new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }),
   );
-  mesh.receiveShadow = true;
+  mesh.position.y = 0.012;
   return mesh;
 }
 
-function buildCup(cup: CupDef): THREE.Group {
+/** The hole in the ground with its flag. Follows a moving cup and shows its lid. */
+export class CupView {
+  readonly object: THREE.Group;
+  private readonly lid: THREE.Mesh | null = null;
+  private readonly rim: THREE.MeshBasicMaterial;
+
+  constructor(cup: CupDef) {
+    const { group, rim } = buildCup(cup);
+    this.object = group;
+    this.rim = rim;
+    if (cup.hidden) {
+      this.lid = new THREE.Mesh(
+        new THREE.CircleGeometry(cup.radius + 0.03, 32),
+        new THREE.MeshLambertMaterial({ color: 0x8b95a1 }),
+      );
+      this.lid.rotation.x = -Math.PI / 2;
+      this.lid.position.y = 0.008;
+      this.lid.receiveShadow = true;
+      group.add(this.lid);
+    }
+  }
+
+  /** `openness` runs from 0, lid shut, to 1, wide open. */
+  update(position: XYZ, openness: number): void {
+    this.object.position.set(position.x, position.y, position.z);
+    if (!this.lid) return;
+    // The lid closes like an iris; the rim turns red while the cup takes no ball.
+    this.lid.scale.setScalar(Math.max(1e-3, 1 - openness));
+    this.lid.visible = openness < 1;
+    this.rim.color.setHex(openness > 0 ? 0xffffff : 0xff5a4f);
+  }
+}
+
+function buildCup(cup: CupDef): { group: THREE.Group; rim: THREE.MeshBasicMaterial } {
   const group = new THREE.Group();
   group.position.set(cup.position[0], cup.position[1], cup.position[2]);
 
@@ -124,10 +200,8 @@ function buildCup(cup: CupDef): THREE.Group {
   hole.rotation.x = -Math.PI / 2;
   hole.position.y = 0.004;
 
-  const rim = new THREE.Mesh(
-    new THREE.RingGeometry(cup.radius, cup.radius + 0.03, 32),
-    new THREE.MeshBasicMaterial({ color: 0xffffff }),
-  );
+  const rimMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const rim = new THREE.Mesh(new THREE.RingGeometry(cup.radius, cup.radius + 0.03, 32), rimMaterial);
   rim.rotation.x = -Math.PI / 2;
   rim.position.y = 0.005;
 
@@ -151,5 +225,5 @@ function buildCup(cup: CupDef): THREE.Group {
   flag.castShadow = true;
 
   group.add(hole, rim, pole, flag);
-  return group;
+  return { group, rim: rimMaterial };
 }

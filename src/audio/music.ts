@@ -22,6 +22,12 @@ export const MUSIC: Record<string, MusicDef> = {
   pirate: { bpm: 120, root: 62, scale: [0, 2, 3, 5, 7, 9, 10], wave: 'square', brightness: 1400 },
   magnet: { bpm: 100, root: 57, scale: [0, 3, 5, 7, 10], wave: 'sawtooth', brightness: 1100 },
   gravity: { bpm: 76, root: 60, scale: [0, 2, 4, 6, 8, 10], wave: 'sine', brightness: 2400 },
+  summit: { bpm: 100, root: 62, scale: [0, 2, 4, 7, 9], wave: 'square', brightness: 1500 },
+  forest: { bpm: 88, root: 67, scale: [0, 2, 3, 7, 9], wave: 'triangle', brightness: 1900 },
+  rooftop: { bpm: 108, root: 58, scale: [0, 3, 5, 6, 7, 10], wave: 'square', brightness: 1150 },
+  clockwork: { bpm: 112, root: 64, scale: [0, 2, 4, 5, 7, 9, 11], wave: 'sine', brightness: 3600 },
+  bomb: { bpm: 132, root: 55, scale: [0, 1, 3, 5, 6, 8, 10], wave: 'sawtooth', brightness: 1000 },
+  midnight: { bpm: 124, root: 57, scale: [0, 2, 3, 5, 7, 8, 10], wave: 'sawtooth', brightness: 1300 },
 };
 
 /** Chord roots, as scale steps, one per bar. */

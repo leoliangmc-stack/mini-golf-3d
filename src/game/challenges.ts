@@ -13,6 +13,10 @@ export interface RoundStats {
   surfaces: Set<string>;
   /** Where the ball was at the end of each stroke, in order. */
   rests: XYZ[];
+  /** How many times each zone cue fired, by name: tunnels taken, clocks picked up. */
+  cues: Record<string, number>;
+  /** Seconds left on the hole's countdown when it ended, or null if it has none. */
+  timeLeft: number | null;
 }
 
 export const emptyStats = (): RoundStats => ({
@@ -22,6 +26,8 @@ export const emptyStats = (): RoundStats => ({
   outOfBounds: 0,
   surfaces: new Set(),
   rests: [],
+  cues: {},
+  timeLeft: null,
 });
 
 export type ChallengeCheck = (stats: RoundStats, def: ChallengeDef) => boolean;
@@ -61,4 +67,14 @@ export function registerBuiltinChallenges(): void {
     const rest = stats.rests[0];
     return rest !== undefined && shapeContains(need(def.shape, def, 'shape'), rest);
   });
+  /** The zone cue `cue` fired at most `count` times, e.g. no clock was picked up. */
+  registerChallenge(
+    'maxCues',
+    (stats, def) => (stats.cues[need(def.cue, def, 'cue')] ?? 0) <= need(def.count, def, 'count'),
+  );
+  /** At least `seconds` were left on the countdown at the end. */
+  registerChallenge(
+    'timeLeft',
+    (stats, def) => stats.timeLeft !== null && stats.timeLeft >= need(def.seconds, def, 'seconds'),
+  );
 }

@@ -1,28 +1,9 @@
 import type { Outcome } from '../game/session';
-import type { WorldDef } from '../level/schema';
+import { allHoles, stagesOf } from '../level/chapters';
+import type { ChapterDef, WorldDef } from '../level/schema';
+import { freshSave, readSave, type HoleRecord, type SaveData, type Settings } from './save';
 
-export type Quality = 'auto' | 'low' | 'medium' | 'high';
-
-export interface Settings {
-  /** Null follows the browser language. */
-  lang: 'en' | 'zh' | null;
-  sfx: boolean;
-  music: boolean;
-  quality: Quality;
-}
-
-export interface HoleRecord {
-  stars: 1 | 2 | 3;
-  strokes: number;
-}
-
-interface SaveData {
-  version: 1;
-  holes: Record<string, HoleRecord>;
-  settings: Settings;
-  /** Id of the hole last played, for PLAY to resume from. */
-  last: string | null;
-}
+export type { HoleRecord, Quality, Settings } from './save';
 
 /** The part of localStorage this module needs, so tests can pass a fake. */
 export interface StorageLike {
@@ -30,8 +11,12 @@ export interface StorageLike {
   setItem(key: string, value: string): void;
 }
 
-const KEY = 'minigolf.save.v1';
-const DEFAULT_SETTINGS: Settings = { lang: null, sfx: true, music: true, quality: 'auto' };
+const KEY = 'minigolf.save';
+/**
+ * Where version 1 kept its save. It is read once, to carry the scores over, and never
+ * written again, so the original stays intact if this build is ever rolled back.
+ */
+const LEGACY_KEY = 'minigolf.save.v1';
 
 /** localStorage if it works here, otherwise null: private browsing may block it. */
 export function safeStorage(): StorageLike | null {
@@ -45,6 +30,7 @@ export function safeStorage(): StorageLike | null {
   }
 }
 
+/** A hole, as the world (or finale) it is in and its place there. */
 export interface HoleRef {
   world: WorldDef;
   index: number;
@@ -58,14 +44,16 @@ export class Progress {
   /** Development switch: treats every hole as unlocked. */
   unlockAll = false;
   private data: SaveData;
-  /** Every hole of every world, in play order. */
+  /** Every hole of every chapter, in play order. */
   private readonly order: HoleRef[];
 
   constructor(
-    private readonly worlds: readonly WorldDef[],
+    readonly chapters: readonly ChapterDef[],
     private readonly storage: StorageLike | null,
   ) {
-    this.order = worlds.flatMap((world) => world.holes.map((_, index) => ({ world, index })));
+    this.order = chapters.flatMap((chapter) =>
+      stagesOf(chapter).flatMap((world) => world.holes.map((_, index) => ({ world, index }))),
+    );
     this.data = this.load();
   }
 
@@ -80,6 +68,26 @@ export class Progress {
 
   record(holeId: string): HoleRecord | null {
     return this.data.holes[holeId] ?? null;
+  }
+
+  /** Number of holes with a score. */
+  get completedHoles(): number {
+    return Object.keys(this.data.holes).length;
+  }
+
+  /**
+   * The save version this player's scores were carried over from, until that has been
+   * reported (see `migrationReported`). Null for everyone else.
+   */
+  get migratedFrom(): number | null {
+    return this.data.migratedFrom ?? null;
+  }
+
+  /** Call once analytics has taken the migration event, so it is sent exactly once. */
+  migrationReported(): void {
+    if (this.data.migratedFrom === undefined) return;
+    delete this.data.migratedFrom;
+    this.save();
   }
 
   /** Stores a finished hole, keeping the best stars and the fewest strokes seen. */
@@ -97,7 +105,11 @@ export class Progress {
     this.save();
   }
 
-  /** Linear unlock (SPEC 2.7): a hole opens when the one before it has been finished. */
+  /**
+   * Linear unlock (SPEC 2.7, v2 2.8): a hole opens when the one before it has been
+   * finished. The order runs through each chapter's worlds, then its finale, then on
+   * into the next chapter.
+   */
   isUnlocked(world: WorldDef, index: number): boolean {
     if (this.unlockAll) return true;
     const position = this.order.findIndex((ref) => ref.world === world && ref.index === index);
@@ -105,6 +117,11 @@ export class Progress {
     if (position <= 0) return true;
     const before = this.order[position - 1];
     return this.record(before.world.holes[before.index].id) !== null;
+  }
+
+  /** A chapter is open once the finale of the chapter before it has been finished. */
+  chapterUnlocked(chapter: ChapterDef): boolean {
+    return this.isUnlocked(chapter.worlds[0] ?? chapter.finale, 0);
   }
 
   worldStars(world: WorldDef): number {
@@ -117,35 +134,38 @@ export class Progress {
     return this.order[position + 1] ?? null;
   }
 
-  /** Where PLAY goes: the last hole played if it is still open, else the first unfinished one. */
+  /**
+   * Where PLAY goes. Back to the hole last played if it is still unfinished; otherwise
+   * on to the first hole without a score, which is where new content shows up for a
+   * returning player; and once everything is finished, back to the hole last played.
+   */
   resume(): HoleRef {
-    const last = this.order.find((ref) => ref.world.holes[ref.index].id === this.data.last);
-    if (last && this.isUnlocked(last.world, last.index)) return last;
-    return (
-      this.order.find((ref) => this.record(ref.world.holes[ref.index].id) === null) ??
-      this.order[this.order.length - 1]
-    );
+    const id = (ref: HoleRef) => ref.world.holes[ref.index].id;
+    const last = this.order.find((ref) => id(ref) === this.data.last);
+    const open = last !== undefined && this.isUnlocked(last.world, last.index);
+    if (last && open && this.record(id(last)) === null) return last;
+    const frontier = this.order.find((ref) => this.record(id(ref)) === null);
+    if (frontier) return frontier;
+    return last && open ? last : this.order[this.order.length - 1];
   }
 
   private load(): SaveData {
-    const fresh: SaveData = { version: 1, holes: {}, settings: { ...DEFAULT_SETTINGS }, last: null };
-    try {
-      const raw = this.storage?.getItem(KEY);
-      if (!raw) return fresh;
-      const parsed = JSON.parse(raw) as Partial<SaveData>;
-      if (parsed.version !== 1) return fresh;
-      const known = new Set(this.worlds.flatMap((world) => world.holes.map((hole) => hole.id)));
-      for (const [id, record] of Object.entries(parsed.holes ?? {})) {
-        const stars = record?.stars;
-        const valid = (stars === 1 || stars === 2 || stars === 3) && Number.isFinite(record.strokes);
-        if (known.has(id) && valid) fresh.holes[id] = { stars, strokes: record.strokes };
+    const known = new Set(allHoles(this.chapters).map((hole) => hole.id));
+    const read = (key: string) => {
+      try {
+        return readSave(this.storage?.getItem(key), known);
+      } catch {
+        return null;
       }
-      fresh.settings = { ...DEFAULT_SETTINGS, ...parsed.settings };
-      fresh.last = typeof parsed.last === 'string' ? parsed.last : null;
-      return fresh;
-    } catch {
-      return fresh;
-    }
+    };
+    const current = read(KEY);
+    if (current) return current.data;
+    const legacy = read(LEGACY_KEY);
+    if (!legacy) return freshSave();
+    this.data = legacy.data;
+    // Written at once under the new key, so the migration happens exactly one time.
+    this.save();
+    return legacy.data;
   }
 
   private save(): void {

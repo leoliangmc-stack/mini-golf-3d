@@ -147,6 +147,64 @@ export class AudioEngine {
     );
   }
 
+  /** A whole chapter finished: the world fanfare, then a held chord on top. */
+  chapterComplete(): void {
+    this.worldComplete();
+    [784, 988, 1175, 1568].forEach((hz) =>
+      this.tone({ wave: 'triangle', from: hz, length: 1.4, level: 0.14, delay: 1.75 }),
+    );
+  }
+
+  /** A hard landing after a drop, e.g. onto a lower roof. `speed` is the change of velocity in m/s. */
+  land(speed: number): void {
+    const level = Math.min(1, speed / 8);
+    this.tone({ from: 150, to: 48, length: 0.18, level: 0.42 * level });
+    this.noise({ filter: 'lowpass', from: 520, to: 120, length: 0.16, level: 0.26 * level });
+  }
+
+  /** The ball going into a tunnel mouth: a hollow swoop down. */
+  tunnelEnter(): void {
+    this.tone({ from: 540, to: 150, length: 0.18, level: 0.24 });
+    this.noise({ filter: 'bandpass', from: 900, to: 260, length: 0.16, level: 0.12 });
+  }
+
+  /** The ball coming out of the other mouth: the swoop back up, and a pop. */
+  tunnelExit(): void {
+    this.tone({ from: 170, to: 620, length: 0.15, level: 0.24 });
+    this.tone({ wave: 'triangle', from: 780, length: 0.06, level: 0.16, delay: 0.14 });
+  }
+
+  /** The lid of the cup sliding open or shut. Kept quiet: it happens all through a hole. */
+  cupLid(open: boolean): void {
+    this.tone({ wave: 'triangle', from: open ? 880 : 1320, to: open ? 1320 : 740, length: 0.09, level: 0.09 });
+    this.noise({ filter: 'highpass', from: 3200, length: 0.03, level: 0.05 });
+  }
+
+  /** One second off the countdown. */
+  timerTick(): void {
+    this.tone({ wave: 'square', from: 1250, length: 0.025, level: 0.05 });
+  }
+
+  /** One of the last seconds of the countdown. */
+  timerWarn(): void {
+    this.tone({ wave: 'square', from: 990, length: 0.11, level: 0.2 });
+    this.tone({ wave: 'square', from: 990, length: 0.11, level: 0.2, delay: 0.16 });
+  }
+
+  /** A clock picked up: time added. */
+  timeBonus(): void {
+    [784, 1047, 1319].forEach((hz, i) =>
+      this.tone({ wave: 'triangle', from: hz, length: 0.14, level: 0.2, delay: i * 0.06 }),
+    );
+  }
+
+  /** The countdown ran out. */
+  explode(): void {
+    this.noise({ filter: 'lowpass', from: 1600, to: 60, length: 0.8, level: 0.7 });
+    this.tone({ from: 95, to: 28, length: 0.7, level: 0.55 });
+    this.noise({ filter: 'highpass', from: 2400, length: 0.08, level: 0.3 });
+  }
+
   cannonLoad(): void {
     this.tone({ from: 170, to: 80, length: 0.18, level: 0.3 });
   }

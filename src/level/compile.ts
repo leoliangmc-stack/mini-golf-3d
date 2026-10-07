@@ -21,6 +21,8 @@ export interface CompiledGround {
   indices: Uint32Array;
   /** Surface id of each triangle, in index order. */
   triangleSurfaces: string[];
+  /** Which ground piece each triangle came from, as an index into `CompiledHole.bodies`. */
+  trianglePieces: number[];
   /** Surface at a point on the mesh, or null if the point is not on the ground. */
   surfaceAt(point: XYZ): string | null;
 }
@@ -117,6 +119,7 @@ function compileGround(
   const vertices: number[] = [];
   const indices: number[] = [];
   const triangleSurfaces: string[] = [];
+  const trianglePieces: number[] = [];
   const bodies: CompiledBody[] = [];
   const vertexIds = new Map<string, number>();
   // Several layers can share a cell when one piece passes over another.
@@ -172,6 +175,7 @@ function compileGround(
         const d = vertex(ix + 1, iz, at(ix + 1, iz));
         indices.push(a, b, c, a, c, d);
         triangleSurfaces.push(piece.surface, piece.surface);
+        trianglePieces.push(bodies.length, bodies.length);
       }
     }
 
@@ -194,6 +198,7 @@ function compileGround(
     vertices: new Float32Array(vertices),
     indices: new Uint32Array(indices),
     triangleSurfaces,
+    trianglePieces,
     surfaceAt(p) {
       const layers = cells.get(`${Math.floor(p.x / FLOOR_CELL)},${Math.floor(p.z / FLOOR_CELL)}`);
       if (!layers) return null;

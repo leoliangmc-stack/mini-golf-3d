@@ -13,13 +13,19 @@ interface Providers {
   umami?: { track(event: string, props?: AnalyticsProps): void };
 }
 
-export function track(event: string, props: AnalyticsProps = {}): void {
+/** Sends an event. Returns whether a provider was there to take it. */
+export function track(event: string, props: AnalyticsProps = {}): boolean {
   try {
     const providers = window as unknown as Providers;
     if (providers.plausible) providers.plausible(event, { props });
     else if (providers.umami) providers.umami.track(event, props);
-    else if (import.meta.env.DEV) console.debug('[analytics]', event, props);
+    else {
+      if (import.meta.env.DEV) console.debug('[analytics]', event, props);
+      return false;
+    }
+    return true;
   } catch {
     // Analytics must never break the game.
+    return false;
   }
 }
