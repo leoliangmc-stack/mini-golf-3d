@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#bfe0f3" />
+    <meta name="description" content="3D mini golf where every world has a different rule." />
+    <title>3D Mini Golf</title>
+    <link rel="stylesheet" href="/src/ui/hud.css" />
+    <link rel="stylesheet" href="/src/ui/screens.css" />
+    <!--
+      Anonymous analytics (SPEC 2.14): add your provider's script tag here.
+      The game detects Plausible or Umami by itself; see src/app/analytics.ts.
+    -->
+  </head>
+  <body data-mode="menu">
+    <canvas id="view"></canvas>
+
+    <div id="hud">
+      <div class="hud-top">
+        <span id="hole-name"></span>
+        <span id="strokes"></span>
+      </div>
+      <div id="challenge"></div>
+
+      <button id="retry" class="round" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5v5h5M5.6 14a7 7 0 1 0 1.5-7.3L5 10" /></svg>
+      </button>
+      <div class="hud-right">
+        <span id="rule-tag"></span>
+        <button id="pause" class="round" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12" /></svg>
+        </button>
+      </div>
+      <div class="camera-pad">
+        <button id="cam-left" class="round" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5 4 9l4 4M4 9h9a6 6 0 0 1 0 12h-2" /></svg>
+        </button>
+        <button id="cam-right" class="round" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16 5 4 4-4 4M20 9h-9a6 6 0 0 0 0 12h2" /></svg>
+        </button>
+        <button id="cam-in" class="round" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+        </button>
+        <button id="cam-out" class="round" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /></svg>
+        </button>
+      </div>
+
+      <div id="power" aria-hidden="true"><div id="power-fill"></div></div>
+      <div id="toast" role="status"></div>
+      <div id="hint" aria-hidden="true">
+        <div id="hint-label"></div>
+        <div class="hint-band"></div>
+        <div class="hint-finger"></div>
+      </div>
+    </div>
+
+    <div id="card" class="overlay" hidden>
+      <div class="panel">
+        <div class="eyebrow" id="card-world"></div>
+        <h1 id="card-rule"></h1>
+        <p class="tap" id="card-tap"></p>
+      </div>
+    </div>
+
+    <div id="result" class="overlay" hidden>
+      <div class="panel">
+        <div class="eyebrow" id="result-sub"></div>
+        <div class="stars" id="result-stars" aria-hidden="true"><span>★</span><span>★</span><span>★</span></div>
+        <h1 id="result-title"></h1>
+        <p id="result-par"></p>
+        <p class="challenge" id="result-challenge"></p>
+        <div class="actions">
+          <button id="result-retry" type="button"></button>
+          <button id="result-next" type="button" class="primary"></button>
+        </div>
+      </div>
+    </div>
+
+    <div id="screen" class="screen" hidden></div>
+
+    <div id="start" class="screen">
+      <div class="stack">
+        <h1 class="logo" id="start-title">3D MINI GOLF</h1>
+        <p class="tagline" id="start-tagline"></p>
+        <button id="start-button" type="button" class="primary big" disabled></button>
+      </div>
+    </div>
+
+    <div id="rotate">
+      <div class="rotate-icon"></div>
+      <p id="rotate-text"></p>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

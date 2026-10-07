@@ -1,0 +1,147 @@
+#dev-toggle {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  z-index: 60;
+  min-width: 44px;
+  min-height: 34px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(29, 43, 58, 0.78);
+  color: #fff;
+  font: 700 11px ui-monospace, Menlo, monospace;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+#dev-toggle.open {
+  background: #ff7a3d;
+}
+
+#dev-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  width: min(280px, 46vw);
+  padding: 10px 12px 60px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  background: rgba(22, 32, 44, 0.92);
+  color: #e6edf3;
+  font: 12px/1.35 ui-monospace, Menlo, monospace;
+}
+
+#dev-panel[hidden] {
+  display: none;
+}
+
+#dev-panel h2 {
+  margin: 12px 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8fb4d3;
+}
+
+#dev-panel section:first-child h2 {
+  margin-top: 0;
+}
+
+#dev-panel select,
+#dev-panel button,
+#dev-panel textarea {
+  font: inherit;
+  color: inherit;
+  background: #2b3b4d;
+  border: 1px solid #40566d;
+  border-radius: 6px;
+}
+
+#dev-panel select {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 6px;
+}
+
+#dev-panel button {
+  flex: 1;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+#dev-panel button:active {
+  background: #40566d;
+}
+
+.dev-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.dev-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.dev-shots {
+  margin: 0;
+  padding-left: 20px;
+  color: #b9c7d4;
+}
+
+.dev-status {
+  margin-top: 6px;
+  color: #8fe39a;
+  overflow-wrap: anywhere;
+}
+
+.dev-status.bad {
+  color: #ff8a80;
+}
+
+#dev-panel fieldset {
+  margin: 0 0 8px;
+  padding: 6px 8px 8px;
+  border: 1px solid #40566d;
+  border-radius: 6px;
+}
+
+#dev-panel legend {
+  padding: 0 4px;
+  color: #8fb4d3;
+}
+
+.dev-slider {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  margin-top: 4px;
+}
+
+.dev-slider output {
+  color: #ffd23d;
+  font-variant-numeric: tabular-nums;
+}
+
+.dev-slider input {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 2px 0 0;
+  touch-action: pan-x;
+}
+
+.dev-export {
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px;
+  resize: vertical;
+  user-select: text;
+  -webkit-user-select: text;
+}

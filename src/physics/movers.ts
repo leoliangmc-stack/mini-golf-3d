@@ -1,0 +1,176 @@
+import { FIXED_DT } from '../core/loop';
+import type { Vec3, XYZ } from '../core/types';
+import type { CycleDef, MoverDef } from '../level/schema';
+import type { Ball } from './ball';
+import { RAPIER } from './rapier';
+import { getSurface, type GroundCarrier, type SurfaceMap } from './surfaces';
+import type { PhysicsWorld } from './world';
+import { shapeContains } from './zones/shape';
+
+export interface MoverPose {
+  position: XYZ;
+  /** Rotation about +Y, in radians. */
+  yaw: number;
+}
+
+const RAD = Math.PI / 180;
+/** Collides with everything / with nothing. */
+const SOLID = 0xffffffff;
+const GHOST = 0x00020000;
+
+/** Position within a cycle, 0..1, at a given tick. Periods are whole ticks so cycles repeat exactly. */
+function cyclePhase(tick: number, period: number, phase = 0): number {
+  const ticks = Math.max(2, Math.round(period / FIXED_DT));
+  const u = (tick % ticks) / ticks + phase;
+  return u - Math.floor(u);
+}
+
+/** How far along its travel a back-and-forth mover is at a given tick: 0 at the start, 1 at the far end. */
+export function cycleValue(tick: number, def: CycleDef): number {
+  const u = cyclePhase(tick, def.period, def.phase);
+  const [holdStart, holdEnd] = def.hold ?? [0, 0];
+  const move = (1 - holdStart - holdEnd) / 2;
+  const ease = (x: number) => 0.5 - 0.5 * Math.cos(Math.PI * x);
+  if (u < holdStart) return 0;
+  if (u < holdStart + move) return ease((u - holdStart) / move);
+  if (u < holdStart + move + holdEnd) return 1;
+  return ease((1 - u) / move);
+}
+
+/** Where a mover is at a given tick. A pure function of the tick: this is what makes timing reproducible. */
+export function moverPose(def: MoverDef, tick: number): MoverPose {
+  const [x, y, z] = def.position;
+  const yaw = (def.yaw ?? 0) * RAD;
+  const { motion } = def;
+  if (motion.type === 'slide') {
+    const s = cycleValue(tick, motion);
+    return {
+      position: { x: x + motion.offset[0] * s, y: y + motion.offset[1] * s, z: z + motion.offset[2] * s },
+      yaw,
+    };
+  }
+  const angle =
+    motion.type === 'swing'
+      ? motion.angle * RAD * cycleValue(tick, motion)
+      : 2 * Math.PI * cyclePhase(tick, motion.period, motion.phase);
+  const [px, pz] = motion.pivot;
+  const dx = x - px;
+  const dz = z - pz;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return {
+    position: { x: px + dx * cos + dz * sin, y, z: pz - dx * sin + dz * cos },
+    yaw: yaw + angle,
+  };
+}
+
+/** Maps a point fixed to the mover in one pose to where it is in another pose. */
+function carry(point: XYZ, from: MoverPose, to: MoverPose): XYZ {
+  const dx = point.x - from.position.x;
+  const dz = point.z - from.position.z;
+  const turn = to.yaw - from.yaw;
+  const cos = Math.cos(turn);
+  const sin = Math.sin(turn);
+  return {
+    x: to.position.x + dx * cos + dz * sin,
+    y: point.y + to.position.y - from.position.y,
+    z: to.position.z - dx * sin + dz * cos,
+  };
+}
+
+/** A moving part in the physics world. */
+export class Mover implements GroundCarrier {
+  readonly body: RAPIER.RigidBody;
+  readonly collider: RAPIER.Collider;
+  /** Pose before and after the last physics step, for render interpolation. */
+  prevPose: MoverPose;
+  pose: MoverPose;
+  private nextPose: MoverPose;
+
+  constructor(
+    readonly def: MoverDef,
+    world: PhysicsWorld,
+    surfaces: SurfaceMap,
+  ) {
+    this.pose = this.prevPose = moverPose(def, world.tick);
+    this.nextPose = moverPose(def, world.tick + 1);
+    const { position, yaw } = this.pose;
+    this.body = world.raw.createRigidBody(
+      RAPIER.RigidBodyDesc.kinematicPositionBased()
+        .setTranslation(position.x, position.y, position.z)
+        .setRotation(yawRotation(yaw)),
+    );
+    this.collider = world.raw.createCollider(
+      RAPIER.ColliderDesc.cuboid(def.size[0] / 2, def.size[1] / 2, def.size[2] / 2)
+        .setFriction(0)
+        .setRestitution(getSurface(def.surface).restitution)
+        .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Max),
+      this.body,
+    );
+    surfaces.setCollider(this.collider.handle, 'mover', def.surface);
+    surfaces.setCarrier(this.collider.handle, this);
+  }
+
+  /** Schedules the move for the coming step. Call before stepping the world. */
+  preStep(world: PhysicsWorld, ball: Ball): void {
+    this.nextPose = moverPose(this.def, world.tick + 1);
+    this.body.setNextKinematicTranslation(this.nextPose.position);
+    this.body.setNextKinematicRotation(yawRotation(this.nextPose.yaw));
+    if (this.def.role === 'platform') {
+      // A platform only exists for a ball that is above its top. A ball rolling up to it
+      // from level ground would otherwise trip on its edge (see tests/seams.test.ts).
+      this.collider.setCollisionGroups(this.isUnder(ball.position()) ? SOLID : GHOST);
+    }
+  }
+
+  /** Call after stepping the world. */
+  postStep(): void {
+    this.prevPose = this.pose;
+    this.pose = this.nextPose;
+  }
+
+  /** True when `point` is over the top face of the box. */
+  isUnder(point: XYZ): boolean {
+    const { position, yaw } = this.pose;
+    const dx = point.x - position.x;
+    const dz = point.z - position.z;
+    const cos = Math.cos(yaw);
+    const sin = Math.sin(yaw);
+    const localX = dx * cos - dz * sin;
+    const localZ = dx * sin + dz * cos;
+    const [width, height, depth] = this.def.size;
+    return Math.abs(localX) <= width / 2 && Math.abs(localZ) <= depth / 2 && point.y >= position.y + height / 2;
+  }
+
+  pointVelocity(point: XYZ): XYZ {
+    const next = carry(point, this.pose, this.nextPose);
+    return {
+      x: (next.x - point.x) / FIXED_DT,
+      y: (next.y - point.y) / FIXED_DT,
+      z: (next.z - point.z) / FIXED_DT,
+    };
+  }
+
+  /** True if a ball may not be left at `point` because of this mover. */
+  forbidsRest(point: XYZ): boolean {
+    return this.def.sweep !== undefined && shapeContains(this.def.sweep, point);
+  }
+
+  /** The safe spot nearest to `point`, if the hole data lists any. */
+  nearestRest(point: XYZ): Vec3 | null {
+    let best: Vec3 | null = null;
+    let bestDistance = Infinity;
+    for (const rest of this.def.rest ?? []) {
+      const d = Math.hypot(rest[0] - point.x, rest[1] - point.y, rest[2] - point.z);
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = rest;
+      }
+    }
+    return best;
+  }
+}
+
+function yawRotation(yaw: number): { x: number; y: number; z: number; w: number } {
+  return { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) };
+}
