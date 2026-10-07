@@ -6,17 +6,47 @@ export interface Pull {
   power: number;
 }
 
-export function dragToPull(dx: number, dy: number, maxDragPx: number): Pull {
-  const len = Math.hypot(dx, dy);
-  if (len < 1e-6) return { x: 0, y: 0, power: 0 };
-  return { x: dx / len, y: dy / len, power: Math.min(1, len / maxDragPx) };
+/**
+ * Input feel, mutable for tuning. A drag is full power at a fraction of the shorter screen
+ * side, but never less than a fixed length so small phones keep some resolution. Where the
+ * screen edge is closer than that, full power comes `edgeMarginPx` short of the edge
+ * instead, though never in less than `minRoomFraction` of the usual length.
+ */
+export const INPUT = { fullDragFraction: 0.3, fullDragMinPx: 110, edgeMarginPx: 20, minRoomFraction: 0.35 };
+
+/** How long a drag is full power when nothing is in the way. */
+export function fullDragPx(width: number, height: number): number {
+  return Math.max(INPUT.fullDragMinPx, INPUT.fullDragFraction * Math.min(width, height));
 }
 
 /**
- * How long a drag is full power: a fraction of the shorter screen side, but never
- * less than a fixed length so small phones keep some resolution. Mutable for tuning.
+ * How far a drag that starts at (x, y) and heads along (dx, dy) can go before the finger
+ * comes within the edge margin of a width by height screen.
  */
-export const INPUT = { fullDragFraction: 0.3, fullDragMinPx: 110 };
+export function dragRoom(x: number, y: number, dx: number, dy: number, width: number, height: number): number {
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return Infinity;
+  const margin = INPUT.edgeMarginPx;
+  const along = (from: number, step: number, size: number) =>
+    step > 0 ? (size - margin - from) / step : step < 0 ? (margin - from) / step : Infinity;
+  return Math.max(0, Math.min(along(x, dx / len, width), along(y, dy / len, height)));
+}
+
+/**
+ * Power grows with the length of the drag and is full at `fullPx`. With less room than
+ * that (the camera parks the ball near the bottom edge, and a pull toward the cup heads
+ * straight for it), full power lands where the room ends: gentle pulls keep their usual
+ * rate and the missing length is made up toward the end.
+ */
+export function dragToPull(dx: number, dy: number, fullPx: number, roomPx = fullPx): Pull {
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return { x: 0, y: 0, power: 0 };
+  // The floor keeps a twitch right at the edge from being a full shot.
+  const reach = Math.min(fullPx, Math.max(roomPx, INPUT.minRoomFraction * fullPx));
+  const t = len / reach;
+  const power = t >= 1 ? 1 : len / fullPx + (1 - reach / fullPx) * t * t;
+  return { x: dx / len, y: dy / len, power };
+}
 
 export interface SlingshotHandlers {
   /** Whether a new aim may start right now. */
@@ -34,8 +64,12 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
   const active = new Set<number>();
   let aiming: { id: number; x: number; y: number } | null = null;
 
-  const maxDrag = () =>
-    Math.max(INPUT.fullDragMinPx, INPUT.fullDragFraction * Math.min(window.innerWidth, window.innerHeight));
+  const pullTo = (from: { x: number; y: number }, e: PointerEvent): Pull => {
+    const dx = e.clientX - from.x;
+    const dy = e.clientY - from.y;
+    const { innerWidth: width, innerHeight: height } = window;
+    return dragToPull(dx, dy, fullDragPx(width, height), dragRoom(from.x, from.y, dx, dy, width, height));
+  };
 
   const cancel = () => {
     if (!aiming) return;
@@ -55,18 +89,18 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
     } catch {
       // Capture is a nicety (keeps the drag alive outside the canvas); aiming works without it.
     }
-    handlers.onAim(dragToPull(0, 0, maxDrag()));
+    handlers.onAim(pullTo(aiming, e));
   };
 
   const onMove = (e: PointerEvent) => {
     if (aiming?.id !== e.pointerId) return;
-    handlers.onAim(dragToPull(e.clientX - aiming.x, e.clientY - aiming.y, maxDrag()));
+    handlers.onAim(pullTo(aiming, e));
   };
 
   const onUp = (e: PointerEvent) => {
     active.delete(e.pointerId);
     if (aiming?.id !== e.pointerId) return;
-    const pull = dragToPull(e.clientX - aiming.x, e.clientY - aiming.y, maxDrag());
+    const pull = pullTo(aiming, e);
     aiming = null;
     handlers.onAim(null);
     handlers.onRelease(pull);

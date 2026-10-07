@@ -18,7 +18,9 @@ npm test         # headless engine tests
 npm run build    # typecheck + production build into dist/
 ```
 
-Landscape only. Drag anywhere to aim (pull back, release to shoot). Two fingers twist
+Landscape only. Drag anywhere to aim (pull back, release to shoot). A pull that starts
+close to a screen edge, such as straight down from the ball, reaches full power just
+short of that edge, so the finger never has to leave the screen. Two fingers twist
 and pinch the camera; on a desktop, right-drag and the wheel do the same.
 
 ## Status

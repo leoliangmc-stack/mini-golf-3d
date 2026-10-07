@@ -74,6 +74,8 @@ export function collectTunables(game: Game): TunableGroup[] {
         field('rules.maxShotSpeed', 'max speed (m/s)', RULES, 'maxShotSpeed', [6, 30, 0.5]),
         field('input.fullDragMinPx', 'full drag, min px', INPUT, 'fullDragMinPx', [60, 300, 5]),
         field('input.fullDragFraction', 'full drag, of screen', INPUT, 'fullDragFraction', [0.1, 0.6, 0.01]),
+        field('input.edgeMarginPx', 'full drag, px short of edge', INPUT, 'edgeMarginPx', [0, 60, 1]),
+        field('input.minRoomFraction', 'full drag, least of usual', INPUT, 'minRoomFraction', [0.1, 1, 0.05]),
       ],
     },
     {
