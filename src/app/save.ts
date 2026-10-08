@@ -14,7 +14,7 @@ export interface HoleRecord {
 }
 
 /** Version of the save format this build writes. Bump it together with a new entry in MIGRATIONS. */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export interface SaveData {
   version: typeof SAVE_VERSION;
@@ -51,6 +51,10 @@ const MIGRATIONS: Record<number, (save: Loose) => Loose> = {
   // The Chapter 1 finale and all of Chapter 2 have no record yet, which is what locked
   // means: the finale opens by itself for a player who had finished all 18 holes.
   1: (save) => ({ ...save, version: 2 }),
+  // 2 -> 3, Chapter 3. The same again: no hole changed its id, so every record carries
+  // over as it is, and Chapter 3 is locked simply because nothing in it has a record.
+  // It opens by itself for a player who had finished the Chapter 2 finale.
+  2: (save) => ({ ...save, version: 3 }),
 };
 
 export interface LoadedSave {

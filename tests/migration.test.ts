@@ -5,8 +5,9 @@ import { CHAPTERS } from '../src/data/chapters';
 import { allHoles } from '../src/level/chapters';
 
 const V1_KEY = 'minigolf.save.v1';
-const KEY = 'minigolf.save';
-const [chapter1, chapter2] = CHAPTERS;
+const V2_KEY = 'minigolf.save';
+const KEY = 'minigolf.save.v3';
+const [chapter1, chapter2, chapter3] = CHAPTERS;
 const known = new Set(allHoles(CHAPTERS).map((hole) => hole.id));
 /** The 18 holes version 1 shipped with, in play order. */
 const v1Holes = chapter1.worlds.flatMap((world) => world.holes);
@@ -24,6 +25,27 @@ function v1Save(holes: Record<string, HoleRecord>, last: string | null = null): 
     settings: { lang: 'zh', sfx: false, music: true, quality: 'low' },
     last,
   });
+}
+
+/** The 32 holes version 2 shipped with, in play order: Chapter 1 with its finale, then Chapter 2 with its own. */
+const v2Holes = [...chapter1.worlds, chapter1.finale, ...chapter2.worlds, chapter2.finale].flatMap((world) => world.holes);
+
+/** A save exactly as version 2 wrote it. */
+function v2Save(holes: Record<string, HoleRecord>, last: string | null = null, extra: object = {}): string {
+  return JSON.stringify({
+    version: 2,
+    holes,
+    settings: { lang: 'en', sfx: true, music: false, quality: 'high' },
+    last,
+    ...extra,
+  });
+}
+
+/** Scores for the first `count` holes of version 2, all different so a mix-up would show. */
+function v2Scores(count: number): Record<string, HoleRecord> {
+  return Object.fromEntries(
+    v2Holes.slice(0, count).map((hole, i) => [hole.id, { stars: ((i % 3) + 1) as 1 | 2 | 3, strokes: (i % 7) + 1 }]),
+  );
 }
 
 /** Scores for the first `count` holes of version 1, all different so a mix-up would show. */
@@ -184,6 +206,79 @@ describe('migrating once', () => {
     const storage = memoryStorage();
     const progress = new Progress(CHAPTERS, storage);
     progress.complete('ice-1', { holed: true, strokes: 2, stars: 2, challengeMet: false, ticks: 10 });
+    expect(new Progress(CHAPTERS, storage).migratedFrom).toBeNull();
+  });
+});
+
+describe('save migration, version 2 to 3 (SPEC v3 2.10)', () => {
+  it('keeps every score of a version 2 save exactly as it was (SPEC v3 5.3 #10)', () => {
+    for (const count of [0, 1, 19, 25, 32]) {
+      const before = v2Scores(count);
+      const loaded = readSave(v2Save(before, 'city-2'), known)!;
+      expect(loaded.migratedFrom).toBe(2);
+      expect(loaded.data.version).toBe(3);
+      expect(loaded.data.holes).toEqual(before);
+      expect(loaded.data.last).toBe('city-2');
+      expect(loaded.data.settings).toEqual({ lang: 'en', sfx: true, music: false, quality: 'high' });
+
+      const progress = new Progress(CHAPTERS, memoryStorage({ [V2_KEY]: v2Save(before, 'city-2') }));
+      expect(progress.completedHoles).toBe(count);
+      for (const [id, record] of Object.entries(before)) expect(progress.record(id)).toEqual(record);
+      // Nothing in Chapter 3 has a score, whatever came before.
+      for (const world of [...chapter3.worlds, chapter3.finale]) {
+        for (const hole of world.holes) expect(progress.record(hole.id)).toBeNull();
+      }
+    }
+  });
+
+  it('adds Chapter 3 locked, and opens it for a player who finished the Chapter 2 finale', () => {
+    const almost = new Progress(CHAPTERS, memoryStorage({ [V2_KEY]: v2Save(v2Scores(31), 'bomb-3') }));
+    expect(almost.chapterUnlocked(chapter3)).toBe(false);
+    for (const world of [...chapter3.worlds, chapter3.finale]) {
+      world.holes.forEach((_, index) => expect(almost.isUnlocked(world, index)).toBe(false));
+    }
+    expect(almost.resume()).toEqual({ world: chapter2.finale, index: 0 });
+
+    const done = new Progress(CHAPTERS, memoryStorage({ [V2_KEY]: v2Save(v2Scores(32), 'ch2-finale') }));
+    expect(done.chapterUnlocked(chapter3)).toBe(true);
+    expect(done.isUnlocked(chapter3.worlds[0], 0)).toBe(true);
+    // Only the first hole: Chapter 3 unlocks in order, like the others.
+    expect(done.isUnlocked(chapter3.worlds[0], 1)).toBe(false);
+    expect(done.isUnlocked(chapter3.finale, 0)).toBe(false);
+    // PLAY takes the returning player straight to the new chapter.
+    expect(done.resume()).toEqual({ world: chapter3.worlds[0], index: 0 });
+  });
+
+  it('writes the new save under a new key and leaves the version 2 save untouched', () => {
+    // If this build is rolled back, the version 2 build finds its own save as it left it.
+    const original = v2Save(v2Scores(32), 'ch2-finale');
+    const storage = memoryStorage({ [V2_KEY]: original, [V1_KEY]: v1Save(scores(18)) });
+    const progress = new Progress(CHAPTERS, storage);
+    progress.complete('grow-1', { holed: true, strokes: 1, stars: 3, challengeMet: true, ticks: 10 });
+    expect(storage.data[V2_KEY]).toBe(original);
+    const written = JSON.parse(storage.data[KEY]);
+    expect(written.version).toBe(3);
+    expect(Object.keys(written.holes)).toHaveLength(33);
+  });
+
+  it('takes the version 2 save over the version 1 save when both are there', () => {
+    const storage = memoryStorage({ [V2_KEY]: v2Save(v2Scores(25)), [V1_KEY]: v1Save(scores(4)) });
+    expect(new Progress(CHAPTERS, storage).completedHoles).toBe(25);
+  });
+
+  it('still carries a version 1 save all the way over', () => {
+    const progress = new Progress(CHAPTERS, memoryStorage({ [V1_KEY]: v1Save(scores(18), 'gravity-3') }));
+    expect(progress.completedHoles).toBe(18);
+    expect(progress.migratedFrom).toBe(1);
+    expect(progress.chapterUnlocked(chapter3)).toBe(false);
+  });
+
+  it('reports the return once, as coming from version 2', () => {
+    // This save was itself carried over from version 1, and that was never reported.
+    const storage = memoryStorage({ [V2_KEY]: v2Save(v2Scores(20), null, { migratedFrom: 1 }) });
+    const first = new Progress(CHAPTERS, storage);
+    expect(first.migratedFrom).toBe(2);
+    first.migrationReported();
     expect(new Progress(CHAPTERS, storage).migratedFrom).toBeNull();
   });
 });

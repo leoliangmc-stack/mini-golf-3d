@@ -11,12 +11,14 @@ export interface StorageLike {
   setItem(key: string, value: string): void;
 }
 
-const KEY = 'minigolf.save';
+const KEY = 'minigolf.save.v3';
 /**
- * Where version 1 kept its save. It is read once, to carry the scores over, and never
- * written again, so the original stays intact if this build is ever rolled back.
+ * Where versions 2 and 1 kept their saves, newest first. An older save is read once, to
+ * carry the scores over, and never written again: an older build does not understand a
+ * newer save and would start the player from nothing, so if this build is ever rolled
+ * back, the save that build wrote is still there for it.
  */
-const LEGACY_KEY = 'minigolf.save.v1';
+const LEGACY_KEYS = ['minigolf.save', 'minigolf.save.v1'];
 
 /** localStorage if it works here, otherwise null: private browsing may block it. */
 export function safeStorage(): StorageLike | null {
@@ -160,12 +162,15 @@ export class Progress {
     };
     const current = read(KEY);
     if (current) return current.data;
-    const legacy = read(LEGACY_KEY);
-    if (!legacy) return freshSave();
-    this.data = legacy.data;
-    // Written at once under the new key, so the migration happens exactly one time.
-    this.save();
-    return legacy.data;
+    for (const key of LEGACY_KEYS) {
+      const legacy = read(key);
+      if (!legacy) continue;
+      this.data = legacy.data;
+      // Written at once under the new key, so the migration happens exactly one time.
+      this.save();
+      return legacy.data;
+    }
+    return freshSave();
   }
 
   private save(): void {

@@ -1,8 +1,9 @@
 import type { Vec2, Vec3 } from '../core/types';
 import type { DecorDef, FinaleDef, PieceDef } from '../level/schema';
 import type { ZoneDef } from '../physics/zones';
+import { growPad, shrinkPad, splitPad } from '../physics/zones/pads';
 import { headingVector, tunnelPair, type TunnelEnd } from '../physics/zones/tunnel';
-import { CUP, FALL, STREET } from './worlds/common';
+import { CUP, FALL, rack, STREET } from './worlds/common';
 
 const magnet = (x: number, z: number, strength: number, reach: number): { post: PieceDef; field: ZoneDef } => ({
   post: { type: 'pillar', at: [x, z], radius: 0.35, surface: strength > 0 ? 'magnetRed' : 'magnetBlue' },
@@ -209,6 +210,69 @@ export const COUNTDOWN_RUN: FinaleDef = {
         clock(9, 4, -4.5, 8),
       ],
       outOfBounds: 'lastPosition',
+    },
+  ],
+};
+
+/**
+ * Chapter 3, hole 13: a goal in two steps (SPEC v3 2.6). The six pins come first; only
+ * when the last one is down does the cup appear. On the way: a turn in mid-air off the
+ * launch deck (time freeze), a green pad that makes the ball heavy enough to plough
+ * through pins (growing), and a doorway that sends one half at each group (clones).
+ * The cup takes the medium ball, so a ball that grew has to shrink again.
+ */
+export const GRAND_FINALE: FinaleDef = {
+  id: 'ch3-finale',
+  name: { en: 'The Grand Finale', zh: '压轴大戏' },
+  theme: 'carnival',
+  ruleCard: {
+    en: 'Knock down every pin — then the hole appears.',
+    zh: '先撞倒所有木桩，洞口才会出现。',
+  },
+  ruleTag: { en: 'FINALE', zh: '终局' },
+  holes: [
+    {
+      id: 'ch3-finale',
+      par: 5,
+      tee: [0, 2, 10],
+      goal: {
+        type: 'sequence',
+        steps: [
+          { type: 'knockdown', pins: [...rack([4.05, 0, -4], 2), ...rack([6.95, 0, -4], 2)] },
+          { type: 'cup', position: [5.5, 0, -8.5], ...CUP, acceptSize: 'medium' },
+        ],
+      },
+      challenge: { type: 'maxStrokes', strokes: 4, text: { en: 'Finish in four strokes', zh: '四杆完成' } },
+      skills: { freeze: 2 },
+      maxBalls: 2,
+      pieces: [
+        // Launch deck: railed, open at the far end, with nothing beyond it
+        { type: 'floor', min: [-0.5, 6], max: [0.5, 11], y: 2, depth: 1.6, surface: 'felt' },
+        { type: 'wall', from: [-0.5, 11], to: [0.5, 11], y: 2, surface: 'brass' },
+        { type: 'wall', from: [-0.5, 11], to: [-0.5, 6], y: 2, surface: 'brass' },
+        { type: 'wall', from: [0.5, 11], to: [0.5, 6], y: 2, surface: 'brass' },
+        // The main floor. Its west side is open where the ball flies in.
+        { type: 'floor', min: [2, -10], max: [9, 6], depth: 1.6, surface: 'felt' },
+        { type: 'wall', from: [2, 6], to: [9, 6], surface: 'brass' },
+        { type: 'wall', from: [9, 6], to: [9, -10], height: 0.8, surface: 'brass' },
+        { type: 'wall', from: [9, -10], to: [2, -10], surface: 'brass' },
+        // A screen too tall to fly over from a deck two metres up, and no taller, so as not
+        // to hide the pins: the ball has to come down north of the doorway.
+        { type: 'wall', from: [2, -10], to: [2, 0], height: 3, thickness: 0.3, surface: 'brass' },
+        // The wall across it, as tall as the screen, with the doorway: the only way south
+        { type: 'wall', from: [2, 0], to: [4.9, 0], height: 3, thickness: 0.3, surface: 'brass' },
+        { type: 'wall', from: [6.1, 0], to: [9, 0], height: 3, thickness: 0.3, surface: 'brass' },
+        // Low enough that nothing gets through the doorway without touching the pad in it.
+        { type: 'beam', from: [4.9, 0], to: [6.1, 0], clearance: 0.45, height: 2.55, thickness: 0.3, surface: 'brass' },
+      ],
+      zones: [
+        FALL,
+        growPad([5.5, 0, 2.5], 0.6),
+        splitPad([5.5, 0, 0], 20, 0.5),
+        shrinkPad([5.5, 0, -6.5], 0.7),
+      ],
+      outOfBounds: 'lastPosition',
+      camera: { pitch: 58, maxDistance: 36 },
     },
   ],
 };

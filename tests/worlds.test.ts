@@ -26,12 +26,15 @@ describe('world data', () => {
     }
   });
 
-  it('is the game SPEC v2 2.1 describes: 18 + 1 holes, then 12 + 1', () => {
+  it('is the game SPEC v3 0 describes: 18 + 1 holes, then 12 + 1, then 12 + 1, 45 in all', () => {
     expect(CHAPTERS.map((chapter) => chapter.worlds.map((world) => world.id))).toEqual([
       ['ice', 'desert', 'sky', 'pirate', 'magnet', 'gravity'],
       ['forest', 'city', 'moving', 'bomb'],
+      ['grow', 'freeze', 'clone', 'bowl'],
     ]);
-    expect(CHAPTERS.map((chapter) => stagesOf(chapter).flatMap((stage) => stage.holes).length)).toEqual([19, 13]);
+    const counts = CHAPTERS.map((chapter) => stagesOf(chapter).flatMap((stage) => stage.holes).length);
+    expect(counts).toEqual([19, 13, 13]);
+    expect(holes.length - TEST_WORLD.holes.length).toBe(45);
   });
 
   it.each(holes)('$hole.id is well formed', ({ hole }) => {

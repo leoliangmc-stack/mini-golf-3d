@@ -2,10 +2,10 @@
 
 > It's Mini Golf, but every world has a different rule.
 
-A browser mini golf game: 2 chapters, 10 worlds, 32 holes, each world built around one
+A browser mini golf game: 3 chapters, 14 worlds, 45 holes, each world built around one
 mechanic. TypeScript, Three.js and Rapier; a static site with no backend. Requirements
 live in [SPEC.md](SPEC.md) (v1, Chapter 1), [SPEC-v2.md](SPEC-v2.md) (Chapter 2) and
-SPEC v3.0 (Chapter 3, under way), which are the source of truth for scope and milestones.
+SPEC v3.0 (Chapter 3), which are the source of truth for scope and milestones.
 
 **Play it: https://mini-golf-3d-self.vercel.app**
 
@@ -45,14 +45,20 @@ and pinch the camera; on a desktop, right-drag and the wheel do the same.
 | N7 share the link again, watch who comes back | not started |
 | P0 replay check: file format, `npm run replay`, 32 reference solutions, CI | done |
 | P1 goals (`cup` -> `goal`), several balls, ball state, skills | done |
-| P2 to P7 Chapter 3: four worlds, the finale, save migration | engine in place and tested; the holes come in the next release |
+| P2 Growing Ball: three sizes, pads, cups that take one size, crates, low bars | done |
+| P3 Time Freeze: freeze skill, strokes in mid-air | done |
+| P4 Clone Ball: split pads, picking a ball, camera framing every ball | done |
+| P5 Golf Bowling: pins, knock-down goal | done |
+| P6 Chapter 3 finale: a goal in steps | done |
+| P7 sound, music, text, save migration | done; see "Not yet verified" below |
 
 Not yet verified on real devices: frame rate, touch feel, first-load time on 4G, and
 audio on iOS. Everything so far was checked in a desktop browser and in headless tests.
 For Chapter 2 that leaves, from SPEC v2 5.2: #5 (occlusion fading on phones) and #6
-(the countdown pausing when a phone sends the page to the background). From SPEC v3
-5.3, of #3, every browser but Chromium: open the dev build on the device and press
-CHECK ALL REPLAYS in the dev panel.
+(the countdown pausing when a phone sends the page to the background). For Chapter 3,
+from SPEC v3 5.3: #8 (60 FPS with four balls and fifteen pins), #9 (picking a ball by
+tapping it without mis-taps) and, of #3, every browser but Chromium: open the dev build
+on the device and press CHECK ALL REPLAYS in the dev panel.
 
 ### Open decisions
 
@@ -112,6 +118,10 @@ and pull request, where the result can be seen before merging.
   which SPEC v3 2.8 does not list but 2.2 needs. A crate slides and never turns; a low
   bar is what "a narrow passage" is built from, because a gap between two walls asks
   for an aim no thumb can manage.
+- **Saves move to a new key.** Version 3 is written under `minigolf.save.v3` and the
+  version 2 save is left as it was, as the version 1 save was before it. A version 2
+  build does not understand a version 3 save and would start the player from nothing,
+  so after a rollback it must still find its own.
 - **The reference solutions of the first 18 holes were found by a search script,** not
   recorded by hand. It is not part of the game or of this repository (SPEC v3 4). The
   routes it found are valid, not necessarily the intended ones: several par 3 holes
@@ -177,8 +187,8 @@ src/
   audio/     synthesised sound effects and generated music
   ui/        HTML/CSS HUD and menus, all interface text (en / zh)
   debug/     development panel (not included in production builds)
-  data/      surfaces, themes, the ten worlds, the two finales and the chapter list
-             (content only, no logic)
+  data/      surfaces, themes, the fourteen worlds, the three finales and the chapter
+             list (content only, no logic)
 tests/       determinism, tunneling, seams, terrain, rules, scoring, movers, fields, saves,
              save migration, tunnels, the moving cup, countdown, rooftops, ball sizes,
              time freeze, clones, bowling and goals in steps, reference solutions
@@ -236,7 +246,7 @@ or `?lang=en` forces a language in any build.
 
 Every hole has one in `replays/<holeId>.json`: the inputs of a round that finishes it
 (each stroke's tick, direction, power and ball, each use of a skill) and how that round
-ended. `npm run replay` plays all 32 back without rendering, in well under a second,
+ended. `npm run replay` plays all 45 back without rendering, in well under a second,
 and prints a report; `npm test` and `npm run build` run the same check. A round has to
 end on the same tick, with the same strokes and stars, within a millimetre of the same
 place. In practice it ends in exactly the same place, to the last bit, and the tests

@@ -112,6 +112,52 @@ export function registerThemes(): void {
     sunIntensity: 1.6,
     sea: { color: 0x232733, y: 0 },
   });
+  // --- Chapter 3 ---
+  // Growing ball: a sunny playroom.
+  registerTheme('playroom', {
+    sky: 0xffe3c2,
+    ambientSky: 0xfffaf0,
+    ambientGround: 0xe0b98a,
+    ambientIntensity: 1.6,
+    sun: 0xfff3dd,
+    sunIntensity: 2.1,
+  });
+  // Time freeze: an observatory under a clear night sky.
+  registerTheme('observatory', {
+    sky: 0x14213d,
+    ambientSky: 0xbfd0ff,
+    ambientGround: 0x2b3a67,
+    ambientIntensity: 1.8,
+    sun: 0xeaf0ff,
+    sunIntensity: 1.7,
+  });
+  // Clone ball: a hall of mirrors, cool and bright.
+  registerTheme('mirrors', {
+    sky: 0xc5efe9,
+    ambientSky: 0xffffff,
+    ambientGround: 0x86c9c4,
+    ambientIntensity: 1.6,
+    sun: 0xffffff,
+    sunIntensity: 2,
+  });
+  // Golf bowling: a bowling alley at night, lit from above.
+  registerTheme('alley', {
+    sky: 0x23202e,
+    ambientSky: 0xfff0d6,
+    ambientGround: 0x4a3f5c,
+    ambientIntensity: 1.5,
+    sun: 0xfff1d0,
+    sunIntensity: 2.2,
+  });
+  // The Chapter 3 finale: fairground lights at dusk.
+  registerTheme('carnival', {
+    sky: 0x4b2a6b,
+    ambientSky: 0xffd9f2,
+    ambientGround: 0x5b3a86,
+    ambientIntensity: 1.7,
+    sun: 0xffe2b8,
+    sunIntensity: 2,
+  });
   registerTheme('pirate', {
     sky: 0x9fd8f0,
     ambientSky: 0xffffff,

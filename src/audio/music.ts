@@ -28,6 +28,12 @@ export const MUSIC: Record<string, MusicDef> = {
   clockwork: { bpm: 112, root: 64, scale: [0, 2, 4, 5, 7, 9, 11], wave: 'sine', brightness: 3600 },
   bomb: { bpm: 132, root: 55, scale: [0, 1, 3, 5, 6, 8, 10], wave: 'sawtooth', brightness: 1000 },
   midnight: { bpm: 124, root: 57, scale: [0, 2, 3, 5, 7, 8, 10], wave: 'sawtooth', brightness: 1300 },
+  // Chapter 3
+  playroom: { bpm: 116, root: 60, scale: [0, 2, 4, 5, 7, 9, 11], wave: 'square', brightness: 1700 },
+  observatory: { bpm: 72, root: 57, scale: [0, 2, 3, 7, 8], wave: 'sine', brightness: 2600 },
+  mirrors: { bpm: 106, root: 64, scale: [0, 2, 4, 6, 7, 9, 11], wave: 'triangle', brightness: 3000 },
+  alley: { bpm: 128, root: 55, scale: [0, 3, 5, 6, 7, 10], wave: 'square', brightness: 1250 },
+  carnival: { bpm: 136, root: 62, scale: [0, 2, 4, 7, 9], wave: 'sawtooth', brightness: 1500 },
 };
 
 /** Chord roots, as scale steps, one per bar. */

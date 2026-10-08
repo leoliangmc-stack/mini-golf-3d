@@ -19,7 +19,7 @@ function memoryStorage(initial: Record<string, string> = {}): StorageLike & { da
 
 const [chapter1, chapter2] = CHAPTERS;
 const [ice, desert] = chapter1.worlds;
-const KEY = 'minigolf.save';
+const KEY = 'minigolf.save.v3';
 
 /** A progress with every hole of the first `count` in play order finished. */
 function played(count: number, storage: StorageLike | null = memoryStorage()): Progress {
@@ -48,7 +48,9 @@ describe('progress (SPEC 2.7)', () => {
     const gravity = chapter1.worlds.at(-1)!;
     expect(new Progress(CHAPTERS, null).next(gravity, 2)).toEqual({ world: chapter1.finale, index: 0 });
     expect(new Progress(CHAPTERS, null).next(chapter1.finale, 0)).toEqual({ world: chapter2.worlds[0], index: 0 });
-    expect(new Progress(CHAPTERS, null).next(chapter2.finale, 0)).toBeNull();
+    const chapter3 = CHAPTERS[2];
+    expect(new Progress(CHAPTERS, null).next(chapter2.finale, 0)).toEqual({ world: chapter3.worlds[0], index: 0 });
+    expect(new Progress(CHAPTERS, null).next(chapter3.finale, 0)).toBeNull();
 
     // All 18 holes of Chapter 1 open its finale, but not Chapter 2.
     const progress = played(18);

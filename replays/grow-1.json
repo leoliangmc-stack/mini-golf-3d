@@ -1,0 +1,26 @@
+{
+  "hole": "grow-1",
+  "inputs": [
+    {
+      "type": "shot",
+      "tick": 60,
+      "dir": [
+        0,
+        0,
+        -1
+      ],
+      "power": 0.6
+    }
+  ],
+  "expect": {
+    "holed": true,
+    "strokes": 1,
+    "stars": 3,
+    "tick": 216,
+    "position": [
+      0,
+      0.05993099883198738,
+      -5.2938947677612305
+    ]
+  }
+}
