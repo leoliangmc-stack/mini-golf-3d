@@ -20,6 +20,8 @@ export interface HudActions {
   resultHeading(): string;
   /** The countdown kept running out and the player picked how to go on. */
   onStuckChoice(choice: 'retry' | 'concede'): void;
+  /** The player asked to take the last stroke back. */
+  onUndo(): void;
 }
 
 /** Binds the in-game overlay to the game: HUD, rule card, tutorial hint and result panel. */
@@ -39,6 +41,9 @@ export function createHud(game: Game, actions: HudActions): void {
   const freezeCount = byId('skill-freeze-count');
   const picker = byId('ball-picker');
   const pins = byId('pins');
+  const undo = byId<HTMLButtonElement>('undo');
+  const gold = byId('gold');
+  const alert = byId('alert');
 
   let toastTimer = 0;
   let resultTimer = 0;
@@ -84,20 +89,29 @@ export function createHud(game: Game, actions: HudActions): void {
   };
 
   /**
-   * What Chapter 3 adds to the screen: the freeze button with its uses left, the ball
-   * picker after a split, and the pins still standing. Touches the page only on a change.
+   * What Chapters 3 and 4 add to the screen: the freeze button with its uses left, the
+   * ball picker after a split, the pins still standing; the undo button, the gold picked
+   * up and the dragon's meter. Touches the page only on a change.
    */
   let extrasShown = '';
   const drawExtras = () => {
     const { session } = game;
     const skill = session.skills.get('freeze');
     const pinTotal = session.goal.pins.length;
+    // Chapter 4: the stroke that can be taken back, the gold, the dragon.
+    const field = session.field;
+    const coins = field?.all('coin') ?? [];
+    const coinsHeld = coins.filter((coin) => coin.on).length;
+    const dragon = field?.all('dragon')[0] as { def: { threshold: number }; on: boolean } | undefined;
     const state = [
       skill ? skill.charges : -1,
       session.frozen,
       session.canUseSkill('freeze'),
       game.choosing,
       pinTotal > 0 ? session.goal.pinsLeft : -1,
+      field ? session.canUndo : -1,
+      coins.length > 0 ? coinsHeld : -1,
+      dragon ? field!.alert : -1,
     ].join();
     if (state === extrasShown) return;
     extrasShown = state;
@@ -113,6 +127,20 @@ export function createHud(game: Game, actions: HudActions): void {
     picker.hidden = !game.choosing;
     pins.hidden = pinTotal === 0;
     if (pinTotal > 0) pins.textContent = TEXT.pins(session.goal.pinsLeft, pinTotal);
+    undo.hidden = !field;
+    undo.classList.toggle('unready', !session.canUndo);
+    undo.setAttribute('aria-label', TEXT.undo());
+    gold.hidden = coins.length === 0;
+    if (coins.length > 0) {
+      gold.textContent = TEXT.gold(coinsHeld, coins.length);
+      gold.classList.toggle('all', coinsHeld === coins.length);
+    }
+    alert.hidden = !dragon;
+    if (dragon && field) {
+      alert.textContent = TEXT.alert(field.alert, dragon.def.threshold, dragon.on ? TEXT.dragonAwake() : TEXT.dragonAsleep());
+      alert.classList.toggle('awake', dragon.on);
+      alert.classList.toggle('stirring', !dragon.on && field.alert > 0);
+    }
   };
 
   const fillResult = (outcome: Outcome) => {
@@ -213,6 +241,13 @@ export function createHud(game: Game, actions: HudActions): void {
       case 'cupAppeared':
         showToast(TEXT.cupAppeared());
         break;
+      case 'undo':
+        showToast(TEXT.undone());
+        break;
+      case 'cue':
+        if (event.name === 'dragonWake') showToast(TEXT.dragonWakes());
+        else if (event.name === 'dragonStir') showToast(TEXT.dragonStirs());
+        break;
       case 'pinDown':
         // On a hole that is all pins the result panel says it; here there is more to do.
         if (event.left === 0 && goalCups(game.hole.goal).length > 0) showToast(TEXT.allDown());
@@ -266,6 +301,12 @@ export function createHud(game: Game, actions: HudActions): void {
     if (event.code !== 'Space' || event.repeat || !game.session.skills.has('freeze')) return;
     event.preventDefault();
     toggleFreeze();
+  });
+  undo.addEventListener('click', () => actions.onUndo());
+  window.addEventListener('keydown', (event) => {
+    if (event.code !== 'KeyZ' || event.repeat || !game.session.field) return;
+    event.preventDefault();
+    actions.onUndo();
   });
   byId('ball-prev').addEventListener('click', () => game.pickNext(-1));
   byId('ball-next').addEventListener('click', () => game.pickNext(1));

@@ -283,6 +283,93 @@ export class AudioEngine {
     this.tone({ wave: 'triangle', from: 1175, length: 0.3, level: 0.16, delay: 0.38 });
   }
 
+  // --- Chapter 4: the works of the ruins ---
+
+  /** A plate going down under something, or coming back up. */
+  plate(down: boolean): void {
+    this.tone({ wave: 'triangle', from: down ? 190 : 150, to: down ? 120 : 200, length: 0.09, level: 0.22 });
+    this.noise({ filter: 'lowpass', from: 900, to: 300, length: 0.07, level: 0.14 });
+  }
+
+  /** A gate grinding open, or coming down shut. */
+  gate(open: boolean): void {
+    this.noise({ filter: 'bandpass', from: open ? 420 : 260, to: open ? 180 : 520, length: 0.32, level: 0.26 });
+    this.tone({ from: open ? 110 : 70, to: open ? 70 : 55, length: 0.3, level: 0.2 });
+    if (!open) this.tone({ wave: 'triangle', from: 90, to: 50, length: 0.16, level: 0.32, delay: 0.2 });
+  }
+
+  /** A block of stone starting to slide. */
+  stoneSlide(): void {
+    this.noise({ filter: 'bandpass', from: 320, to: 210, length: 0.26, level: 0.3 });
+  }
+
+  /** A block of stone that will not move. */
+  stoneBlocked(): void {
+    this.tone({ wave: 'triangle', from: 120, to: 80, length: 0.1, level: 0.3 });
+  }
+
+  /** A block settling on its square. */
+  stoneLand(): void {
+    this.tone({ from: 95, to: 55, length: 0.14, level: 0.34 });
+  }
+
+  crystalTurn(): void {
+    this.tone({ from: 1320, to: 1760, length: 0.16, level: 0.14 });
+    this.tone({ wave: 'triangle', from: 2640, length: 0.22, level: 0.08, delay: 0.05 });
+  }
+
+  /** Light reaching a receiver for the first time. */
+  beamLock(): void {
+    [1047, 1319, 1568].forEach((hz, i) =>
+      this.tone({ from: hz, length: 0.3, level: 0.16, delay: i * 0.07 }),
+    );
+  }
+
+  /** A link of a chain setting off: a bridge rising, a boulder rolling. */
+  sliderStart(): void {
+    this.noise({ filter: 'lowpass', from: 240, to: 520, length: 0.5, level: 0.26 });
+    this.tone({ from: 60, to: 90, length: 0.5, level: 0.2 });
+  }
+
+  sliderStop(): void {
+    this.tone({ wave: 'triangle', from: 110, to: 60, length: 0.18, level: 0.34 });
+    this.noise({ filter: 'lowpass', from: 600, to: 200, length: 0.12, level: 0.2 });
+  }
+
+  coin(): void {
+    this.tone({ wave: 'square', from: 1568, length: 0.06, level: 0.1 });
+    this.tone({ wave: 'square', from: 2093, length: 0.2, level: 0.1, delay: 0.06 });
+  }
+
+  /** A bell or a pile of bones disturbed: the dragon may have heard. */
+  bell(): void {
+    this.tone({ wave: 'triangle', from: 880, length: 0.7, level: 0.22 });
+    this.tone({ from: 1325, length: 0.5, level: 0.12 });
+    this.tone({ from: 2210, length: 0.3, level: 0.06 });
+  }
+
+  dragonStir(): void {
+    this.tone({ wave: 'sawtooth', from: 70, to: 48, length: 0.7, level: 0.2 });
+  }
+
+  dragonWake(): void {
+    this.tone({ wave: 'sawtooth', from: 55, to: 130, length: 0.5, level: 0.3 });
+    this.tone({ wave: 'sawtooth', from: 130, to: 60, length: 0.9, level: 0.3, delay: 0.45 });
+    this.noise({ filter: 'lowpass', from: 500, to: 1600, length: 1.1, level: 0.24, delay: 0.2 });
+  }
+
+  /** A burst of fire starting. */
+  fire(): void {
+    this.noise({ filter: 'bandpass', from: 500, to: 1400, length: 0.7, level: 0.32 });
+    this.noise({ filter: 'lowpass', from: 300, length: 0.9, level: 0.2 });
+  }
+
+  /** A stroke taken back. */
+  undo(): void {
+    this.tone({ wave: 'triangle', from: 520, to: 260, length: 0.18, level: 0.2 });
+    this.tone({ wave: 'triangle', from: 390, to: 196, length: 0.2, level: 0.14, delay: 0.1 });
+  }
+
   /** Entering (`on`) or leaving a gravity zone. */
   gravityShift(on: boolean): void {
     this.tone({ from: on ? 280 : 900, to: on ? 900 : 280, length: 0.28, level: 0.13 });

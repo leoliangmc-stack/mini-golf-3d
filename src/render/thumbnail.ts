@@ -3,6 +3,7 @@ import { goalAnchor, goalPins } from '../game/goal';
 import { compileHole } from '../level/compile';
 import type { WorldDef } from '../level/schema';
 import { FollowCamera } from './camera';
+import { buildFieldView } from './fieldViews';
 import { buildHoleView, disposeHoleView } from './holeView';
 import { buildMoverView } from './moverView';
 import { buildCrateView, buildPinView } from './propViews';
@@ -40,6 +41,7 @@ export function renderThumbnail(
   }
   for (const crate of hole.crates ?? []) view.add(buildCrateView(crate));
   for (const pin of goalPins(hole.goal)) view.add(buildPinView(pin.at));
+  if (hole.field) view.add(buildFieldView(hole.field).group);
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(theme.sky);

@@ -4,6 +4,7 @@ import type { ZoneDef } from '../physics/zones';
 import { growPad, shrinkPad, splitPad } from '../physics/zones/pads';
 import { headingVector, tunnelPair, type TunnelEnd } from '../physics/zones/tunnel';
 import { CUP, FALL, rack, STREET } from './worlds/common';
+import { wallWithDoors } from './worlds/ruins';
 
 const magnet = (x: number, z: number, strength: number, reach: number): { post: PieceDef; field: ZoneDef } => ({
   post: { type: 'pillar', at: [x, z], radius: 0.35, surface: strength > 0 ? 'magnetRed' : 'magnetBlue' },
@@ -273,6 +274,125 @@ export const GRAND_FINALE: FinaleDef = {
       ],
       outOfBounds: 'lastPosition',
       camera: { pitch: 58, maxDistance: 36 },
+    },
+  ],
+};
+
+/**
+ * Chapter 4, hole 13: the four worlds of the chapter, one after another (SPEC v4 3.7).
+ * A block onto a plate opens the first gate; a crystal turned to its receiver opens the
+ * second; the plate behind that one starts a chain that raises a bridge and then opens
+ * the temple door. The dragon lies by the door, with a bell either side of the way in:
+ * awake, it breathes across the doorway in bursts.
+ *
+ * The gates stand in the way of each other, so the order needs no rule of its own: the
+ * goal is a plain cup.
+ */
+export const TEMPLE_GATE: FinaleDef = {
+  id: 'ch4-finale',
+  name: { en: 'The Temple Gate', zh: '神庙大门' },
+  theme: 'temple',
+  ruleCard: {
+    en: 'Stone, light, chain: open the temple gate. Let the dragon sleep.',
+    zh: '石块、光路、连锁：打开神庙大门。别吵醒巨龙。',
+  },
+  ruleTag: { en: 'FINALE', zh: '终局' },
+  holes: [
+    {
+      id: 'ch4-finale',
+      par: 6,
+      tee: [0, 0, 12],
+      goal: { type: 'cup', position: [0, 0, -15], ...CUP },
+      challenge: { type: 'partOff', part: 'dragon', text: { en: "Don't wake the dragon", zh: '不要惊醒巨龙' } },
+      pieces: [
+        // The first chamber: the block and its plate
+        { type: 'floor', min: [-4, 6], max: [4, 13], surface: 'tombFloor' },
+        { type: 'wall', from: [-4, 13], to: [4, 13], surface: 'templeWall' },
+        { type: 'wall', from: [4, 13], to: [4, -8], surface: 'templeWall' },
+        { type: 'wall', from: [-4, -8], to: [-4, 13], surface: 'templeWall' },
+        ...wallWithDoors([-4, 6], [4, 6], [[5.2, 6.4]], 'templeWall', { height: 0.8 }),
+        // The second: the lantern and the crystal
+        { type: 'floor', min: [-4, -1], max: [4, 6], surface: 'cavernFloor' },
+        ...wallWithDoors([-4, -1], [4, -1], [[1.6, 2.8]], 'templeWall', { height: 0.8 }),
+        // The third: the plate behind the door, and the edge of the pit
+        { type: 'floor', min: [-4, -8], max: [4, -1], surface: 'jungleFloor' },
+        { type: 'wall', from: [-4, -8], to: [-0.8, -8], surface: 'templeWall' },
+        { type: 'wall', from: [0.8, -8], to: [4, -8], surface: 'templeWall' },
+        // The court of the temple, beyond the pit
+        { type: 'floor', min: [-3, -17], max: [3, -10.5], surface: 'hoardFloor' },
+        { type: 'wall', from: [-3, -10.5], to: [-0.8, -10.5], surface: 'templeWall' },
+        { type: 'wall', from: [0.8, -10.5], to: [3, -10.5], surface: 'templeWall' },
+        { type: 'wall', from: [3, -10.5], to: [3, -17], surface: 'templeWall' },
+        { type: 'wall', from: [3, -17], to: [-3, -17], surface: 'templeWall' },
+        { type: 'wall', from: [-3, -17], to: [-3, -10.5], surface: 'templeWall' },
+        ...wallWithDoors([-3, -12.5], [3, -12.5], [[2.3, 3.7]], 'templeWall', { height: 1.2 }),
+      ],
+      field: {
+        grid: { origin: [-3, 7], cols: 7, rows: 6 },
+        parts: [
+          { kind: 'stone', id: 'block', cell: [3, 2] },
+          { kind: 'plate', id: 'hold', at: [0, 0, 8], mode: 'hold' },
+          { kind: 'gate', id: 'first', from: [1.2, 6], to: [2.4, 6], when: 'hold', via: [[1.8, 8]] },
+
+          { kind: 'emitter', at: [-3.6, 0, 3.5], heading: 90 },
+          { kind: 'crystal', id: 'crystal', at: [2.7, 0, 3.5], facings: [90, 0] },
+          { kind: 'receiver', id: 'receiver', at: [2.7, 0, -0.4] },
+          { kind: 'gate', id: 'second', from: [-2.4, -1], to: [-1.2, -1], when: 'receiver', via: [[2.7, -0.4], [-1.8, -0.4]] },
+
+          { kind: 'plate', id: 'start', at: [-1.8, 0, -1.9], mode: 'latch', radius: 0.7 },
+          {
+            kind: 'slider',
+            id: 'bridge',
+            role: 'platform',
+            look: 'bridge',
+            size: [1.6, 0.4, 2.7],
+            from: [0, -1.7, -9.25],
+            to: [0, -0.196, -9.25],
+            ticks: 50,
+            when: 'start',
+            via: [[-1.8, -7.4], [0, -7.4]],
+            surface: 'templeStone',
+          },
+          {
+            kind: 'gate',
+            id: 'door',
+            from: [-0.7, -12.5],
+            to: [0.7, -12.5],
+            when: 'bridge',
+            delay: 25,
+            height: 1.2,
+            look: 'door',
+            via: [[-1.4, -10.9], [-1.4, -12.1]],
+          },
+
+          { kind: 'bell', at: [-0.8, 0, -11.3] },
+          { kind: 'bell', at: [0.8, 0, -11.3] },
+          { kind: 'dragon', id: 'dragon', at: [4.4, 0, -12], heading: 270, threshold: 1 },
+          {
+            kind: 'fire',
+            id: 'breath',
+            shape: { kind: 'box', center: [0, 0.3, -12], halfExtents: [3, 0.5, 0.3] },
+            when: 'dragon',
+            cycle: { period: 3, burn: 0.45 },
+            rest: [[0, 0, -10.9]],
+          },
+        ],
+      },
+      decor: [
+        { type: 'obelisk', at: [-5.4, -0.9, 10], size: [0.8, 4.4, 0] },
+        { type: 'obelisk', at: [5.4, -0.9, 10], size: [0.8, 4.4, 0] },
+        { type: 'crystals', at: [-5.4, -0.9, 2.5], size: [2, 0, 0] },
+        { type: 'crystals', at: [5.5, -0.9, 1], size: [1.6, 0, 0] },
+        { type: 'palm', at: [-5.4, -0.9, -4], size: [3.6, 0, 0] },
+        { type: 'palm', at: [5.4, -0.9, -6], size: [3.2, 0, 0] },
+        { type: 'column', at: [-4.3, -0.9, -11.5], size: [0.4, 3, 0] },
+        { type: 'column', at: [-4.3, -0.9, -15.5], size: [0.4, 3, 0] },
+        { type: 'column', at: [4.3, -0.9, -16.2], size: [0.4, 3, 0] },
+        { type: 'goldHeap', at: [0, -0.9, -18.6], size: [1.4, 0, 0] },
+      ],
+      zones: [FALL],
+      outOfBounds: 'lastPosition',
+      camera: { pitch: 58, maxDistance: 34 },
     },
   ],
 };

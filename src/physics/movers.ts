@@ -94,14 +94,21 @@ export class Mover implements GroundCarrier {
   prevPose: MoverPose;
   pose: MoverPose;
   private nextPose: MoverPose;
+  private readonly poseAt: (tick: number) => MoverPose;
 
   constructor(
     readonly def: MoverDef,
     world: PhysicsWorld,
     surfaces: SurfaceMap,
+    /**
+     * Where the part is at a tick, for a part that is not on the fixed schedule of its
+     * `motion`: one that waits for a signal (see game/field/slider.ts).
+     */
+    schedule?: (tick: number) => MoverPose,
   ) {
-    this.pose = this.prevPose = moverPose(def, world.tick);
-    this.nextPose = moverPose(def, world.tick + 1);
+    this.poseAt = schedule ?? ((tick) => moverPose(def, tick));
+    this.pose = this.prevPose = this.poseAt(world.tick);
+    this.nextPose = this.poseAt(world.tick + 1);
     const { position, yaw } = this.pose;
     this.body = world.raw.createRigidBody(
       RAPIER.RigidBodyDesc.kinematicPositionBased()
@@ -121,7 +128,7 @@ export class Mover implements GroundCarrier {
 
   /** Schedules the move for the coming step. Call before stepping the world. */
   preStep(world: PhysicsWorld, balls: readonly Ball[]): void {
-    this.nextPose = moverPose(this.def, world.tick + 1);
+    this.nextPose = this.poseAt(world.tick + 1);
     this.body.setNextKinematicTranslation(this.nextPose.position);
     this.body.setNextKinematicRotation(yawRotation(this.nextPose.yaw));
     if (this.def.role === 'platform') {
@@ -137,6 +144,13 @@ export class Mover implements GroundCarrier {
   postStep(): void {
     this.prevPose = this.pose;
     this.pose = this.nextPose;
+  }
+
+  /** Puts the part where its schedule has it right now, at once: after a state was put back. */
+  snap(world: PhysicsWorld): void {
+    this.pose = this.prevPose = this.nextPose = this.poseAt(world.tick);
+    this.body.setTranslation(this.pose.position, true);
+    this.body.setRotation(yawRotation(this.pose.yaw), true);
   }
 
   /** True when `point` is over the top face of the box. */

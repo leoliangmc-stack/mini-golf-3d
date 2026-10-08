@@ -12,6 +12,7 @@ import { AimIndicator } from '../render/aimIndicator';
 import { BallView } from '../render/ballView';
 import { FollowCamera } from '../render/camera';
 import { Explosion } from '../render/explosion';
+import { buildFieldView, groundBounds, type FieldView } from '../render/fieldViews';
 import { buildHoleView, disposeHoleView, type HoleView } from '../render/holeView';
 import { buildMoverView, updateMoverView } from '../render/moverView';
 import { OcclusionFader } from '../render/occlusion';
@@ -27,7 +28,9 @@ export type GameEvent =
   /** The player is dragging to aim (power 0..1), or stopped (null). */
   | { type: 'aim'; power: number | null }
   /** The countdown has kept running out on this hole: the player is offered a way on (SPEC v2 2.6). */
-  | { type: 'stuck' };
+  | { type: 'stuck' }
+  /** The camera showed the player a part that had changed. `skipped`: they did not wait for it to finish. */
+  | { type: 'showcase'; part: string; skipped: boolean };
 
 /** Ticks between the countdown running out and the hole starting over: long enough to see the blast. */
 const RESTART_TICKS = 50;
@@ -38,6 +41,11 @@ const EXPLOSIONS_BEFORE_OFFER = 3;
  * than the ball covers, since a finger hides what it is aiming at (SPEC v3 2.4).
  */
 const PICK_RADIUS_PX = 56;
+
+/** Seconds the camera stays on a part that changed while the ball was rolling (SPEC v4 3.2). */
+const SHOWCASE_SECONDS = 1.4;
+/** A part this near the middle of the screen, as a share of it, needs no showing: it is in view already. */
+const IN_VIEW = 0.62;
 
 /** What a zone cue does to the picture of a ball that a zone has hold of. */
 const BALL_CUES: Record<string, 'vanish' | 'appear'> = { tunnelEnter: 'vanish', tunnelExit: 'appear' };
@@ -69,6 +77,16 @@ export class Game {
   private pinViews: THREE.Object3D[] = [];
   /** One entry per zone of the hole, in order; null for zones that have nothing to show. */
   private zoneViews: (ZoneView | null)[] = [];
+  private fieldView: FieldView | null = null;
+  /** Seconds this hole has been on screen. */
+  private time = 0;
+  /** Parts that changed during the stroke under way, to be shown when the ball has stopped. */
+  private toShow: string[] = [];
+  /** Parts shown once already on this hole: each is shown only the first time. */
+  private readonly shown = new Set<string>();
+  /** The part the camera is on right now, and the seconds left of it. */
+  private showing: { part: string; left: number } | null = null;
+  private readonly showPoint = new THREE.Vector3();
   private pull: Pull | null = null;
   private readonly cupPoints: THREE.Vector3[] = [];
   /** Where the selected ball is drawn this frame. */
@@ -95,6 +113,8 @@ export class Game {
     attachSlingshot(canvas, {
       canAim: () => this.canAim(),
       onAim: (pull) => {
+        // Starting to aim is how the player says they have seen enough.
+        if (pull) this.endShowcase(true);
         this.pull = pull;
         this.emit({ type: 'aim', power: pull ? pull.power : null });
       },
@@ -163,6 +183,10 @@ export class Game {
     for (const view of [...this.moverViews, ...this.crateViews, ...this.pinViews]) group.add(view);
     this.zoneViews = hole.zones.map(buildZoneView);
     for (const view of this.zoneViews) if (view) group.add(view.object);
+    this.fieldView = hole.field ? buildFieldView(hole.field, groundBounds(this.session.compiled.bodies)) : null;
+    if (this.fieldView) group.add(this.fieldView.group);
+    this.shown.clear();
+    this.time = 0;
     this.stage.scene.add(group);
     this.fader.setOccluders(this.holeView.occluders);
     this.stage.applyTheme(getTheme(world.theme));
@@ -189,6 +213,11 @@ export class Game {
 
   replay(inputs: readonly (InputRecord | ShotRecord)[]): void {
     this.session.replay(inputs);
+  }
+
+  /** Takes the last stroke back, if the hole allows it right now. */
+  undo(): boolean {
+    return !this.paused && !this.inputBlocked && !this.session.replaying && this.session.undo();
   }
 
   /** Uses a skill the hole gives, if it can be used right now. */
@@ -268,6 +297,8 @@ export class Game {
     this.crateViews.forEach((view, i) => updatePropView(view, session.crates[i], alpha));
     this.pinViews.forEach((view, i) => updatePropView(view, session.goal.pins[i], alpha));
     this.zoneViews.forEach((view, i) => view?.update?.(session.zones[i]));
+    this.time += frameDt;
+    if (session.field) this.fieldView?.update(session.field, { alpha, dt: frameDt, time: this.time });
     session.goal.cups.forEach((cup, i) => {
       const { prevPosition: was, position: now } = cup.pose;
       const point = (this.cupPoints[i] ??= new THREE.Vector3());
@@ -295,7 +326,10 @@ export class Game {
       if (view.gone) this.dropView(id);
     }
 
-    this.camera.update(this.focus, session.goal.focus(), frameDt, this.others);
+    // A part being shown has the view to itself; otherwise it is the ball and the goal.
+    const watched = this.watched(frameDt);
+    if (watched) this.camera.update(watched, watched, frameDt);
+    else this.camera.update(this.focus, session.goal.focus(), frameDt, this.others);
     this.fader.update(this.camera.camera.position, this.focus, frameDt);
     this.explosion.update(frameDt);
     const pull = this.pull;
@@ -306,6 +340,54 @@ export class Game {
     else this.aim.showReady(this.focus, radius, frameDt);
     for (const listener of this.frameListeners) listener();
     this.stage.renderer.render(this.stage.scene, this.camera.camera);
+  }
+
+  /**
+   * The part the camera has turned to, if any (SPEC v4 3.2). While the ball waits for a
+   * chain to run, the part that is moving; and once the ball has stopped, each part that
+   * changed out of sight during the stroke, one after another. Only ever with the ball
+   * at rest: the camera never leaves one that is rolling.
+   */
+  private watched(frameDt: number): XYZ | null {
+    const { session } = this;
+    const field = session.field;
+    if (!field) return null;
+    if (this.showing) {
+      this.showing.left -= frameDt;
+      if (this.showing.left <= 0) this.endShowcase(false);
+    }
+    const part = this.showing ? field.part(this.showing.part) : session.waiting ? field.active : null;
+    return part ? this.showPoint.set(part.anchor.x, part.anchor.y, part.anchor.z) : null;
+  }
+
+  /** Moves on to the next part waiting to be shown, if there is one. */
+  private nextShowcase(): void {
+    const field = this.session.field;
+    this.showing = null;
+    while (field && this.toShow.length > 0) {
+      const part = this.toShow.shift()!;
+      const at = field.part(part).anchor;
+      const seen = this.projected.set(at.x, at.y, at.z).project(this.camera.camera);
+      // Already in plain view: the player watched it happen.
+      if (Math.abs(seen.x) < IN_VIEW && Math.abs(seen.y) < IN_VIEW && seen.z < 1) continue;
+      this.showing = { part, left: SHOWCASE_SECONDS };
+      return;
+    }
+  }
+
+  private endShowcase(skipped: boolean): void {
+    if (!this.showing) {
+      if (skipped) this.toShow.length = 0;
+      return;
+    }
+    const { part } = this.showing;
+    this.emit({ type: 'showcase', part, skipped });
+    if (skipped) {
+      this.toShow.length = 0;
+      this.showing = null;
+    } else {
+      this.nextShowcase();
+    }
   }
 
   /** Where the selected ball is on screen, in CSS pixels. */
@@ -350,6 +432,8 @@ export class Game {
   }
 
   private resetView(): void {
+    this.toShow.length = 0;
+    this.showing = null;
     this.restartIn = 0;
     this.explosion.stop();
     for (const id of [...this.ballViews.keys()]) this.dropView(id);
@@ -366,11 +450,33 @@ export class Game {
         this.ballViews.get(event.ball)?.startSink();
         break;
       case 'finished':
+        this.toShow.length = 0;
+        this.showing = null;
         this.explosions = 0;
         for (const view of this.ballViews.values()) view.setAlert(false);
         break;
       case 'reset':
         this.resetView();
+        break;
+      case 'partChanged':
+        // Shown once per hole, the first time it happens.
+        if (!this.shown.has(event.part)) {
+          this.shown.add(event.part);
+          this.toShow.push(event.part);
+        }
+        break;
+      case 'stopped':
+        this.nextShowcase();
+        break;
+      case 'shot':
+        this.toShow.length = 0;
+        this.showing = null;
+        break;
+      case 'outOfBounds':
+      case 'undo':
+        // What changed was put back: there is nothing to show.
+        this.toShow.length = 0;
+        this.showing = null;
         break;
       case 'ballRemoved':
         this.ballViews.get(event.ball)?.vanish();

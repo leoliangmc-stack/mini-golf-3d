@@ -15,6 +15,7 @@ import { createZone, type Zone, type ZoneContext, type ZoneEvent } from '../phys
 import { BallSet } from './ballSet';
 import { challengeMet, emptyStats, type RoundStats } from './challenges';
 import { cupOpenAt, cupPositionAt, type CupPose } from './cup';
+import { Field, type FieldState } from './field/field';
 import { Goal, type CupState } from './goal';
 import { cupCaptures, RULES, starsFor, StopDetector } from './rules';
 import { getSkill, type SkillHost, type SkillState } from './skills';
@@ -42,7 +43,9 @@ export type InputRecord =
   | ({ type: 'shot' } & ShotRecord)
   | { type: 'skill'; tick: number; id: string }
   /** Time was let run again after a freeze, without a stroke. */
-  | { type: 'resume'; tick: number };
+  | { type: 'resume'; tick: number }
+  /** The last stroke was taken back, at the cost of one more. */
+  | { type: 'undo'; tick: number };
 
 /** How a hole ended. */
 export interface Outcome {
@@ -88,7 +91,11 @@ export type SessionEvent =
   /** A pin went down. `left` is how many are still standing. */
   | { type: 'pinDown'; pin: number; left: number }
   /** A cup that was not there yet has appeared: the steps before it are done. */
-  | { type: 'cupAppeared'; cup: number };
+  | { type: 'cupAppeared'; cup: number }
+  /** The last stroke was taken back: the ball and the course are as they were before it. */
+  | { type: 'undo'; strokes: number }
+  /** One of the works of the hole changed what it is doing: a gate opened, a block set off. */
+  | { type: 'partChanged'; part: string };
 
 /** Impacts gentler than this are contact noise, not bounces. */
 const MIN_BOUNCE_SPEED = 0.3;
@@ -101,6 +108,18 @@ const RAD = Math.PI / 180;
 const MAX_BALLS = 4;
 /** Ticks a stroke waits for crates and pins to settle once the balls have stopped. */
 const PROP_SETTLE_TICKS = 240;
+/**
+ * Ticks a stroke waits for the works of the hole to finish moving. They always do; this
+ * only keeps a mistake in a hole's data from holding a stroke open for ever.
+ */
+const FIELD_SETTLE_TICKS = 1800;
+
+/** The course as it was when a stroke was played: what an out-of-bounds or an undo goes back to. */
+interface Snapshot {
+  position: XYZ;
+  size: BallSize;
+  field: FieldState;
+}
 
 /** What the session keeps about one ball from step to step. */
 interface Track {
@@ -132,6 +151,10 @@ export class Session implements SkillHost {
   goal!: Goal;
   movers: Mover[] = [];
   crates: Crate[] = [];
+  /** Plates, gates, stones and the rest of the hole's works; null on a hole that has none. */
+  field: Field | null = null;
+  /** The balls have stopped and the stroke is waiting for something else to: a chain still running. */
+  waiting = false;
   /** The live zones, in the order of the hole's data. Rebuilt on every reset. */
   zones: Zone[] = [];
   /** Skills this hole gives the player, by id, with the uses left. */
@@ -155,9 +178,15 @@ export class Session implements SkillHost {
   private won = false;
   /** Ticks the balls have been at rest while crates or pins were still moving. */
   private propWait = 0;
+  /** The same, for the works of the hole. */
+  private fieldWait = 0;
+  /** The course before each stroke still standing, oldest first (SPEC v4 3.8). Only on a hole with works. */
+  private snapshots: Snapshot[] = [];
+  /** A stroke has been played and has not ended yet. */
+  private strokeOpen = false;
   private replayQueue: InputRecord[] = [];
   /** What each ball ran into during the last step. Emptied and refilled every step. */
-  private readonly hits = new Map<Ball, ColliderKind[]>();
+  private readonly hits = new Map<Ball, { kind: ColliderKind; handle: number }[]>();
   private readonly listeners = new Set<(event: SessionEvent) => void>();
 
   constructor(
@@ -256,6 +285,7 @@ export class Session implements SkillHost {
       if (this.track(ball).probe?.grounded) {
         this.lastShotPosition = from;
         this.lastShotSize = ball.state.size;
+        this.keep(from, ball.state.size);
       }
     } else {
       for (const other of [...this.balls.live]) {
@@ -266,7 +296,9 @@ export class Session implements SkillHost {
       // A ball that leaves the course comes back here, so only strokes from the ground count.
       this.lastShotPosition = from;
       this.lastShotSize = ball.state.size;
+      this.keep(from, ball.state.size);
     }
+    this.strokeOpen = true;
     this.balls.selected = ball;
     if (this.strokes === 0) {
       this.firstShotTick = this.world.tick;
@@ -280,6 +312,7 @@ export class Session implements SkillHost {
     this.phase = 'rolling';
     this.track(ball).stop.reset();
     this.propWait = 0;
+    this.fieldWait = 0;
     if (frozen) this.cue('airShot');
     this.emit({ type: 'shot', strokes: this.strokes, power: p, ball: ball.id, frozen });
     if (frozen) this.emit({ type: 'resumed' });
@@ -315,6 +348,27 @@ export class Session implements SkillHost {
     if (!this.frozen) return false;
     this.inputs.push({ type: 'resume', tick: this.world.tick });
     this.setFrozen(false);
+    return true;
+  }
+
+  /** Whether the last stroke can be taken back right now. Only a hole with works offers it. */
+  get canUndo(): boolean {
+    return this.field !== null && this.phase === 'aiming' && !this.frozen && this.snapshots.length > 0;
+  }
+
+  /**
+   * Takes the last stroke back (SPEC v4 3.8): the ball and every part of the course
+   * return to how they were when it was played, and it costs a stroke, exactly as going
+   * out of bounds does. The way out of a stone shoved where it cannot be shoved back from.
+   */
+  undo(): boolean {
+    if (!this.canUndo) return false;
+    this.inputs.push({ type: 'undo', tick: this.world.tick });
+    this.rewind(this.ball, this.snapshots.pop()!);
+    this.strokes++;
+    this.stats.undos++;
+    this.emit({ type: 'undo', strokes: this.strokes });
+    if (this.strokes >= this.strokeLimit) this.finish(false);
     return true;
   }
 
@@ -363,6 +417,7 @@ export class Session implements SkillHost {
           zone.preStep(this.zoneContext);
         }
       }
+      this.field?.preStep();
       this.handleZoneEvents();
     }
     // Before the ground is probed: a platform's speed is read from where its next
@@ -397,6 +452,7 @@ export class Session implements SkillHost {
     for (const mover of this.movers) mover.postStep();
     for (const crate of this.crates) crate.postStep();
     for (const pin of this.goal.pins) pin.postStep();
+    this.field?.postStep();
     for (const ball of balls) ball.recordPose(this.track(ball).snap);
     for (const ball of this.balls.sunk) ball.recordPose(false);
     this.handleCollisions();
@@ -408,6 +464,7 @@ export class Session implements SkillHost {
   private apply(input: InputRecord): void {
     if (input.type === 'shot') this.shoot(xyz(input.dir), input.power, this.balls.live[input.ball ?? 0]);
     else if (input.type === 'skill') this.useSkill(input.id);
+    else if (input.type === 'undo') this.undo();
     else this.resume();
   }
 
@@ -456,8 +513,11 @@ export class Session implements SkillHost {
       // a second one dropping in is worth something (SPEC v3 2.4).
       const waiting =
         rolling && !atRest && this.balls.live.length > 0 && this.goal.cups.some((cup) => cup.sunk > 0);
+      const still = rolling && atRest && !this.won;
+      const settled = still && this.propsSettled() && this.fieldSettled();
+      this.waiting = still && !settled;
       if (this.won && !waiting) this.finish(true);
-      else if (rolling && atRest && !this.won && this.propsSettled()) this.endStroke();
+      else if (settled) this.endStroke();
     } else if (this.goal.met && this.playing) {
       // The last pin fell while the player was aiming.
       this.finish(true);
@@ -533,8 +593,37 @@ export class Session implements SkillHost {
     return false;
   }
 
+  /** True once nothing of the hole's works is still moving: a chain has run to its end. */
+  private fieldSettled(): boolean {
+    if (!this.field?.busy || this.fieldWait >= FIELD_SETTLE_TICKS) return true;
+    this.fieldWait++;
+    return false;
+  }
+
+  /** Keeps the course as it is now, for the stroke about to be played to go back to. */
+  private keep(position: XYZ, size: BallSize): void {
+    if (this.field) this.snapshots.push({ position: { ...position }, size, field: this.field.save() });
+  }
+
+  /** Puts a ball and the course back to how a snapshot has them. */
+  private rewind(ball: Ball, snapshot: Snapshot): void {
+    if (ball.setSize(snapshot.size, this.world.up)) this.emit({ type: 'resized', ball: ball.id, size: snapshot.size });
+    // The ball first: parts work out what is standing on them from where it is.
+    ball.teleport(snapshot.position);
+    this.field?.restore(snapshot.field);
+    this.lastShotPosition = snapshot.position;
+    this.lastShotSize = snapshot.size;
+    this.strokeOpen = false;
+    this.waiting = false;
+    this.phase = 'aiming';
+    this.track(ball).stop.reset();
+    ball.recordPose(true);
+  }
+
   /** Every ball has stopped: the stroke is over and the player aims again. */
   private endStroke(): void {
+    this.strokeOpen = false;
+    this.waiting = false;
     for (const ball of this.balls.live) this.settle(ball);
     this.stats.rests.push({ ...this.ball.position() });
     // Fallen pins are cleared away; the ones left standing stay where they were knocked to.
@@ -571,9 +660,10 @@ export class Session implements SkillHost {
     const { probe } = this.track(ball);
     const position = ball.position();
     const riding = probe?.grounded ? this.movers.find((m) => m === probe.carrier) : undefined;
-    const mover = riding ?? this.movers.find((m) => m.forbidsRest(position));
+    // The works of the hole have places a ball may not stay in too: where fire burns.
+    const mover = riding ?? this.movers.find((m) => m.forbidsRest(position)) ?? this.field?.forbidsRest(position);
     if (!mover) return;
-    const rest = mover.nearestRest(position);
+    const rest = mover.nearestRest?.(position) ?? null;
     const r = ball.props.radius;
     ball.teleport(rest ? { x: rest[0], y: rest[1] + r, z: rest[2] } : this.lastShotPosition);
     ball.recordPose(true);
@@ -590,6 +680,20 @@ export class Session implements SkillHost {
     this.balls = new BallSet(this.world, ballProps, this.teePoint());
     this.goal = new Goal(hole.goal, this.world, this.surfaces);
     this.crates = (hole.crates ?? []).map((def) => new Crate(def, this.world, this.surfaces));
+    this.field = hole.field
+      ? new Field(hole.field, {
+          world: this.world,
+          surfaces: this.surfaces,
+          balls: () => this.balls.live,
+          cue: (name) => this.cue(name),
+          outOfBounds: (ball) => this.zoneEvents.push({ event: { type: 'outOfBounds' }, ball }),
+          changed: (part) => this.emit({ type: 'partChanged', part }),
+        })
+      : null;
+    this.snapshots = [];
+    this.strokeOpen = false;
+    this.waiting = false;
+    this.fieldWait = 0;
     this.skills = new Map(Object.entries(hole.skills ?? {}).map(([id, uses]) => [id, { max: uses, charges: uses }]));
     this.zoneEvents = [];
     this.zoneContext = {
@@ -675,6 +779,12 @@ export class Session implements SkillHost {
     const strokes = holed ? this.strokes : this.strokeLimit;
     this.stats.strokes = strokes;
     this.stats.timeLeft = this.timeLeft === null ? null : this.timeLeft * FIXED_DT;
+    // What the works look like at the end, not what happened along the way: a stroke
+    // that was taken back never happened, so nothing it did may count for or against.
+    if (this.field) {
+      this.stats.partsOn = new Set(this.field.parts.filter((part) => part.on).map((part) => part.id));
+      this.stats.coinsLeft = this.field.all('coin').filter((coin) => !coin.on).length;
+    }
     const met = holed && challengeMet(this.hole.challenge, this.stats);
     this.outcome = {
       holed,
@@ -685,6 +795,8 @@ export class Session implements SkillHost {
     };
     this.phase = 'done';
     this.frozen = false;
+    this.strokeOpen = false;
+    this.waiting = false;
     for (const ball of this.balls.live) ball.halt();
     for (const ball of this.balls.sunk) ball.halt();
     this.emit({ type: 'finished', outcome: this.outcome });
@@ -709,11 +821,15 @@ export class Session implements SkillHost {
         continue;
       }
       // The last one comes back, at the size it was struck at, and it costs a stroke (SPEC 2.6).
-      const toTee = this.hole.outOfBounds === 'tee';
+      // On a hole with works the course comes back with it, to how it was when the stroke
+      // was played (SPEC v4 3.8): the stroke did not happen, but it is still counted.
+      const snapshot = this.strokeOpen ? this.snapshots.pop() : undefined;
+      const toTee = this.hole.outOfBounds === 'tee' && !snapshot;
       const size = toTee ? 'medium' : this.lastShotSize;
       if (ball.setSize(size, this.world.up)) this.emit({ type: 'resized', ball: ball.id, size });
       const target = toTee ? xyz(this.teePoint(ball.props.radius)) : this.lastShotPosition;
-      ball.teleport(target);
+      if (snapshot) this.rewind(ball, snapshot);
+      else ball.teleport(target);
       this.strokes++;
       this.stats.outOfBounds++;
       this.stats.rests.push({ ...target });
@@ -733,18 +849,21 @@ export class Session implements SkillHost {
       if (!started) return;
       const ball = this.balls.owner(a) ?? this.balls.owner(b);
       if (!ball) return;
-      const kind = this.surfaces.kindOf(ball.collider.handle === a ? b : a);
+      const handle = ball.collider.handle === a ? b : a;
+      const kind = this.surfaces.kindOf(handle);
       if (!kind) return;
       const kinds = hits.get(ball);
-      if (kinds) kinds.push(kind);
-      else hits.set(ball, [kind]);
+      if (kinds) kinds.push({ kind, handle });
+      else hits.set(ball, [{ kind, handle }]);
     });
     if (hits.size === 0 || this.phase === 'done') return;
     for (const [ball, kinds] of hits) {
       const before = this.track(ball).before;
       const after = ball.velocity();
       const speed = hypot(after.x - before.x, after.y - before.y, after.z - before.z);
-      for (const kind of kinds) {
+      for (const { kind, handle } of kinds) {
+        // A stone is shoved, a crystal turned.
+        this.field?.hit(ball, handle, speed);
         if (kind === 'wall' && this.phase === 'rolling') this.stats.wallHits++;
         if (kind === 'mover' && this.phase === 'rolling') this.stats.moverHits++;
         if (speed >= MIN_BOUNCE_SPEED) this.emit({ type: 'bounce', kind, speed });

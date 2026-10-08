@@ -71,4 +71,24 @@ export function registerSurfaces(): void {
   // Golf bowling: an oiled lane keeps the ball's speed, and gutter walls are dull
   registerSurface('lane', { restitution: 0.15, rollingResistance: 0.35, drag: 0.3, color: 0xe4bb7a });
   registerSurface('gutter', { restitution: 0.45, rollingResistance: 0.5, drag: 0.7, color: 0x48505e });
+
+  // --- Chapter 4 ---
+  // The works: gates, stone blocks, crystal pedestals
+  registerSurface('gate', { restitution: 0.55, rollingResistance: 0.5, drag: 0.7, color: 0x8c7b62 });
+  // Dull on purpose: a ball that has shoved a block should not fly back across the room.
+  registerSurface('block', { restitution: 0.35, rollingResistance: 0.5, drag: 0.7, color: 0xc9b48a });
+  registerSurface('crystal', { restitution: 0.5, rollingResistance: 0.5, drag: 0.7, color: 0x8fe3ff });
+  // Pharaoh's tomb
+  registerSurface('tombFloor', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xdcc391 });
+  registerSurface('tombWall', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0xa9895a });
+  // Crystal cavern
+  registerSurface('cavernFloor', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x56607e });
+  registerSurface('cavernWall', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0x343b55 });
+  // Jungle temple
+  registerSurface('jungleFloor', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x7fae62 });
+  registerSurface('templeWall', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0x6f7a63 });
+  registerSurface('templeStone', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xa7ab95 });
+  // Dragon's hoard
+  registerSurface('hoardFloor', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x6b4a4f });
+  registerSurface('hoardWall', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0x3c2a33 });
 }

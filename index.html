@@ -40,6 +40,9 @@
       <button id="retry" class="round" type="button">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5v5h5M5.6 14a7 7 0 1 0 1.5-7.3L5 10" /></svg>
       </button>
+      <button id="undo" class="round" type="button" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 4 10l5 5M4 10h10a5 5 0 0 1 0 10h-3" /></svg>
+      </button>
       <div class="hud-right">
         <span id="rule-tag"></span>
         <button id="pause" class="round" type="button">
@@ -62,6 +65,10 @@
       </div>
 
       <div id="pins" hidden></div>
+      <div class="hud-meters">
+        <div id="gold" hidden></div>
+        <div id="alert" hidden></div>
+      </div>
       <button id="skill-freeze" class="round skill" type="button" hidden>
         <svg class="icon-freeze" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12" /></svg>
         <svg class="icon-run" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>

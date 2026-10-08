@@ -15,7 +15,7 @@ export interface HoleRecord {
 }
 
 /** Version of the save format this build writes. Bump it together with a new entry in MIGRATIONS. */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export interface SaveData {
   version: typeof SAVE_VERSION;
@@ -56,6 +56,10 @@ const MIGRATIONS: Record<number, (save: Loose) => Loose> = {
   // over as it is, and Chapter 3 is locked simply because nothing in it has a record.
   // It opens by itself for a player who had finished the Chapter 2 finale.
   2: (save) => ({ ...save, version: 3 }),
+  // 3 -> 4, Chapter 4. Once more nothing changes shape. Chapter 4 has no record yet, and
+  // it opens with the Chapter 2 finale rather than the Chapter 3 one, so a player who
+  // had finished Chapter 2 finds it open whether or not Chapter 3 is done.
+  3: (save) => ({ ...save, version: 4 }),
 };
 
 export interface LoadedSave {

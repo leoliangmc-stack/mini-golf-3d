@@ -1,7 +1,8 @@
 import type { ChapterDef } from '../level/schema';
-import { COUNTDOWN_RUN, GAUNTLET, GRAND_FINALE } from './finales';
+import { COUNTDOWN_RUN, GAUNTLET, GRAND_FINALE, TEMPLE_GATE } from './finales';
 import { BOMB_WORLD } from './worlds/bomb';
 import { BOWL_WORLD } from './worlds/bowl';
+import { CAVERN_WORLD } from './worlds/cavern';
 import { CITY_WORLD } from './worlds/city';
 import { CLONE_WORLD } from './worlds/clone';
 import { DESERT_WORLD } from './worlds/desert';
@@ -9,11 +10,14 @@ import { FOREST_WORLD } from './worlds/forest';
 import { FREEZE_WORLD } from './worlds/freeze';
 import { GRAVITY_WORLD } from './worlds/gravity';
 import { GROW_WORLD } from './worlds/grow';
+import { HOARD_WORLD } from './worlds/hoard';
 import { ICE_WORLD } from './worlds/ice';
+import { JUNGLE_WORLD } from './worlds/jungle';
 import { MAGNET_WORLD } from './worlds/magnet';
 import { MOVING_WORLD } from './worlds/moving';
 import { PIRATE_WORLD } from './worlds/pirate';
 import { SKY_WORLD } from './worlds/sky';
+import { TOMB_WORLD } from './worlds/tomb';
 
 /**
  * The game, in play order: each chapter's worlds, then its finale. Adding a chapter is
@@ -37,5 +41,14 @@ export const CHAPTERS: readonly ChapterDef[] = [
     name: { en: 'Chapter 3', zh: '第三章' },
     worlds: [GROW_WORLD, FREEZE_WORLD, CLONE_WORLD, BOWL_WORLD],
     finale: GRAND_FINALE,
+  },
+  // Ancient Ruins (SPEC v4). It opens with Chapter 3, not after it: a player who has
+  // finished Chapter 2 can go either way.
+  {
+    id: 'ch4',
+    name: { en: 'Chapter 4', zh: '第四章' },
+    worlds: [TOMB_WORLD, CAVERN_WORLD, JUNGLE_WORLD, HOARD_WORLD],
+    finale: TEMPLE_GATE,
+    after: 'ch2',
   },
 ];

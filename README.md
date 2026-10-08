@@ -2,10 +2,11 @@
 
 > It's Mini Golf, but every world has a different rule.
 
-A browser mini golf game: 3 chapters, 14 worlds, 45 holes, each world built around one
+A browser mini golf game: 4 chapters, 18 worlds, 58 holes, each world built around one
 mechanic. TypeScript, Three.js and Rapier; a static site with no backend. Requirements
-live in [SPEC.md](SPEC.md) (v1, Chapter 1), [SPEC-v2.md](SPEC-v2.md) (Chapter 2) and
-SPEC v3.0 (Chapter 3), which are the source of truth for scope and milestones.
+live in [SPEC.md](SPEC.md) (v1, Chapter 1), [SPEC-v2.md](SPEC-v2.md) (Chapter 2),
+SPEC v3.0 (Chapter 3) and SPEC v4 (Ancient Ruins, built as Chapter 4), which are the
+source of truth for scope and milestones.
 
 **Play it: https://mini-golf-3d-self.vercel.app**
 
@@ -51,6 +52,17 @@ and pinch the camera; on a desktop, right-drag and the wheel do the same.
 | P5 Golf Bowling: pins, knock-down goal | done |
 | P6 Chapter 3 finale: a goal in steps | done |
 | P7 sound, music, text, save migration | done; see "Not yet verified" below |
+| R2 the works: parts wired by signals, field snapshots, undo, glowing lines, camera showcase | done |
+| R3 Pharaoh's Tomb: plates (latch and hold), gates, stones on a grid | done |
+| R4 Crystal Cavern: lanterns, crystals, beams, receivers | done |
+| R5 Jungle Temple: chains, a bridge, traps that shut the short way | done |
+| R6 Dragon's Hoard: gold, alert, the dragon, fire that seals and fire in bursts | done |
+| R7 Chapter 4 finale: The Temple Gate | done |
+| R8 sound, music, text, save migration to version 4, events | done; see "Not yet verified" below |
+| R9 share the link, watch who comes back and who gets stuck | not started |
+
+SPEC v4 lists R0 (replay check) and R1 (`cup` -> `goal`) first. Both were already done
+as P0 and P1.
 
 Not yet verified on real devices: frame rate, touch feel, first-load time on 4G, and
 audio on iOS. Everything so far was checked in a desktop browser and in headless tests.
@@ -58,7 +70,12 @@ For Chapter 2 that leaves, from SPEC v2 5.2: #5 (occlusion fading on phones) and
 (the countdown pausing when a phone sends the page to the background). For Chapter 3,
 from SPEC v3 5.3: #8 (60 FPS with four balls and fifteen pins), #9 (picking a ball by
 tapping it without mis-taps) and, of #3, every browser but Chromium: open the dev build
-on the device and press CHECK ALL REPLAYS in the dev panel.
+on the device and press CHECK ALL REPLAYS in the dev panel. For Chapter 4, from SPEC v4
+7.3: #8 by hand on a device (a showcase that is skipped changes nothing in a round,
+since it only moves the camera, but whether it is pleasant has not been judged), #9
+(nobody has played the finale by hand: its reference round was found by search) and
+#11 only as far as the texts being present in both languages. No hole of Chapter 4 has
+been played by a person yet, so every par in it is a guess.
 
 ### Open decisions
 
@@ -74,6 +91,13 @@ on the device and press CHECK ALL REPLAYS in the dev panel.
   enter Chapter 3" therefore asks for 40% of them to finish the game. Either count
   against the players who finished Chapter 2, or let Chapter 3 open earlier; that is one
   condition in `Progress.isUnlocked`.
+- **Who the Chapter 4 targets are measured against, and with what.** SPEC v4 7.1 asks
+  for 40% of Chapter 2 players to enter Chapter 4 and for at most 20% of players to
+  reach the stroke limit on any of its holes. With no provider on the page neither can
+  be read. When there is one: `hole_start` on `tomb-1` over `hole_complete` on
+  `ch2-finale` is the first; `stroke_limit` over `hole_start` per hole is the second.
+  The second undercounts confusion, because a player who is lost restarts or leaves
+  long before the limit: read `retry` and `undo` per hole next to it.
 - **Tuning by feel.** Shot power, camera, surface values and every par were set by
   calculation and by a search script, not by playing on a phone. The dev panel exists
   to tune them.
@@ -92,6 +116,78 @@ deploys on push whatever a workflow says, so `npm run build` runs the replay che
 itself: if one hole's reference solution no longer plays back, the build fails and
 nothing is deployed. `.github/workflows/replay.yml` runs the same checks on every push
 and pull request, where the result can be seen before merging.
+
+### Where this differs from SPEC v4 (Ancient Ruins)
+
+SPEC v4 was written as "Chapter 3" on the belief that the original Chapter 3 had been
+put off. It had shipped. The differences that follow from that come first.
+
+- **It is Chapter 4, and the game has 58 holes.** Growing Ball, Time Freeze, Clone Ball
+  and Golf Bowling stay where they are as Chapter 3. Several balls, skills and the
+  `knockdown` goal, which the SPEC lists as things not to build yet, already existed.
+- **Saves move to version 4** under `minigolf.save.v4`, not to version 3. The version 3
+  save is left as it was.
+- **Chapter 4 opens with the Chapter 2 finale, beside Chapter 3,** not after it
+  (`ChapterDef.after`). That is what the SPEC says in words ("after the Chapter 2
+  finale"), and it keeps the new chapter from sitting behind 45 holes. PLAY goes to the
+  first hole in play order that is open and has no score; "all holes complete" waits
+  for every hole, not for the last one in the list.
+- **A stroke can be taken back (UNDO), for the price of a stroke.** Not in the SPEC. A
+  stone can only be pushed, so one shoved into a corner cannot be got out again, and
+  without this the way out of a dead end would be to restart the hole or to hit the
+  ball out of bounds on purpose. Undo is that same out-of-bounds rule with a button: the
+  ball and the course go back to before the stroke, plus one. Only holes with works
+  have it. The Z key does the same.
+- **Going back puts the dragon back to sleep.** SPEC v4 3.6 says a dragon that has woken
+  never sleeps again; 3.8 says the snapshot holds the alert and the dragon. Both cannot
+  hold. The snapshot wins: a stroke that is taken back, or ends out of bounds, never
+  happened. The dragon never goes back to sleep by itself.
+- **Challenges are judged by how the course stands at the end,** not by what happened
+  along the way, for the same reason: gold picked up in a stroke that was taken back is
+  not held, and a dragon woken in one is asleep.
+- **The camera never leaves a rolling ball.** SPEC v4 3.2 turns the camera to a part the
+  moment it is triggered, with the physics running on, which hides the ball while it is
+  moving. Here the plate sinks, the line lights and the sound plays at once; the camera
+  goes to look only when the ball has stopped, at each part that changed out of sight,
+  for 1.4 seconds each, the first time it happens on a hole. Starting to aim skips it.
+  While a ball waits for a chain to finish, the camera watches the part that is moving.
+- **A stroke is not over until the works have stopped moving.** So a snapshot is always
+  of a course at rest, and the next stroke never starts with a bridge half way up.
+- **Parts are wired by signal, not by trigger and action lists.** SPEC v4 4.2 sketches
+  `TriggerDef`, `ActionDef` and `LinkDef`. A hold plate is a level, not an event: with
+  open and close as actions, two plates on one gate would fight. Instead every part has
+  a signal (a plate while pressed, a gate once open, a block once arrived) and a part
+  that reacts names the signals it listens to with `when`, all of some and none of
+  others. A chain is parts listening to one another. It is still all data: no hole has
+  logic of its own, and a new kind of part is one registration.
+- **A crystal sends light on the way it points.** It is not a mirror. Which way the
+  light leaves does not depend on where it came from, so the arrow on the ground under a
+  crystal is the whole story. Its facings are a list it steps through, not always 45
+  degrees apart.
+- **A stone moves away from the side that was struck,** not along the ball's main
+  direction of travel. The side is something the player can see; near a diagonal the
+  direction of travel flips between two answers on a hair.
+- **A gate is open or shut at once for the ball; only the picture takes time.** If a
+  shutting gate were a moving wall, a hard enough stroke off a hold plate would beat
+  it through.
+- **Fire has a rest rule, like a moving part.** A ball that stops where fire can burn is
+  moved to a safe spot the hole names. Otherwise it would burn, be put back where it
+  was struck from, which is that same spot, and burn again.
+- **The finale's goal is a plain cup.** The SPEC makes it a `sequence`. Its gates stand
+  in the way of each other, so the order needs no rule; a `sequence` of steps is for
+  goals that are not places, like pins.
+- **The switched-zone action was not built.** Nothing in the chapter needs a zone that a
+  signal turns on, other than fire, which is a part of its own.
+- **On the dragon holes the gold is off the way to the cup.** SPEC v4 3.6 puts the
+  gold on the short way, which makes going for it and going for the cup the same
+  stroke. In hoard-1 and hoard-3 the cup is straight ahead with nothing in the way, and
+  the gold is to one side between the bells: it costs strokes as well as risk, and a
+  round that leaves it finishes sooner with two stars (`tests/ruins.test.ts` plays
+  both). hoard-2 keeps the SPEC's shape: its gold lies toward the near door.
+- **Scenery is built in code,** as before: no CC0 kits.
+- **Solutions were searched for, with a tool that is in the repository this time:**
+  `src/debug/search.ts`. Many of them are a hole in one or two. They prove a hole can
+  be done within par with its third star, not that the par is fair.
 
 ### Where this differs from SPEC v3.0
 
@@ -181,17 +277,21 @@ src/
   level/     chapter, world and hole data schema, compiler (data -> geometry), physics builder
   game/      session state machine, rules, goals (cup, pins, steps), the set of balls,
              skills, challenges, replay
+  game/field/  the works of a hole: plates, gates, stones, light, sliders, gold, the
+             dragon, fire; how they pass signals; the snapshot a stroke goes back to
   input/     slingshot aiming and camera gestures on Pointer Events
-  render/    Three.js scene, camera, course, ball, zone and mover views, scenery,
-             occlusion fading, quality tiers
+  render/    Three.js scene, camera, course, ball, zone and mover views, the views of
+             the works and the lines between them, scenery, occlusion fading, quality tiers
   audio/     synthesised sound effects and generated music
   ui/        HTML/CSS HUD and menus, all interface text (en / zh)
-  debug/     development panel (not included in production builds)
-  data/      surfaces, themes, the fourteen worlds, the three finales and the chapter
+  debug/     development panel, and the stroke search the reference solutions are found
+             with (not included in production builds)
+  data/      surfaces, themes, the eighteen worlds, the four finales and the chapter
              list (content only, no logic)
 tests/       determinism, tunneling, seams, terrain, rules, scoring, movers, fields, saves,
              save migration, tunnels, the moving cup, countdown, rooftops, ball sizes,
-             time freeze, clones, bowling and goals in steps, reference solutions
+             time freeze, clones, bowling and goals in steps, the works (field) and the
+             Chapter 4 holes (ruins), reference solutions
 replays/     one reference solution per hole: its inputs and how the round ended
 scripts/     the replay command and the dev server's SAVE REPLAY endpoint
 ```
@@ -200,15 +300,17 @@ scripts/     the replay command and the dev server's SAVE REPLAY endpoint
 
 A **hole** is one object in a world file under `src/data/worlds/`: tee, goal (a cup,
 pins, or steps of them), par, pieces (floors, ramps, walls, pillars, low bars), zones,
-movers, crates, skills, an optional third-star challenge. Nothing outside that file
+movers, crates, skills, works (`field`: parts wired by `when`), an optional third-star
+challenge. Nothing outside that file
 changes, except that it needs a reference solution in `replays/` (see below).
 `tests/worlds.test.ts` then checks it automatically.
 
 A **world** is a new file there plus one line in `src/data/chapters.ts`, and, if it
 wants its own look, entries in `src/data/themes.ts` and `src/data/surfaces.ts`.
 
-A **chapter** is one more entry in `src/data/chapters.ts`: its worlds and its finale.
-Menus, unlock order and saves all follow from that list.
+A **chapter** is one more entry in `src/data/chapters.ts`: its worlds and its finale,
+and, if it should open from a chapter other than the one before it, `after`. Menus,
+unlock order and saves all follow from that list.
 
 A **new mechanic** is a module, registered by name so data can refer to it:
 
@@ -221,6 +323,8 @@ A **new mechanic** is a module, registered by name so data can refer to it:
 | Mover motion | `src/physics/movers.ts` | slide, swing, spin |
 | Challenge check | `src/game/challenges.ts` | noWallHits, firstStrokeInto |
 | Scenery model | `src/render/decor.ts` | canopy, tower, gear |
+| Part (one of the works of a hole) | `src/game/field/` | plate, gate, stone, crystal, fire |
+| Part visual | `src/render/fieldViews.ts` | the gate slab, the dragon |
 
 A zone talks to the game through `ZoneContext` only: it can move the ball, hold it
 (`busy`), say that it jumped (`snap`), add time to the countdown (`addTime`) and name
@@ -228,6 +332,11 @@ a moment for sound and effects (`emit` a cue), make the ball a size bigger or sm
 (`resize`) and split it in two (`split`). With several balls on the course a zone is
 run once per ball, so one that remembers something about a ball keeps it per ball
 (`perBall`). Challenges can count cues.
+
+A part talks to the round through `FieldHost` only, and to other parts through signals:
+it has `on` (what others listen to), `busy` (still moving, so the stroke is not over)
+and `save`/`load` (its state, for the snapshot). A part that reacts to others holds a
+`Drive`, which works out when the signal named by its `when` has arrived.
 
 `physics/`, `level/` and `game/` never mention a specific world.
 
@@ -238,15 +347,15 @@ hole, unlock everything, draw the physics colliders and zone volumes, replay the
 strokes of the current round, check that a replay is identical 10 times over, and tune
 feel values with sliders. **COPY CHANGES** exports whatever was changed as JSON.
 
-URL switches, development only: `?hole=ice-2` starts on that hole (`ch1-finale` and
-`ch2-finale` are the finales), `?unlock` opens every hole in every chapter. `?lang=zh`
+URL switches, development only: `?hole=ice-2` starts on that hole (`ch1-finale` to
+`ch4-finale` are the finales), `?unlock` opens every hole in every chapter. `?lang=zh`
 or `?lang=en` forces a language in any build.
 
 ### Reference solutions
 
 Every hole has one in `replays/<holeId>.json`: the inputs of a round that finishes it
 (each stroke's tick, direction, power and ball, each use of a skill) and how that round
-ended. `npm run replay` plays all 45 back without rendering, in well under a second,
+ended. `npm run replay` plays all 58 back without rendering, in well under a second,
 and prints a report; `npm test` and `npm run build` run the same check. A round has to
 end on the same tick, with the same strokes and stars, within a millimetre of the same
 place. In practice it ends in exactly the same place, to the last bit, and the tests
@@ -260,7 +369,9 @@ or a number on purpose:
 - if the same inputs still finish the hole, `npm run replay -- --update <holeId>`
   records how the round ends now;
 - otherwise play the hole in the dev build and press **SAVE REPLAY** in the dev panel,
-  which writes the file through the dev server;
+  which writes the file through the dev server, or look for a round with
+  `searchStroke` from `src/debug/search.ts` in a throwaway test and record what it
+  finds with `npm run replay -- --import <file.json>`;
 - commit the replay with the change, and say in the commit message which holes were
   recorded again and why.
 
@@ -287,6 +398,18 @@ must match Node's exactly; that is how a difference between engines would show.
   left it. A ball flying over one is not changed.
 - **Frozen time is no tick at all.** `Session.step` returns at once, so a freeze of any
   length replays as nothing but the inputs made during it.
+- **A snapshot is taken where the ball's return point is set, and nowhere else:** on a
+  stroke from the ground. Out of bounds and undo both pop the newest one. An
+  out-of-bounds with no stroke under way puts the ball back and leaves the course alone.
+- **Fire in bursts keeps the hole's clock, and the clock is not in the snapshot.** Going
+  back a stroke does not rewind a burst, as it does not rewind a moving part.
+- **An open gate has no collider at all** (it is switched off, not ghosted): the ray
+  that looks for the ground under the ball would otherwise find the gate it is rolling
+  through.
+- **A stone is a kinematic body moved one square at a time.** Its position is read back
+  from the physics engine, in the engine's own single precision.
+- **Light is traced when a crystal turns, not every tick,** and gives up after eight
+  stretches or on meeting a crystal twice.
 
 Decisions that are easy to undo by accident:
 

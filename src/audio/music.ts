@@ -34,6 +34,12 @@ export const MUSIC: Record<string, MusicDef> = {
   mirrors: { bpm: 106, root: 64, scale: [0, 2, 4, 6, 7, 9, 11], wave: 'triangle', brightness: 3000 },
   alley: { bpm: 128, root: 55, scale: [0, 3, 5, 6, 7, 10], wave: 'square', brightness: 1250 },
   carnival: { bpm: 136, root: 62, scale: [0, 2, 4, 7, 9], wave: 'sawtooth', brightness: 1500 },
+  // Chapter 4
+  tomb: { bpm: 80, root: 57, scale: [0, 1, 4, 5, 7, 8, 11], wave: 'triangle', brightness: 1500 },
+  cavern: { bpm: 68, root: 64, scale: [0, 2, 4, 7, 9, 11], wave: 'sine', brightness: 3400 },
+  jungle: { bpm: 110, root: 60, scale: [0, 2, 3, 5, 7, 10], wave: 'triangle', brightness: 1700 },
+  hoard: { bpm: 96, root: 52, scale: [0, 2, 3, 6, 7, 8, 11], wave: 'sawtooth', brightness: 900 },
+  temple: { bpm: 118, root: 57, scale: [0, 2, 3, 5, 7, 8, 10], wave: 'square', brightness: 1400 },
 };
 
 /** Chord roots, as scale steps, one per bar. */

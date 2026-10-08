@@ -98,6 +98,12 @@ export const TEXT = {
   previousBall: pick('Previous ball', '上一个球'),
   nextBall: pick('Next ball', '下一个球'),
   cupAppeared: pick('THE HOLE APPEARS!', '洞口出现了！'),
+  undo: pick('Take back the last stroke', '撤销上一杆'),
+  undone: pick('STROKE TAKEN BACK  +1', '已撤销一杆  +1'),
+  dragonStirs: pick('THE DRAGON STIRS…', '巨龙动了一下…'),
+  dragonWakes: pick('THE DRAGON WAKES!', '巨龙醒了！'),
+  dragonAsleep: pick('ASLEEP', '沉睡'),
+  dragonAwake: pick('AWAKE', '已醒'),
   allDown: pick('ALL PINS DOWN!', '木桩全倒！'),
   allComplete: (holes: number) => (zh() ? `${holes} 洞全部完成！` : `ALL ${holes} HOLES COMPLETE!`),
   chapterComplete: (chapter: string) => (zh() ? `${chapter}完成！` : `${chapter.toUpperCase()} COMPLETE!`),
@@ -105,6 +111,12 @@ export const TEXT = {
     zh() ? `完成${previous}的终局洞后解锁` : `Finish the ${previous} finale to unlock`,
   timeBonus: (seconds: number) => (zh() ? `+${seconds} 秒` : `+${seconds} s`),
   pins: (left: number, total: number) => (zh() ? `木桩 ${left} / ${total}` : `PINS ${left} / ${total}`),
+  gold: (have: number, total: number) => (zh() ? `金币 ${have} / ${total}` : `GOLD ${have} / ${total}`),
+  /** The dragon's meter: one mark for each noise it can still sleep through, and the ones it has heard. */
+  alert: (heard: number, threshold: number, state: string) => {
+    const marks = '●'.repeat(Math.min(heard, threshold)) + '○'.repeat(Math.max(0, threshold - heard));
+    return zh() ? `巨龙 ${marks} ${state}` : `DRAGON ${marks} ${state}`;
+  },
   /** Result of a hole that is all pins. */
   clearedIn: (strokes: number) => {
     if (strokes === 1) return zh() ? '一杆全倒！' : 'STRIKE!';

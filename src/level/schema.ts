@@ -1,16 +1,22 @@
 import type { I18nText, Vec2, Vec3 } from '../core/types';
 import type { ZoneDef } from '../physics/zones';
 import type { ZoneShape } from '../physics/zones/shape';
+import type { FieldDef } from './field';
 
 /**
- * A chapter: a run of worlds closed by one finale hole. Chapters unlock in order, each
- * one when the finale of the chapter before it has been finished.
+ * A chapter: a run of worlds closed by one finale hole. A chapter opens when the finale
+ * of another has been finished: the one before it, unless it names a different one.
  */
 export interface ChapterDef {
   id: string;
   name: I18nText;
   worlds: readonly WorldDef[];
   finale: FinaleDef;
+  /**
+   * Id of the chapter whose finale opens this one. Defaults to the chapter before it.
+   * Naming an earlier one lets two chapters be open side by side (SPEC v4 3.1).
+   */
+  after?: string;
 }
 
 /**
@@ -53,6 +59,12 @@ export interface HoleDef {
   movers?: readonly MoverDef[];
   /** Loose boxes the ball can shove around, if it is heavy enough. */
   crates?: readonly CrateDef[];
+  /**
+   * The works of the hole: plates, gates, stones, crystals, gold, a dragon (SPEC v4 3).
+   * On a hole that has them, the course goes back with the ball after an out-of-bounds,
+   * and the player may take a stroke back.
+   */
+  field?: FieldDef;
   /** How many balls a split may leave on the course at once, 1 to 4. Defaults to 1: no splitting. */
   maxBalls?: number;
   /** Skills the player may use on this hole, and how many times each: `{ freeze: 2 }`. */
@@ -90,6 +102,8 @@ export interface ChallengeDef {
   cue?: string;
   count?: number;
   seconds?: number;
+  /** Id of one of the hole's works. */
+  part?: string;
 }
 
 /** Per-hole camera settings; anything left out uses the default. Angles in degrees. */

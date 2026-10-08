@@ -158,6 +158,57 @@ export function registerThemes(): void {
     sun: 0xffe2b8,
     sunIntensity: 2,
   });
+  // --- Chapter 4: ancient ruins ---
+  // Pharaoh's tomb: torchlight on sandstone, under a dusk sky.
+  registerTheme('tomb', {
+    sky: 0x2b2238,
+    ambientSky: 0xffe2b0,
+    ambientGround: 0x7a5a3a,
+    ambientIntensity: 1.6,
+    sun: 0xffd9a0,
+    sunIntensity: 2.1,
+    sea: { color: 0x8a6a45, y: -0.9 },
+  });
+  // Crystal cavern: dark, so the beams and the crystals carry the picture.
+  registerTheme('cavern', {
+    sky: 0x0e1326,
+    ambientSky: 0xa8c4ff,
+    ambientGround: 0x27304f,
+    ambientIntensity: 1.7,
+    sun: 0xd6e4ff,
+    sunIntensity: 1.5,
+    sea: { color: 0x1a2038, y: -0.9 },
+  });
+  // Jungle temple: green daylight through leaves.
+  registerTheme('jungle', {
+    sky: 0x9fd6b0,
+    ambientSky: 0xf2ffe6,
+    ambientGround: 0x5f8f5a,
+    ambientIntensity: 1.6,
+    sun: 0xfff6cf,
+    sunIntensity: 2.1,
+    sea: { color: 0x4f8a55, y: -0.9 },
+  });
+  // Dragon's hoard: a red cave lit by the gold in it.
+  registerTheme('hoard', {
+    sky: 0x1f0f14,
+    ambientSky: 0xffc98a,
+    ambientGround: 0x5a2a2a,
+    ambientIntensity: 1.7,
+    sun: 0xffd08a,
+    sunIntensity: 1.9,
+    sea: { color: 0x2c171c, y: -0.9 },
+  });
+  // The Chapter 4 finale: the temple at sunset.
+  registerTheme('temple', {
+    sky: 0xf0a868,
+    ambientSky: 0xffe9cf,
+    ambientGround: 0x8a6a4f,
+    ambientIntensity: 1.6,
+    sun: 0xffd6a0,
+    sunIntensity: 2.2,
+    sea: { color: 0xb98a55, y: -0.9 },
+  });
   registerTheme('pirate', {
     sky: 0x9fd8f0,
     ambientSky: 0xffffff,

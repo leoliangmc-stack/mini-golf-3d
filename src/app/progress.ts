@@ -1,5 +1,5 @@
 import type { Outcome } from '../game/session';
-import { allHoles, stagesOf } from '../level/chapters';
+import { allHoles, chapterOf, stagesOf } from '../level/chapters';
 import type { ChapterDef, WorldDef } from '../level/schema';
 import { freshSave, readSave, type HoleRecord, type SaveData, type Settings } from './save';
 
@@ -11,14 +11,14 @@ export interface StorageLike {
   setItem(key: string, value: string): void;
 }
 
-const KEY = 'minigolf.save.v3';
+const KEY = 'minigolf.save.v4';
 /**
- * Where versions 2 and 1 kept their saves, newest first. An older save is read once, to
+ * Where versions 3, 2 and 1 kept their saves, newest first. An older save is read once, to
  * carry the scores over, and never written again: an older build does not understand a
  * newer save and would start the player from nothing, so if this build is ever rolled
  * back, the save that build wrote is still there for it.
  */
-const LEGACY_KEYS = ['minigolf.save', 'minigolf.save.v1'];
+const LEGACY_KEYS = ['minigolf.save.v3', 'minigolf.save', 'minigolf.save.v1'];
 
 /**
  * localStorage if it can be read here, otherwise null: private browsing may block it.
@@ -111,22 +111,43 @@ export class Progress {
   }
 
   /**
-   * Linear unlock (SPEC 2.7, v2 2.8): a hole opens when the one before it has been
-   * finished. The order runs through each chapter's worlds, then its finale, then on
-   * into the next chapter.
+   * Linear unlock (SPEC 2.7, v2 2.8): within a chapter a hole opens when the one before
+   * it has been finished, through the chapter's worlds and then its finale. The first
+   * hole of a chapter opens with the finale of the chapter that leads to it, which is
+   * the one before it unless the chapter says otherwise (SPEC v4 3.1).
    */
   isUnlocked(world: WorldDef, index: number): boolean {
     if (this.unlockAll) return true;
-    const position = this.order.findIndex((ref) => ref.world === world && ref.index === index);
-    // The first hole is always open, and so is anything outside the play order (the dev sandbox).
-    if (position <= 0) return true;
-    const before = this.order[position - 1];
-    return this.record(before.world.holes[before.index].id) !== null;
+    const chapter = chapterOf(this.chapters, world);
+    // Anything outside the play order (the dev sandbox) is always open.
+    if (!chapter) return true;
+    const stages = stagesOf(chapter);
+    const stage = stages.indexOf(world);
+    if (index === 0 && stage === 0) {
+      const opener = this.opener(chapter);
+      return opener === null || this.record(opener.finale.holes[0].id) !== null;
+    }
+    const before = index > 0 ? world.holes[index - 1] : stages[stage - 1].holes.at(-1)!;
+    return this.record(before.id) !== null;
   }
 
-  /** A chapter is open once the finale of the chapter before it has been finished. */
+  /** The chapter whose finale opens this one, or null for a chapter that is open from the start. */
+  opener(chapter: ChapterDef): ChapterDef | null {
+    if (chapter.after !== undefined) {
+      const named = this.chapters.find((other) => other.id === chapter.after);
+      if (!named) throw new Error(`Chapter "${chapter.id}" opens after "${chapter.after}", which does not exist`);
+      return named;
+    }
+    return this.chapters[this.chapters.indexOf(chapter) - 1] ?? null;
+  }
+
   chapterUnlocked(chapter: ChapterDef): boolean {
     return this.isUnlocked(chapter.worlds[0] ?? chapter.finale, 0);
+  }
+
+  /** True once every hole of the game has a score. */
+  get allComplete(): boolean {
+    return this.order.every((ref) => this.record(ref.world.holes[ref.index].id) !== null);
   }
 
   worldStars(world: WorldDef): number {
@@ -149,7 +170,9 @@ export class Progress {
     const last = this.order.find((ref) => id(ref) === this.data.last);
     const open = last !== undefined && this.isUnlocked(last.world, last.index);
     if (last && open && this.record(id(last)) === null) return last;
-    const frontier = this.order.find((ref) => this.record(id(ref)) === null);
+    // With two chapters open side by side, the first hole without a score may be in one
+    // the player cannot enter yet: the frontier is the first that is open.
+    const frontier = this.order.find((ref) => this.record(id(ref)) === null && this.isUnlocked(ref.world, ref.index));
     if (frontier) return frontier;
     return last && open ? last : this.order[this.order.length - 1];
   }

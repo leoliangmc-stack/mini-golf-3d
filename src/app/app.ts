@@ -7,6 +7,7 @@ import { allHoles, chapterOf, stagesOf } from '../level/chapters';
 import type { WorldDef } from '../level/schema';
 import { initPhysics } from '../physics/rapier';
 import { registerBuiltinDecor } from '../render/decor';
+import { registerBuiltinPartViews } from '../render/fieldViews';
 import { QualityController } from '../render/quality';
 import { createStage } from '../render/scene';
 import { renderThumbnail } from '../render/thumbnail';
@@ -40,6 +41,7 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
   await initPhysics();
   registerContent();
   registerBuiltinZoneViews();
+  registerBuiltinPartViews();
   registerBuiltinDecor();
 
   const dev = import.meta.env.DEV;
@@ -146,9 +148,15 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
       return chapter === game.chapter ? TEXT.nextWorld() : TEXT.nextChapter();
     },
     resultHeading() {
-      if (!upNext()) return TEXT.allComplete(allHoles(CHAPTERS).length);
+      // The last hole in the list is not the end of the game for a player who went
+      // straight from Chapter 2 to Chapter 4.
+      if (!upNext() && progress.allComplete) return TEXT.allComplete(allHoles(CHAPTERS).length);
       if (game.isFinale && game.chapter) return TEXT.chapterComplete(tr(game.chapter.name));
       return game.isLastHole ? TEXT.worldComplete() : '';
+    },
+    onUndo() {
+      if (!game.undo()) return;
+      if (stages.includes(game.world)) track('undo', { hole: game.hole.id });
     },
     onStuckChoice(choice) {
       audio.click();
@@ -211,6 +219,31 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
         else if (event.name === 'resume') audio.resume();
         else if (event.name === 'strike') audio.strike();
         else if (event.name === 'cupAppear') audio.cupAppear();
+        else if (event.name === 'plateDown') audio.plate(true);
+        else if (event.name === 'plateUp') audio.plate(false);
+        else if (event.name === 'gateOpen') audio.gate(true);
+        else if (event.name === 'gateShut') audio.gate(false);
+        else if (event.name === 'stoneSlide') audio.stoneSlide();
+        else if (event.name === 'stoneBlocked') audio.stoneBlocked();
+        else if (event.name === 'stoneLand') audio.stoneLand();
+        else if (event.name === 'crystalTurn') audio.crystalTurn();
+        else if (event.name === 'beamLock') audio.beamLock();
+        else if (event.name === 'sliderStart') audio.sliderStart();
+        else if (event.name === 'sliderStop') audio.sliderStop();
+        else if (event.name === 'coin') audio.coin();
+        else if (event.name === 'bell') audio.bell();
+        else if (event.name === 'dragonStir') audio.dragonStir();
+        else if (event.name === 'fireOn') audio.fire();
+        else if (event.name === 'dragonWake') {
+          audio.dragonWake();
+          if (stages.includes(game.world)) track('dragon_woke', { hole: hole.id });
+        }
+        break;
+      case 'undo':
+        audio.undo();
+        break;
+      case 'showcase':
+        if (stages.includes(game.world)) track('showcase', { hole: hole.id, skipped: event.skipped });
         break;
       case 'timeAdded':
         audio.timeBonus();

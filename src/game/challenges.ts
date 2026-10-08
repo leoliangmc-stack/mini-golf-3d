@@ -20,6 +20,12 @@ export interface RoundStats {
   cues: Record<string, number>;
   /** Seconds left on the hole's countdown when it ended, or null if it has none. */
   timeLeft: number | null;
+  /** Strokes taken back. */
+  undos: number;
+  /** Ids of the hole's works whose signal was on when the hole ended: a gate that had opened, a dragon awake. */
+  partsOn: Set<string>;
+  /** Coins still lying on the course when the hole ended. */
+  coinsLeft: number;
 }
 
 export const emptyStats = (): RoundStats => ({
@@ -31,6 +37,9 @@ export const emptyStats = (): RoundStats => ({
   rests: [],
   cues: {},
   timeLeft: null,
+  undos: 0,
+  partsOn: new Set(),
+  coinsLeft: 0,
 });
 
 export type ChallengeCheck = (stats: RoundStats, def: ChallengeDef) => boolean;
@@ -79,6 +88,15 @@ export function registerBuiltinChallenges(): void {
   registerChallenge(
     'minCues',
     (stats, def) => (stats.cues[need(def.cue, def, 'cue')] ?? 0) >= need(def.count, def, 'count'),
+  );
+  /** Every coin was picked up (SPEC v4 3.6). */
+  registerChallenge('allCoins', (stats) => stats.coinsLeft === 0);
+  /** The part called `part` was never set off, or only in a stroke that was taken back: the dragon is still asleep. */
+  registerChallenge('partOff', (stats, def) => !stats.partsOn.has(need(def.part, def, 'part')));
+  /** Both of the above: all the gold, and `part` still off. */
+  registerChallenge(
+    'allCoinsPartOff',
+    (stats, def) => stats.coinsLeft === 0 && !stats.partsOn.has(need(def.part, def, 'part')),
   );
   /** At least `seconds` were left on the countdown at the end. */
   registerChallenge(

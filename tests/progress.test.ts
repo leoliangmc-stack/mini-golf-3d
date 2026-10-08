@@ -17,9 +17,9 @@ function memoryStorage(initial: Record<string, string> = {}): StorageLike & { da
   return { data, getItem: (k) => data[k] ?? null, setItem: (k, v) => void (data[k] = v) };
 }
 
-const [chapter1, chapter2, chapter3] = CHAPTERS;
+const [chapter1, chapter2, chapter3, chapter4] = CHAPTERS;
 const [ice, desert] = chapter1.worlds;
-const KEY = 'minigolf.save.v3';
+const KEY = 'minigolf.save.v4';
 
 /** A progress with every hole of the first `count` in play order finished. */
 function played(count: number, storage: StorageLike | null = memoryStorage()): Progress {
@@ -49,7 +49,8 @@ describe('progress (SPEC 2.7)', () => {
     expect(new Progress(CHAPTERS, null).next(gravity, 2)).toEqual({ world: chapter1.finale, index: 0 });
     expect(new Progress(CHAPTERS, null).next(chapter1.finale, 0)).toEqual({ world: chapter2.worlds[0], index: 0 });
     expect(new Progress(CHAPTERS, null).next(chapter2.finale, 0)).toEqual({ world: chapter3.worlds[0], index: 0 });
-    expect(new Progress(CHAPTERS, null).next(chapter3.finale, 0)).toBeNull();
+    expect(new Progress(CHAPTERS, null).next(chapter3.finale, 0)).toEqual({ world: chapter4.worlds[0], index: 0 });
+    expect(new Progress(CHAPTERS, null).next(chapter4.finale, 0)).toBeNull();
 
     // All 18 holes of Chapter 1 open its finale, but not Chapter 2.
     const progress = played(18);
@@ -153,6 +154,34 @@ describe('progress (SPEC 2.7)', () => {
     expect(written.record('ice-1')).toEqual({ stars: 3, strokes: 2 });
     expect(written.record('ice-2')).toEqual({ stars: 2, strokes: 4 });
     expect(written.isUnlocked(ice, 2)).toBe(true);
+  });
+
+  it('opens Chapter 3 and Chapter 4 together, each from the Chapter 2 finale (SPEC v4 3.1)', () => {
+    const progress = played(31);
+    expect(progress.opener(chapter1)).toBeNull();
+    expect(progress.opener(chapter3)).toBe(chapter2);
+    expect(progress.opener(chapter4)).toBe(chapter2);
+    expect(progress.chapterUnlocked(chapter3)).toBe(false);
+    expect(progress.chapterUnlocked(chapter4)).toBe(false);
+    progress.complete(chapter2.finale.holes[0].id, outcome(1, 9));
+    expect(progress.chapterUnlocked(chapter3)).toBe(true);
+    expect(progress.chapterUnlocked(chapter4)).toBe(true);
+    // Finishing a hole of one does nothing for the other.
+    progress.complete(chapter4.worlds[0].holes[0].id, outcome(2, 2));
+    expect(progress.isUnlocked(chapter4.worlds[0], 1)).toBe(true);
+    expect(progress.isUnlocked(chapter3.worlds[0], 0)).toBe(true);
+    expect(progress.isUnlocked(chapter3.worlds[0], 1)).toBe(false);
+    // PLAY goes to the first hole in play order that is open and has no score.
+    expect(progress.resume()).toEqual({ world: chapter3.worlds[0], index: 0 });
+    progress.setLast(chapter4.worlds[0].holes[1].id);
+    expect(progress.resume()).toEqual({ world: chapter4.worlds[0], index: 1 });
+  });
+
+  it('knows the game is finished only when every hole has a score', () => {
+    const all = played(allHoles(CHAPTERS).length - 1);
+    expect(all.allComplete).toBe(false);
+    all.complete(chapter4.finale.holes[0].id, outcome(1, 12));
+    expect(all.allComplete).toBe(true);
   });
 
   it('has a development switch that opens everything', () => {

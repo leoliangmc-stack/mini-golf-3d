@@ -125,7 +125,7 @@ export function createScreens(chapters: readonly ChapterDef[], progress: Progres
     });
     const locked =
       position > 0 && !progress.chapterUnlocked(chapter)
-        ? [el('p', { className: 'chapter-locked', textContent: TEXT.chapterLocked(tr(chapters[position - 1].name)) })]
+        ? [el('p', { className: 'chapter-locked', textContent: TEXT.chapterLocked(tr((progress.opener(chapter) ?? chapters[position - 1]).name)) })]
         : [];
     return [
       header(TEXT.worlds(), () => show(home)),

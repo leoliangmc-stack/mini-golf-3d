@@ -220,6 +220,78 @@ function barrel(def: DecorDef): THREE.Object3D {
   );
 }
 
+/** A tapering four-sided pillar with a pointed top. `size` is [width, height]. */
+function obelisk(def: DecorDef): THREE.Object3D {
+  const [width, height] = def.size ?? [0.8, 4, 0];
+  const stone = flat(def.color ?? 0xc9a56a);
+  const shaft = part(new THREE.CylinderGeometry(width * 0.34, width * 0.5, height, 4), stone, 0, height / 2);
+  const tip = part(new THREE.ConeGeometry(width * 0.34, width * 0.7, 4), flat(0xf2c14e), 0, height + width * 0.35);
+  shaft.rotation.y = tip.rotation.y = Math.PI / 4;
+  return group(shaft, tip);
+}
+
+/** A round column on a square base. A short one reads as broken. `size` is [radius, height]. */
+function column(def: DecorDef): THREE.Object3D {
+  const [radius, height] = def.size ?? [0.35, 2.4, 0];
+  const stone = flat(def.color ?? 0xb9b39c);
+  const base = part(new THREE.BoxGeometry(radius * 2.8, 0.25, radius * 2.8), stone, 0, 0.125);
+  const shaft = part(new THREE.CylinderGeometry(radius * 0.9, radius, height, 9), stone, 0, 0.25 + height / 2);
+  const top = part(new THREE.CylinderGeometry(radius * 1.25, radius * 0.9, 0.22, 9), stone, 0, 0.36 + height);
+  // A broken column ends in a slant instead of a capital.
+  if (height < 1.6) top.rotation.z = 0.35;
+  return group(base, shaft, top);
+}
+
+/** A cluster of crystals growing out of the rock. `size` is [height]. */
+function crystals(def: DecorDef): THREE.Object3D {
+  const height = def.size?.[0] ?? 1.6;
+  const glass = new THREE.MeshLambertMaterial({
+    color: def.color ?? 0x8fe3ff,
+    flatShading: true,
+    emissive: def.color ?? 0x2a8fb5,
+    emissiveIntensity: 0.55,
+  });
+  const cluster = new THREE.Group();
+  for (let i = 0; i < 5; i++) {
+    const tall = height * (1 - i * 0.16);
+    const shard = part(new THREE.ConeGeometry(tall * 0.16, tall, 5), glass, 0, tall / 2 - 0.1);
+    const lean = new THREE.Group().add(shard);
+    lean.rotation.set(0.32 * (i > 0 ? 1 : 0), i * 1.4, 0.28 * (i % 2 ? 1 : -1) * (i > 0 ? 1 : 0));
+    cluster.add(lean);
+  }
+  return cluster;
+}
+
+/** A palm tree. `size` is [height]. */
+function palm(def: DecorDef): THREE.Object3D {
+  const height = def.size?.[0] ?? 3.4;
+  const trunk = part(new THREE.CylinderGeometry(0.11, 0.2, height, 7), flat(0x8a6a45), 0, height / 2);
+  const leaves = flat(def.color ?? 0x3f9a55);
+  const crown = new THREE.Group();
+  crown.position.y = height;
+  for (let i = 0; i < 7; i++) {
+    const frond = part(new THREE.ConeGeometry(0.3, 1.4, 4), leaves, 0, 0, 0.66);
+    frond.rotation.x = Math.PI / 2 + 0.5;
+    frond.scale.z = 0.25;
+    crown.add(new THREE.Group().add(frond));
+    crown.children[i].rotation.y = (i / 7) * Math.PI * 2;
+  }
+  const tree = group(trunk, crown);
+  tree.rotation.z = 0.06;
+  return tree;
+}
+
+/** A heap of gold. `size` is [radius]. */
+function goldHeap(def: DecorDef): THREE.Object3D {
+  const radius = def.size?.[0] ?? 1.2;
+  const gold = new THREE.MeshLambertMaterial({ color: 0xf2c14e, flatShading: true, emissive: 0x6a4300, emissiveIntensity: 0.5 });
+  const heap = part(new THREE.ConeGeometry(radius, radius * 0.55, 9), gold, 0, radius * 0.27);
+  const pieces = [0, 1, 2, 3].map((i) =>
+    part(new THREE.IcosahedronGeometry(radius * 0.16, 0), gold, Math.cos(i * 1.9) * radius * 0.8, radius * 0.1, Math.sin(i * 1.9) * radius * 0.8),
+  );
+  return group(heap, ...pieces);
+}
+
 export function registerBuiltinDecor(): void {
   registerDecor('canopy', canopy);
   registerDecor('pine', pine);
@@ -235,4 +307,9 @@ export function registerBuiltinDecor(): void {
   registerDecor('gear', gear);
   registerDecor('crate', crate);
   registerDecor('barrel', barrel);
+  registerDecor('obelisk', obelisk);
+  registerDecor('column', column);
+  registerDecor('crystals', crystals);
+  registerDecor('palm', palm);
+  registerDecor('goldHeap', goldHeap);
 }
