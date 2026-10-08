@@ -28,7 +28,7 @@ export function boxHole(overrides: Partial<HoleDef> = {}, floors?: PieceDef[]): 
     id: 'box',
     par: 2,
     tee: [0, 0, 0],
-    cup: { position: [100, 0, 100], radius: 0.22, captureSpeed: 3.5 },
+    goal: { type: 'cup', position: [100, 0, 100], radius: 0.22, captureSpeed: 3.5 },
     pieces: [
       ...(floors ?? [{ type: 'floor', min: [-3, -3], max: [3, 3], surface: 'grass' } as const]),
       { type: 'wall', from: [-3, -3], to: [3, -3], surface: 'rail' },

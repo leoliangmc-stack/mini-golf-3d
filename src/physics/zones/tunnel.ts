@@ -1,7 +1,8 @@
 import { FIXED_DT } from '../../core/loop';
+import { cos, hypot, sin } from '../../core/math';
 import type { Vec3, XYZ } from '../../core/types';
 import type { Ball } from '../ball';
-import { numberParam, vectorParam, type ZoneDef, type ZoneFactory } from './index';
+import { numberParam, perBall, vectorParam, type ZoneDef, type ZoneFactory } from './index';
 import type { ZoneShape } from './shape';
 
 /** One mouth of a tunnel. */
@@ -32,7 +33,7 @@ const OUTSET = 0.06;
 /** Unit vector for a compass heading in degrees. */
 export function headingVector(degrees: number): XYZ {
   const a = (degrees * Math.PI) / 180;
-  return { x: Math.sin(a), y: 0, z: -Math.cos(a) };
+  return { x: sin(a), y: 0, z: -cos(a) };
 }
 
 /**
@@ -96,7 +97,7 @@ function sweepHits(p: XYZ, v: XYZ, c: XYZ, radius: number): boolean {
   const lengthSq = dx * dx + dy * dy + dz * dz;
   const along = lengthSq < 1e-12 ? 0 : ((c.x - p.x) * dx + (c.y - p.y) * dy + (c.z - p.z) * dz) / lengthSq;
   const t = Math.min(1, Math.max(0, along));
-  return Math.hypot(p.x + dx * t - c.x, p.y + dy * t - c.y, p.z + dz * t - c.z) <= radius;
+  return hypot(p.x + dx * t - c.x, p.y + dy * t - c.y, p.z + dz * t - c.z) <= radius;
 }
 
 const lerp = (a: XYZ, b: XYZ, t: number): XYZ => ({
@@ -116,8 +117,11 @@ const lerp = (a: XYZ, b: XYZ, t: number): XYZ => ({
 export const tunnel: ZoneFactory = (def) => {
   const radius = tunnelRadius(def);
   const ends = tunnelEnds(def);
-  let mouths: [Mouth, Mouth] | null = null;
-  let transit: { from: Mouth; to: Mouth; start: XYZ; speed: number; tick: number } | null = null;
+  // The mouths sit at the height of the ball's centre, so each size of ball has its own.
+  const mouthsBySize = new Map<number, [Mouth, Mouth]>();
+  const trips = perBall<{ transit: { from: Mouth; to: Mouth; start: XYZ; speed: number; tick: number } | null }>(
+    () => ({ transit: null }),
+  );
 
   const build = (ballRadius: number): [Mouth, Mouth] =>
     ends.map((end): Mouth => {
@@ -130,12 +134,15 @@ export const tunnel: ZoneFactory = (def) => {
   return {
     preStep(ctx) {
       const { ball, world } = ctx;
-      mouths ??= build(ball.props.radius);
+      const ballRadius = ball.props.radius;
+      let mouths = mouthsBySize.get(ballRadius);
+      if (!mouths) mouthsBySize.set(ballRadius, (mouths = build(ballRadius)));
+      const trip = trips(ball);
 
-      if (transit) {
+      if (trip.transit) {
         ctx.busy();
-        const { from, to, start, speed } = transit;
-        const t = ++transit.tick;
+        const { from, to, start, speed } = trip.transit;
+        const t = ++trip.transit.tick;
         if (t < HALF) {
           ball.body.setTranslation(lerp(start, from.inside, t / HALF), true);
         } else if (t === HALF) {
@@ -150,7 +157,7 @@ export const tunnel: ZoneFactory = (def) => {
           ball.body.setTranslation(to.exit, true);
           ball.body.setLinvel({ x: to.dir.x * speed, y: 0, z: to.dir.z * speed }, true);
           lastExit.set(ball, world.tick);
-          transit = null;
+          trip.transit = null;
         }
         return;
       }
@@ -167,7 +174,7 @@ export const tunnel: ZoneFactory = (def) => {
         const into = -(v.x * mouth.dir.x + v.z * mouth.dir.z);
         // Looks one step ahead: by the time the ball touched the trunk it would have bounced.
         if (into < MIN_ENTRY_SPEED || !sweepHits(p, v, mouth.center, radius)) continue;
-        transit = { from: mouth, to: mouths[1 - i], start: { ...p }, speed: Math.hypot(v.x, v.y, v.z), tick: 0 };
+        trip.transit = { from: mouth, to: mouths[1 - i], start: { ...p }, speed: hypot(v.x, v.y, v.z), tick: 0 };
         ball.halt();
         ball.body.setEnabled(false);
         ctx.busy();

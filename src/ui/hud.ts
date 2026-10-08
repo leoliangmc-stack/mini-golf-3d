@@ -1,5 +1,6 @@
 import type { Game } from '../app/game';
 import { FIXED_DT } from '../core/loop';
+import { goalCups } from '../game/goal';
 import type { Outcome } from '../game/session';
 import { byId } from './dom';
 import { onLangChange, TEXT, tr } from './i18n';
@@ -34,6 +35,10 @@ export function createHud(game: Game, actions: HudActions): void {
   const resultNext = byId<HTMLButtonElement>('result-next');
   const timer = byId('timer');
   const stuck = byId('stuck');
+  const freeze = byId<HTMLButtonElement>('skill-freeze');
+  const freezeCount = byId('skill-freeze-count');
+  const picker = byId('ball-picker');
+  const pins = byId('pins');
 
   let toastTimer = 0;
   let resultTimer = 0;
@@ -78,10 +83,44 @@ export function createHud(game: Game, actions: HudActions): void {
     timer.classList.toggle('low', low);
   };
 
+  /**
+   * What Chapter 3 adds to the screen: the freeze button with its uses left, the ball
+   * picker after a split, and the pins still standing. Touches the page only on a change.
+   */
+  let extrasShown = '';
+  const drawExtras = () => {
+    const { session } = game;
+    const skill = session.skills.get('freeze');
+    const pinTotal = session.goal.pins.length;
+    const state = [
+      skill ? skill.charges : -1,
+      session.frozen,
+      session.canUseSkill('freeze'),
+      game.choosing,
+      pinTotal > 0 ? session.goal.pinsLeft : -1,
+    ].join();
+    if (state === extrasShown) return;
+    extrasShown = state;
+    freeze.hidden = !skill;
+    if (skill) {
+      freezeCount.textContent = String(skill.charges);
+      freeze.classList.toggle('frozen', session.frozen);
+      freeze.classList.toggle('unready', !session.frozen && !session.canUseSkill('freeze'));
+      freeze.setAttribute('aria-label', session.frozen ? TEXT.unfreeze() : TEXT.freeze());
+    }
+    if (session.frozen) document.body.dataset.frozen = '';
+    else delete document.body.dataset.frozen;
+    picker.hidden = !game.choosing;
+    pins.hidden = pinTotal === 0;
+    if (pinTotal > 0) pins.textContent = TEXT.pins(session.goal.pinsLeft, pinTotal);
+  };
+
   const fillResult = (outcome: Outcome) => {
-    const { challenge, par } = game.hole;
+    const { challenge, par, goal } = game.hole;
+    // A hole with no cup is not "holed": its pins are cleared.
+    const done = goalCups(goal).length === 0 ? TEXT.clearedIn(outcome.strokes) : TEXT.holedIn(outcome.strokes);
     byId('result-sub').textContent = actions.resultHeading();
-    byId('result-title').textContent = outcome.holed ? TEXT.holedIn(outcome.strokes) : TEXT.strokeLimit();
+    byId('result-title').textContent = outcome.holed ? done : TEXT.strokeLimit();
     byId('result-par').textContent = `${TEXT.result(outcome.strokes, par)}  ·  ${TEXT.time(outcome.ticks * FIXED_DT)}`;
     byId('result-stars')
       .querySelectorAll('span')
@@ -124,6 +163,10 @@ export function createHud(game: Game, actions: HudActions): void {
     byId('stuck-body').textContent = TEXT.stuckBody();
     byId('stuck-retry').textContent = TEXT.tryAgain();
     byId('stuck-limit').textContent = TEXT.takeLimit();
+    byId('ball-pick-label').textContent = TEXT.pickBall();
+    byId('ball-prev').setAttribute('aria-label', TEXT.previousBall());
+    byId('ball-next').setAttribute('aria-label', TEXT.nextBall());
+    extrasShown = '';
     holeName.textContent = TEXT.holeTitle(tr(game.world.name), game.holeNumber);
     byId('rule-tag').textContent = tr(game.world.ruleTag);
     byId('challenge').textContent = game.hole.challenge ? TEXT.challenge(tr(game.hole.challenge.text)) : '';
@@ -164,6 +207,16 @@ export function createHud(game: Game, actions: HudActions): void {
       case 'exploded':
         showToast(TEXT.timeUp());
         break;
+      case 'frozen':
+        showToast(TEXT.frozenHint());
+        break;
+      case 'cupAppeared':
+        showToast(TEXT.cupAppeared());
+        break;
+      case 'pinDown':
+        // On a hole that is all pins the result panel says it; here there is more to do.
+        if (event.left === 0 && goalCups(game.hole.goal).length > 0) showToast(TEXT.allDown());
+        break;
       case 'stuck':
         setStuck(true);
         break;
@@ -179,6 +232,7 @@ export function createHud(game: Game, actions: HudActions): void {
 
   game.onFrame(() => {
     drawTimer();
+    drawExtras();
     if (!hint.classList.contains('show')) return;
     const p = game.ballScreenPosition();
     hint.style.transform = `translate(${p.x}px, ${p.y}px)`;
@@ -198,6 +252,23 @@ export function createHud(game: Game, actions: HudActions): void {
     setStuck(false);
     actions.onStuckChoice('concede');
   });
+  // On press, not on release: the moment matters while the ball is in the air.
+  const toggleFreeze = () => {
+    if (game.inputBlocked) return;
+    if (game.session.frozen) game.resume();
+    else game.useSkill('freeze');
+  };
+  freeze.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    toggleFreeze();
+  });
+  window.addEventListener('keydown', (event) => {
+    if (event.code !== 'Space' || event.repeat || !game.session.skills.has('freeze')) return;
+    event.preventDefault();
+    toggleFreeze();
+  });
+  byId('ball-prev').addEventListener('click', () => game.pickNext(-1));
+  byId('ball-next').addEventListener('click', () => game.pickNext(1));
   byId('pause').addEventListener('click', () => actions.onPause());
   byId('retry').addEventListener('click', () => actions.onRetry());
   byId('result-retry').addEventListener('click', () => actions.onRetry());

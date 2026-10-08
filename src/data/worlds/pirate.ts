@@ -18,7 +18,7 @@ export const PIRATE_WORLD: WorldDef = {
       id: 'pirate-1',
       par: 2,
       tee: [0, 0, 4.5],
-      cup: { position: [0, 0, -8], ...CUP },
+      goal: { type: 'cup', position: [0, 0, -8], ...CUP },
       challenge: { type: 'noMoverHits', text: { en: 'Never touch the gate', zh: '全程不碰闸板' } },
       pieces: [
         { type: 'floor', min: [-2, -10], max: [2, 6], surface: 'deck' },
@@ -51,7 +51,7 @@ export const PIRATE_WORLD: WorldDef = {
       id: 'pirate-2',
       par: 2,
       tee: [0, 0, 7.5],
-      cup: { position: [0, 0, -7], ...CUP },
+      goal: { type: 'cup', position: [0, 0, -7], ...CUP },
       challenge: {
         type: 'noWallHits',
         text: { en: 'Hole out without touching a rail', zh: '不碰任何围栏进洞' },
@@ -91,7 +91,7 @@ export const PIRATE_WORLD: WorldDef = {
       par: 3,
       tee: [0, 0, 6.5],
       // Off the cannon's line, so the flight alone does not find it.
-      cup: { position: [2, 0, -16.5], ...CUP },
+      goal: { type: 'cup', position: [2, 0, -16.5], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 2, text: { en: 'Finish in two strokes', zh: '两杆完成' } },
       pieces: [
         { type: 'floor', min: [-3, 1], max: [3, 8], surface: 'deck' },

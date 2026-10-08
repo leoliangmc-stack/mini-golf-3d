@@ -18,7 +18,7 @@ const CUP = { radius: 0.22, captureSpeed: 3.5 };
 /** A long walled lane along X, with the cup somewhere on it. */
 function lane(cup: CupDef, tee: [number, number, number] = [0, 0, 2]): HoleDef {
   return {
-    ...boxHole({ tee, cup }),
+    ...boxHole({ tee, goal: { type: 'cup', ...cup } }),
     pieces: [
       { type: 'floor', min: [-9, -3], max: [9, 3], surface: 'grass' },
       { type: 'wall', from: [-9, -3], to: [9, -3], surface: 'rail' },
@@ -184,7 +184,7 @@ describe('moving cup (SPEC v2 2.5)', () => {
 describe('cup with a lid (SPEC v2 2.5)', () => {
   /** Open for the first two seconds of every four. */
   const lidded: CupDef = { position: [0, 0, -2], ...CUP, hidden: { period: 4, openRatio: 0.5 } };
-  const hole = boxHole({ cup: lidded });
+  const hole = boxHole({ goal: { type: 'cup', ...lidded } });
 
   it('opens and shuts on a fixed schedule', () => {
     expect(cupOpenAt(lidded, 0)).toBe(true);
@@ -232,7 +232,7 @@ describe('cup with a lid (SPEC v2 2.5)', () => {
   it('drops a ball that came to rest on the lid, the moment the lid opens', () => {
     // Shut for four seconds at a time: long enough for a ball to roll up and stop on it.
     const slow: CupDef = { ...lidded, hidden: { period: 8, openRatio: 0.5 } };
-    const session = new Session(boxHole({ cup: slow }));
+    const session = new Session(boxHole({ goal: { type: 'cup', ...slow } }));
     const cues: string[] = [];
     session.on((e) => e.type === 'cue' && cues.push(`${e.name}@${session.world.tick}`));
     stepTicks(session, 245);

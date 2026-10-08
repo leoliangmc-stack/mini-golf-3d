@@ -85,11 +85,25 @@ export const TEXT = {
   zoomIn: pick('Zoom in', '放大'),
   zoomOut: pick('Zoom out', '缩小'),
   pause: pick('Pause', '暂停'),
+  freeze: pick('Freeze time', '冻结时间'),
+  unfreeze: pick('Let time run', '恢复时间'),
+  frozenHint: pick('TIME IS FROZEN · DRAG TO SHOOT AGAIN', '时间已冻结 · 拖动可再打一杆'),
+  pickBall: pick('TAP A BALL TO PICK IT', '点一下选择要打的球'),
+  previousBall: pick('Previous ball', '上一个球'),
+  nextBall: pick('Next ball', '下一个球'),
+  cupAppeared: pick('THE HOLE APPEARS!', '洞口出现了！'),
+  allDown: pick('ALL PINS DOWN!', '木桩全倒！'),
   allComplete: (holes: number) => (zh() ? `${holes} 洞全部完成！` : `ALL ${holes} HOLES COMPLETE!`),
   chapterComplete: (chapter: string) => (zh() ? `${chapter}完成！` : `${chapter.toUpperCase()} COMPLETE!`),
   chapterLocked: (previous: string) =>
     zh() ? `完成${previous}的终局洞后解锁` : `Finish the ${previous} finale to unlock`,
   timeBonus: (seconds: number) => (zh() ? `+${seconds} 秒` : `+${seconds} s`),
+  pins: (left: number, total: number) => (zh() ? `木桩 ${left} / ${total}` : `PINS ${left} / ${total}`),
+  /** Result of a hole that is all pins. */
+  clearedIn: (strokes: number) => {
+    if (strokes === 1) return zh() ? '一杆全倒！' : 'STRIKE!';
+    return zh() ? `${strokes} 杆全倒` : `CLEARED IN ${strokes}`;
+  },
   holeTitle: (world: string, hole: number) =>
     zh() ? `${world} · 第 ${hole} 洞` : `${world.toUpperCase()} · HOLE ${hole}`,
   hole: (hole: number) => (zh() ? `第 ${hole} 洞` : `HOLE ${hole}`),

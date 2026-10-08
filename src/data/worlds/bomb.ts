@@ -35,7 +35,7 @@ export const BOMB_WORLD: WorldDef = {
       par: 2,
       timer: { seconds: 30 },
       tee: [0, 0, 5],
-      cup: { position: [7, 0, -6], ...CUP },
+      goal: { type: 'cup', position: [7, 0, -6], ...CUP },
       challenge: { type: 'timeLeft', seconds: 18, text: { en: 'Finish with 18 seconds left', zh: '剩余 18 秒以上完成' } },
       pieces: [
         { type: 'floor', min: [-2, -4], max: [2, 7], surface: 'basalt' },
@@ -61,7 +61,7 @@ export const BOMB_WORLD: WorldDef = {
       par: 3,
       timer: { seconds: 12 },
       tee: [0, 0, 5],
-      cup: { position: [0, 0, -8], ...CUP },
+      goal: { type: 'cup', position: [0, 0, -8], ...CUP },
       challenge: {
         type: 'maxCues',
         cue: 'timeBonus',
@@ -91,7 +91,7 @@ export const BOMB_WORLD: WorldDef = {
       par: 4,
       timer: { seconds: 12 },
       tee: [-4, 0, 6],
-      cup: { position: [4, 0, 6], ...CUP },
+      goal: { type: 'cup', position: [4, 0, 6], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 3, text: { en: 'Finish in three strokes', zh: '三杆完成' } },
       pieces: [
         { type: 'floor', min: [-6, -8], max: [6, 8], surface: 'basalt' },

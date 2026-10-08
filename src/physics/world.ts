@@ -1,4 +1,5 @@
 import { FIXED_DT } from '../core/loop';
+import { hypot } from '../core/math';
 import type { Vec3, XYZ } from '../core/types';
 import { RAPIER } from './rapier';
 
@@ -32,7 +33,7 @@ export class PhysicsWorld {
 
   setGravity(g: Vec3): void {
     this.raw.gravity = { x: g[0], y: g[1], z: g[2] };
-    const len = Math.hypot(g[0], g[1], g[2]);
+    const len = hypot(g[0], g[1], g[2]);
     // `|| 0` turns the -0 of a zero component into plain 0.
     if (len > 1e-9) this.upDir = { x: -g[0] / len || 0, y: -g[1] / len || 0, z: -g[2] / len || 0 };
   }

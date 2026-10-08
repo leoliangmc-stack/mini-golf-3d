@@ -1,3 +1,4 @@
+import { hypot } from '../core/math';
 import type { XYZ } from '../core/types';
 import type { CupDef } from '../level/schema';
 
@@ -49,7 +50,7 @@ export function cupCaptures(cup: CupDef, at: XYZ, position: XYZ, speed: number, 
   const dz = position.z - at.z;
   // The ball must be on the ground at the cup, not flying over it.
   if (Math.abs(dy - ballRadius) > ballRadius) return false;
-  return Math.hypot(dx, dz) <= cup.radius;
+  return hypot(dx, dz) <= cup.radius;
 }
 
 /** Stars for a finished hole (SPEC 2.6): finish, par, par plus the hole's challenge. */

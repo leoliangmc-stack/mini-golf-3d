@@ -30,7 +30,7 @@ describe('stars (SPEC 2.6)', () => {
   });
 
   it('gives three stars for par with the challenge met', () => {
-    const session = playOut(boxHole({ cup, challenge: { type: 'noWallHits', text } }), [[0, -1, putt]]);
+    const session = playOut(boxHole({ goal: { type: 'cup', ...cup }, challenge: { type: 'noWallHits', text } }), [[0, -1, putt]]);
     expect(session.outcome).toMatchObject({ holed: true, strokes: 1, stars: 3, challengeMet: true });
     expect(session.outcome!.ticks).toBeGreaterThan(0);
     session.dispose();
@@ -38,7 +38,7 @@ describe('stars (SPEC 2.6)', () => {
 
   it('drops to two stars when the challenge is failed', () => {
     // First stroke taps the side rail and comes back, second one holes out: still par.
-    const session = playOut(boxHole({ cup, challenge: { type: 'noWallHits', text } }), [
+    const session = playOut(boxHole({ goal: { type: 'cup', ...cup }, challenge: { type: 'noWallHits', text } }), [
       [1, 0, 5 / RULES.maxShotSpeed],
     ]);
     const p = session.ball.position();

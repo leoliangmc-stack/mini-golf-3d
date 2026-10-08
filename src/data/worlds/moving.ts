@@ -41,7 +41,7 @@ export const MOVING_WORLD: WorldDef = {
       id: 'moving-1',
       par: 2,
       tee: [0, 0, 4.5],
-      cup: {
+      goal: { type: 'cup',
         position: [-2, 0, -7],
         ...CUP,
         motion: { type: 'slide', offset: [4, 0, 0], period: 8, hold: [0.1, 0.1] },
@@ -60,7 +60,7 @@ export const MOVING_WORLD: WorldDef = {
       id: 'moving-2',
       par: 3,
       tee: [0, 0, 4.5],
-      cup: { position: [2, 0, -5], ...CUP, motion: { type: 'spin', pivot: [0, -5], period: 8 } },
+      goal: { type: 'cup', position: [2, 0, -5], ...CUP, motion: { type: 'spin', pivot: [0, -5], period: 8 } },
       challenge: { type: 'maxStrokes', strokes: 2, text: { en: 'Finish in two strokes', zh: '两杆完成' } },
       pieces: [
         // Listed first so the plate wins where it overlaps the felt.
@@ -79,7 +79,7 @@ export const MOVING_WORLD: WorldDef = {
       id: 'moving-3',
       par: 3,
       tee: [0, 0, 4.5],
-      cup: {
+      goal: { type: 'cup',
         position: [3.5, 0, -6],
         ...CUP,
         motion: { type: 'slide', offset: [4, 0, 0], period: 8, hold: [0.1, 0.1] },

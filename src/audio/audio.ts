@@ -96,13 +96,14 @@ export class AudioEngine {
   }
 
   /** The ball hitting something. `speed` is the change of velocity in m/s. */
-  bounce(kind: 'wall' | 'ground' | 'mover', speed: number): void {
+  bounce(kind: 'wall' | 'ground' | 'mover' | 'prop', speed: number): void {
     const level = Math.min(1, speed / 9);
     if (kind === 'ground') {
       this.tone({ from: 120, to: 70, length: 0.09, level: 0.3 * level });
       return;
     }
-    const base = kind === 'mover' ? 250 : 430;
+    // A crate or a pin gives a woody knock, lower than a rail.
+    const base = kind === 'mover' ? 250 : kind === 'prop' ? 320 : 430;
     this.tone({ wave: 'triangle', from: base, to: base * 0.6, length: 0.07, level: 0.28 * level });
     this.noise({ filter: 'bandpass', from: base * 3, length: 0.04, level: 0.16 * level });
   }
@@ -212,6 +213,65 @@ export class AudioEngine {
   cannonFire(): void {
     this.noise({ filter: 'lowpass', from: 900, to: 90, length: 0.55, level: 0.55 });
     this.tone({ from: 110, to: 38, length: 0.5, level: 0.5 });
+  }
+
+  /** The ball getting bigger: a swell upward, and heavier at the end. */
+  grow(): void {
+    this.tone({ wave: 'triangle', from: 220, to: 660, length: 0.26, level: 0.24 });
+    this.tone({ from: 110, to: 82, length: 0.22, level: 0.26, delay: 0.2 });
+  }
+
+  /** The ball getting smaller: the same swell, turned upside down and thinner. */
+  shrink(): void {
+    this.tone({ wave: 'triangle', from: 880, to: 1760, length: 0.2, level: 0.16 });
+    this.tone({ wave: 'sine', from: 2100, length: 0.05, level: 0.1, delay: 0.19 });
+  }
+
+  /** One ball becoming two: a pluck that comes apart into two notes. */
+  split(): void {
+    this.tone({ wave: 'triangle', from: 520, length: 0.07, level: 0.22 });
+    this.tone({ wave: 'triangle', from: 660, to: 880, length: 0.16, level: 0.18, delay: 0.06 });
+    this.tone({ wave: 'triangle', from: 440, to: 330, length: 0.16, level: 0.18, delay: 0.06 });
+  }
+
+  /** Time stopping: everything winds down and holds its breath. */
+  freeze(): void {
+    this.tone({ wave: 'sawtooth', from: 620, to: 70, length: 0.32, level: 0.16 });
+    this.noise({ filter: 'lowpass', from: 2600, to: 180, length: 0.3, level: 0.12 });
+    this.tone({ wave: 'sine', from: 1480, length: 0.5, level: 0.07, delay: 0.1 });
+  }
+
+  /** Time running again: the wind-down played backwards. */
+  resume(): void {
+    this.tone({ wave: 'sawtooth', from: 90, to: 560, length: 0.2, level: 0.13 });
+    this.noise({ filter: 'lowpass', from: 220, to: 2400, length: 0.18, level: 0.09 });
+  }
+
+  /** A stroke played in mid-air: the usual tick, with a ring to it. */
+  airShot(power: number): void {
+    this.hit(power);
+    this.tone({ wave: 'sine', from: 1320, to: 1980, length: 0.14, level: 0.12 });
+  }
+
+  /** One pin going over. */
+  pinDown(): void {
+    this.tone({ wave: 'triangle', from: 300, to: 190, length: 0.08, level: 0.26 });
+    this.noise({ filter: 'bandpass', from: 1100, to: 500, length: 0.07, level: 0.2 });
+  }
+
+  /** The last pin is down. */
+  strike(): void {
+    this.noise({ filter: 'bandpass', from: 1400, to: 380, length: 0.35, level: 0.32 });
+    [523, 659, 784, 1047].forEach((hz, i) =>
+      this.tone({ wave: 'triangle', from: hz, length: 0.2, level: 0.22, delay: 0.12 + i * 0.07 }),
+    );
+  }
+
+  /** A cup rising out of the ground: its turn has come. */
+  cupAppear(): void {
+    this.tone({ from: 196, to: 392, length: 0.3, level: 0.2 });
+    this.tone({ wave: 'triangle', from: 784, length: 0.24, level: 0.18, delay: 0.26 });
+    this.tone({ wave: 'triangle', from: 1175, length: 0.3, level: 0.16, delay: 0.38 });
   }
 
   /** Entering (`on`) or leaving a gravity zone. */

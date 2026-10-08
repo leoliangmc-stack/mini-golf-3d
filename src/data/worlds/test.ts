@@ -15,7 +15,7 @@ export const TEST_WORLD: WorldDef = {
       id: 'test-1',
       par: 2,
       tee: [0, 0, 4.5],
-      cup: { position: [4.5, 0, -4], radius: 0.22, captureSpeed: 3.5 },
+      goal: { type: 'cup', position: [4.5, 0, -4], radius: 0.22, captureSpeed: 3.5 },
       pieces: [
         { type: 'floor', min: [-2, -2], max: [2, 6], surface: 'grass' },
         { type: 'floor', min: [-2, -6], max: [6, -2], surface: 'grass' },

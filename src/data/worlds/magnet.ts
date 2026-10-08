@@ -31,7 +31,7 @@ export const MAGNET_WORLD: WorldDef = {
       id: 'magnet-1',
       par: 2,
       tee: [0, 0, 4.5],
-      cup: { position: [0, 0, -8], ...CUP },
+      goal: { type: 'cup', position: [0, 0, -8], ...CUP },
       challenge: {
         type: 'noWallHits',
         text: { en: 'Hole out without touching a rail or a magnet', zh: '不碰围栏和磁铁进洞' },
@@ -54,7 +54,7 @@ export const MAGNET_WORLD: WorldDef = {
       id: 'magnet-2',
       par: 3,
       tee: [-2.5, 0, 4.5],
-      cup: { position: [-2.5, 0, -5.5], ...CUP },
+      goal: { type: 'cup', position: [-2.5, 0, -5.5], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 2, text: { en: 'Finish in two strokes', zh: '两杆完成' } },
       pieces: [
         { type: 'floor', min: [-4, -8], max: [4, 6], surface: 'steel' },
@@ -75,7 +75,7 @@ export const MAGNET_WORLD: WorldDef = {
       id: 'magnet-3',
       par: 3,
       tee: [0, 0, 4.5],
-      cup: { position: [0, 0, -7.5], ...CUP },
+      goal: { type: 'cup', position: [0, 0, -7.5], ...CUP },
       challenge: {
         type: 'noWallHits',
         text: { en: 'Hole out without touching a rail or a magnet', zh: '不碰围栏和磁铁进洞' },

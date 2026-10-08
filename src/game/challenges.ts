@@ -13,7 +13,10 @@ export interface RoundStats {
   surfaces: Set<string>;
   /** Where the ball was at the end of each stroke, in order. */
   rests: XYZ[];
-  /** How many times each zone cue fired, by name: tunnels taken, clocks picked up. */
+  /**
+   * How many times each named moment happened: tunnels taken, clocks picked up, and the
+   * round's own (`holed`, `pinDown`, `grow`, `shrink`, `split`, `freeze`, `airShot`).
+   */
   cues: Record<string, number>;
   /** Seconds left on the hole's countdown when it ended, or null if it has none. */
   timeLeft: number | null;
@@ -71,6 +74,11 @@ export function registerBuiltinChallenges(): void {
   registerChallenge(
     'maxCues',
     (stats, def) => (stats.cues[need(def.cue, def, 'cue')] ?? 0) <= need(def.count, def, 'count'),
+  );
+  /** The cue `cue` fired at least `count` times, e.g. two balls were holed. */
+  registerChallenge(
+    'minCues',
+    (stats, def) => (stats.cues[need(def.cue, def, 'cue')] ?? 0) >= need(def.count, def, 'count'),
   );
   /** At least `seconds` were left on the countdown at the end. */
   registerChallenge(

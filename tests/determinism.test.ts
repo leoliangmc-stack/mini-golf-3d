@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { cos, halfAngle, hypot, sin } from '../src/core/math';
 import { TEST_WORLD } from '../src/data/worlds/test';
 import { Session } from '../src/game/session';
 import { runUntilSettled, setupEngine, stepTicks } from './helpers';
@@ -50,5 +51,59 @@ describe('determinism (SPEC 5.2 #5)', () => {
     expect(second[6]).toBe(first[6] + 11);
     a.dispose();
     b.dispose();
+  });
+});
+
+describe('engine-independent math (SPEC v3 3)', () => {
+  it('matches the built-in sine and cosine to the last few bits', () => {
+    for (let i = -4000; i <= 4000; i++) {
+      const x = i * 0.0137;
+      expect(Math.abs(sin(x) - Math.sin(x))).toBeLessThan(4e-16);
+      expect(Math.abs(cos(x) - Math.cos(x))).toBeLessThan(4e-16);
+    }
+  });
+
+  it('is exact where a mover starts and turns around', () => {
+    expect(sin(0)).toBe(0);
+    expect(cos(0)).toBe(1);
+    expect(cos(Math.PI)).toBe(-1);
+    expect(sin(Math.PI / 2)).toBe(1);
+    expect(hypot(3, 4)).toBe(5);
+    expect(hypot(2, 3, 6)).toBe(7);
+  });
+
+  it('halves an angle without an arctangent', () => {
+    for (let degrees = -179; degrees <= 180; degrees += 7) {
+      const angle = (degrees * Math.PI) / 180;
+      const half = halfAngle(Math.sin(angle), Math.cos(angle));
+      expect(half.sin).toBeCloseTo(Math.sin(angle / 2), 12);
+      expect(half.cos).toBeCloseTo(Math.cos(angle / 2), 12);
+    }
+  });
+
+  // The functions below are "implementation-approximated" in the JavaScript standard:
+  // engines may, and do, disagree in the last bit. One such bit in a wall's angle is
+  // enough to end a replay somewhere else.
+  it('is the only math the simulation uses', () => {
+    const sources = import.meta.glob<string>('../src/{core,physics,game,level}/**/*.ts', {
+      eager: true,
+      query: '?raw',
+      import: 'default',
+    });
+    const banned =
+      /Math\.(sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|hypot|pow|exp|expm1|log|log2|log10|log1p|cbrt|random)\b|Date\.now|performance\.now|[^*/]\*\*[^*/]/;
+    // The frame loop reads the wall clock to decide how many fixed steps to run. No step reads it.
+    const exempt = ['/core/loop.ts'];
+    const offenders: string[] = [];
+    for (const [file, text] of Object.entries(sources)) {
+      if (exempt.some((name) => file.endsWith(name))) continue;
+      // Comments are blanked rather than removed, so line numbers still match the file.
+      const code = text.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, '')).replace(/\/\/.*$/gm, '');
+      code.split('\n').forEach((line, i) => {
+        if (banned.test(line)) offenders.push(`${file}:${i + 1}: ${line.trim()}`);
+      });
+    }
+    expect(Object.keys(sources).length).toBeGreaterThan(20);
+    expect(offenders).toEqual([]);
   });
 });

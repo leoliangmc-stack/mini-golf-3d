@@ -70,15 +70,16 @@ export class FollowCamera {
     this.camera.updateProjectionMatrix();
   }
 
-  snapTo(ball: XYZ, cup: XYZ): void {
-    this.distance = this.frame(ball, cup);
+  /** `others` are further points to keep in view: the other balls, after a split. */
+  snapTo(ball: XYZ, cup: XYZ, others: readonly XYZ[] = []): void {
+    this.distance = this.frame(ball, cup, others);
     this.look.copy(this.goal);
     this.place();
   }
 
-  update(ball: XYZ, cup: XYZ, dt: number): void {
+  update(ball: XYZ, cup: XYZ, dt: number, others: readonly XYZ[] = []): void {
     this.turn += (this.turnGoal - this.turn) * (1 - Math.exp(-12 * dt));
-    const wanted = this.frame(ball, cup);
+    const wanted = this.frame(ball, cup, others);
     const k = 1 - Math.exp(-FOLLOW * dt);
     this.look.lerp(this.goal, k);
     this.distance += (wanted - this.distance) * k;
@@ -96,8 +97,8 @@ export class FollowCamera {
     return { x: right.x * x - forward.x * y, y: 0, z: right.z * x - forward.z * y };
   }
 
-  /** Works out where to look (into `goal`) and from how far, to fit the ball and the cup. */
-  private frame(ball: XYZ, cup: XYZ): number {
+  /** Works out where to look (into `goal`) and from how far, to fit the ball, the cup and any other points. */
+  private frame(ball: XYZ, cup: XYZ, others: readonly XYZ[]): number {
     const pitch = this.params.pitch * RAD;
     const yaw = this.yaw;
     const halfFov = (this.camera.fov * RAD) / 2;
@@ -109,9 +110,23 @@ export class FollowCamera {
     // Cup position relative to the ball: `ahead` along the view, `aside` across it.
     const ahead = (cup.x - ball.x) * fx + (cup.z - ball.z) * fz;
     const aside = (cup.x - ball.x) * rx + (cup.z - ball.z) * rz;
-    const nearEdge = Math.min(0, ahead) - MARGIN_NEAR;
-    const farEdge = Math.max(0, ahead) + MARGIN_FAR;
-    const sideSpan = Math.abs(aside) + 2 * MARGIN_SIDE;
+    // The stretch of ground to show, measured from the ball: it reaches to the cup and
+    // to every other point.
+    let back = Math.min(0, ahead);
+    let front = Math.max(0, ahead);
+    let left = Math.min(0, aside);
+    let right = Math.max(0, aside);
+    for (const p of others) {
+      const a = (p.x - ball.x) * fx + (p.z - ball.z) * fz;
+      const s = (p.x - ball.x) * rx + (p.z - ball.z) * rz;
+      back = Math.min(back, a);
+      front = Math.max(front, a);
+      left = Math.min(left, s);
+      right = Math.max(right, s);
+    }
+    const nearEdge = back - MARGIN_NEAR;
+    const farEdge = front + MARGIN_FAR;
+    const sideSpan = right - left + 2 * MARGIN_SIDE;
 
     // Ground visible beyond and before the look point, per metre of camera distance.
     const beyond = -Math.cos(pitch) + Math.sin(pitch) / Math.tan(Math.max(pitch - halfFov * USABLE_TOP, 0.15));
@@ -127,7 +142,7 @@ export class FollowCamera {
       // Too far apart to show both: keep the ball, with the cup's side of the view open.
       lookAhead = ahead >= 0 ? before * distance - MARGIN_NEAR : MARGIN_FAR - beyond * distance;
     }
-    const lookAside = aside / 2;
+    const lookAside = (left + right) / 2;
     this.goal.set(
       ball.x + fx * lookAhead + rx * lookAside,
       (ball.y + cup.y) / 2,

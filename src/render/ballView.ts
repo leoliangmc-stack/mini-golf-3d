@@ -5,8 +5,13 @@ import type { BallPose } from '../game/session';
 const SINK_SECONDS = 0.35;
 /** Seconds the ball takes to shrink out of sight, or to grow back. */
 const FADE_SECONDS = 0.12;
+/** Seconds a change of size takes to show (SPEC v3 2.2). */
+const RESIZE_SECONDS = 0.3;
 const OUTLINE = 0x1d2b3a;
 const ALERT = 0xff3b30;
+const WHITE = 0xffffff;
+/** A ball that is on the course but not the one picked for the next stroke. */
+const PASSED_OVER = 0xaab4bf;
 
 /** The ball: white, faceted so its roll is visible, with a dark outline for contrast. */
 export class BallView {
@@ -20,13 +25,16 @@ export class BallView {
   private shown = 1;
   private shownGoal = 1;
   private alert = false;
+  /** How big the ball is drawn against the medium one, and where that is heading. */
+  private size = 1;
+  private sizeGoal = 1;
   private readonly outline: THREE.MeshBasicMaterial;
+  private readonly skin: THREE.MeshLambertMaterial;
 
+  /** `radius` is that of the medium ball; other sizes are drawn as a scale of it. */
   constructor(private readonly radius: number) {
-    const body = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(radius, 2),
-      new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }),
-    );
+    this.skin = new THREE.MeshLambertMaterial({ color: WHITE, flatShading: true });
+    const body = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 2), this.skin);
     body.castShadow = true;
     this.outline = new THREE.MeshBasicMaterial({ color: OUTLINE, side: THREE.BackSide });
     const outline = new THREE.Mesh(new THREE.IcosahedronGeometry(radius * 1.14, 2), this.outline);
@@ -65,6 +73,22 @@ export class BallView {
     this.shown = this.shownGoal = 0;
   }
 
+  /** True once a ball told to vanish is out of sight, and its view can be thrown away. */
+  get gone(): boolean {
+    return this.shownGoal === 0 && this.shown <= 1e-3;
+  }
+
+  /** Sets how big the ball is against the medium one. It gets there over a moment, or at once. */
+  setSize(scale: number, atOnce = false): void {
+    this.sizeGoal = scale;
+    if (atOnce) this.size = scale;
+  }
+
+  /** Greys the ball out: it is on the course, but another one is picked for the next stroke. */
+  setPassedOver(on: boolean): void {
+    this.skin.color.setHex(on ? PASSED_OVER : WHITE);
+  }
+
   /** Makes the outline blink red: time is nearly up. */
   setAlert(on: boolean): void {
     this.alert = on;
@@ -76,7 +100,9 @@ export class BallView {
     this.sink = -1;
     this.hasLast = false;
     this.shown = this.shownGoal = 1;
+    this.size = this.sizeGoal = 1;
     this.setAlert(false);
+    this.setPassedOver(false);
     this.object.scale.setScalar(1);
   }
 
@@ -99,7 +125,7 @@ export class BallView {
       this.axis.set(dz, 0, -dx);
       const along = this.axis.length();
       if (along > 1e-6) {
-        this.spin.setFromAxisAngle(this.axis.divideScalar(along), along / this.radius);
+        this.spin.setFromAxisAngle(this.axis.divideScalar(along), along / (this.radius * this.size));
         this.object.quaternion.premultiply(this.spin);
       }
     }
@@ -108,14 +134,17 @@ export class BallView {
 
     const change = frameDt / FADE_SECONDS;
     this.shown += Math.min(change, Math.max(-change, this.shownGoal - this.shown));
-    let scale = this.shown;
+    // The picture eases to the new size; the physics changed at once, so the middle of
+    // the ball is already at the height its new size puts it.
+    this.size += (this.sizeGoal - this.size) * Math.min(1, (frameDt / RESIZE_SECONDS) * 3);
+    let scale = this.shown * this.size;
     if (this.sink >= 0) {
       // Purely visual: the ball slides to the centre of the cup and drops out of sight.
       this.sink = Math.min(1, this.sink + frameDt / SINK_SECONDS);
       const t = this.sink * this.sink;
       p.x += (cup.x - p.x) * this.sink;
       p.z += (cup.z - p.z) * this.sink;
-      p.y -= t * this.radius * 2.4;
+      p.y -= t * this.radius * this.size * 2.4;
       scale *= 1 - 0.35 * t;
     }
     this.object.visible = scale > 1e-3;

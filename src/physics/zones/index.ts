@@ -19,6 +19,11 @@ export interface ZoneDef {
  */
 export type ZoneEvent = { type: 'outOfBounds' } | { type: 'cue'; name: string };
 
+/**
+ * What a zone works with. With several balls on the course a zone is run once per ball
+ * every step, each time with that ball here: a zone that remembers something about a
+ * ball keeps it per ball (see `perBall`).
+ */
 export interface ZoneContext {
   world: PhysicsWorld;
   ball: Ball;
@@ -29,6 +34,23 @@ export interface ZoneContext {
   snap(): void;
   /** Adds seconds to the hole's countdown. Does nothing on a hole without one. */
   addTime(seconds: number): void;
+  /** Makes the ball one size bigger (+1) or smaller (-1). False if it has no further to go. */
+  resize(step: 1 | -1): boolean;
+  /**
+   * Splits the ball in two, the halves heading `degrees` to either side of where it was
+   * going. Returns the new ball, or null once the hole has as many balls as it allows.
+   */
+  split(degrees: number): Ball | null;
+}
+
+/** Storage for what a zone remembers about each ball. It goes when the ball does. */
+export function perBall<T>(initial: () => T): (ball: Ball) => T {
+  const memory = new WeakMap<Ball, T>();
+  return (ball) => {
+    let value = memory.get(ball);
+    if (value === undefined) memory.set(ball, (value = initial()));
+    return value;
+  };
 }
 
 /** Reads a number from a zone's params. */

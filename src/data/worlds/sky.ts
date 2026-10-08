@@ -20,7 +20,7 @@ export const SKY_WORLD: WorldDef = {
       id: 'sky-1',
       par: 2,
       tee: [0, 0, 6],
-      cup: { position: [0, 0, -8], ...CUP },
+      goal: { type: 'cup', position: [0, 0, -8], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 1, text: { en: 'Hole in one', zh: '一杆进洞' } },
       pieces: [
         { type: 'floor', min: [-2.5, 3], max: [2.5, 8], depth: ISLAND, surface: 'grass' },
@@ -37,7 +37,7 @@ export const SKY_WORLD: WorldDef = {
       id: 'sky-2',
       par: 3,
       tee: [0, 2, 8.5],
-      cup: { position: [-2.5, 0, -5.5], ...CUP },
+      goal: { type: 'cup', position: [-2.5, 0, -5.5], ...CUP },
       challenge: {
         type: 'noWallHits',
         text: { en: 'Land the jump without using the backstop', zh: '飞跃后不碰挡墙' },
@@ -60,7 +60,7 @@ export const SKY_WORLD: WorldDef = {
       id: 'sky-3',
       par: 3,
       tee: [0, 3, 7],
-      cup: { position: [3.5, 0, -5], ...CUP },
+      goal: { type: 'cup', position: [3.5, 0, -5], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 2, text: { en: 'Finish in two strokes', zh: '两杆完成' } },
       pieces: [
         { type: 'floor', min: [-1.5, 4], max: [1.5, 8], y: 3, depth: ISLAND, surface: 'grass' },

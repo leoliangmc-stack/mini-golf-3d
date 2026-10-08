@@ -1,5 +1,6 @@
+import { halfAngle, hypot } from '../core/math';
 import type { Vec3, XYZ } from '../core/types';
-import type { FloorPiece, HoleDef, PillarPiece, RampPiece, WallPiece } from './schema';
+import type { BeamPiece, FloorPiece, HoleDef, PillarPiece, RampPiece, WallPiece } from './schema';
 
 /** Ground pieces are tessellated on this grid, in metres. */
 export const FLOOR_CELL = 0.5;
@@ -8,6 +9,7 @@ const SLAB_DEPTH = 0.45;
 const WALL_HEIGHT = 0.35;
 const WALL_THICKNESS = 0.2;
 const PILLAR_HEIGHT = 0.9;
+const BEAM_HEIGHT = 0.22;
 /** Walls reach below the ground so the ball never meets their bottom edge. */
 const WALL_SUNK = 0.3;
 /** How far a contact point may be from a ground layer and still belong to it. */
@@ -70,11 +72,29 @@ export function compileHole(hole: HoleDef): CompiledHole {
   const cylinders: CompiledCylinder[] = [];
   for (const piece of hole.pieces) {
     if (piece.type === 'wall') boxes.push(compileWall(hole.id, piece));
+    else if (piece.type === 'beam') boxes.push(compileBeam(hole.id, piece));
     else if (piece.type === 'pillar') cylinders.push(compilePillar(piece));
     else groundPieces.push(piece);
   }
   const { ground, bodies } = compileGround(hole.id, groundPieces);
   return { ground, bodies, boxes, cylinders, bounds: computeBounds(ground, boxes) };
+}
+
+/** A level bar with its underside `clearance` above the ground. */
+function compileBeam(holeId: string, beam: BeamPiece): CompiledBox {
+  const dx = beam.to[0] - beam.from[0];
+  const dz = beam.to[1] - beam.from[1];
+  const run = hypot(dx, dz);
+  if (run < 1e-6) throw new Error(`Hole "${holeId}": beam has zero length in ${JSON.stringify(beam)}`);
+  const height = beam.height ?? BEAM_HEIGHT;
+  const thickness = beam.thickness ?? WALL_THICKNESS;
+  const { sin: sy, cos: cy } = halfAngle(-dz / run, dx / run);
+  return {
+    center: [(beam.from[0] + beam.to[0]) / 2, (beam.y ?? 0) + beam.clearance + height / 2, (beam.from[1] + beam.to[1]) / 2],
+    halfExtents: [run / 2, height / 2, thickness / 2],
+    rotation: [0, sy, 0, cy],
+    surface: beam.surface,
+  };
 }
 
 function compilePillar(pillar: PillarPiece): CompiledCylinder {
@@ -224,18 +244,20 @@ function compileWall(holeId: string, wall: WallPiece): CompiledBox {
   const dx = wall.to[0] - wall.from[0];
   const dz = wall.to[1] - wall.from[1];
   const dy = y1 - y0;
-  const run = Math.hypot(dx, dz);
+  const run = hypot(dx, dz);
   if (run < 1e-6) throw new Error(`Hole "${holeId}": wall has zero length in ${JSON.stringify(wall)}`);
+  const length = hypot(run, dy);
 
-  // Local +X runs along the wall: tilt it up by `pitch`, then turn it by `yaw`.
-  const yaw = Math.atan2(-dz, dx);
-  const pitch = Math.atan2(dy, run);
-  const sy = Math.sin(yaw / 2);
-  const cy = Math.cos(yaw / 2);
-  const sp = Math.sin(pitch / 2);
-  const cp = Math.cos(pitch / 2);
+  // Local +X runs along the wall: tilt it up by the pitch, then turn it by the yaw.
+  // Both come straight from the wall's direction, with no arctangent (see core/math.ts).
+  const sinYaw = -dz / run;
+  const cosYaw = dx / run;
+  const sinPitch = dy / length;
+  const cosPitch = run / length;
+  const { sin: sy, cos: cy } = halfAngle(sinYaw, cosYaw);
+  const { sin: sp, cos: cp } = halfAngle(sinPitch, cosPitch);
   // The wall's own "up", which leans with the slope.
-  const up = [-Math.sin(pitch) * Math.cos(yaw), Math.cos(pitch), Math.sin(pitch) * Math.sin(yaw)];
+  const up = [-sinPitch * cosYaw, cosPitch, sinPitch * sinYaw];
   const lift = (height - WALL_SUNK) / 2;
   return {
     center: [
@@ -244,7 +266,7 @@ function compileWall(holeId: string, wall: WallPiece): CompiledBox {
       (wall.from[1] + wall.to[1]) / 2 + up[2] * lift,
     ],
     // Extended by half a thickness at each end so walls meeting at a corner overlap.
-    halfExtents: [Math.hypot(run, dy) / 2 + thickness / 2, (height + WALL_SUNK) / 2, thickness / 2],
+    halfExtents: [length / 2 + thickness / 2, (height + WALL_SUNK) / 2, thickness / 2],
     rotation: [sy * sp, sy * cp, cy * sp, cy * cp],
     surface: wall.surface,
   };

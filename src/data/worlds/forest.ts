@@ -76,7 +76,7 @@ export const FOREST_WORLD: WorldDef = {
       id: 'forest-1',
       par: 2,
       tee: [0, 0, 5.5],
-      cup: { position: [6.5, 0, -7], ...CUP },
+      goal: { type: 'cup', position: [6.5, 0, -7], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 1, text: { en: 'Hole in one', zh: '一杆进洞' } },
       pieces: [
         { type: 'floor', min: [-2, -3], max: [2, 7], surface: 'moss' },
@@ -112,7 +112,7 @@ export const FOREST_WORLD: WorldDef = {
       id: 'forest-2',
       par: 2,
       tee: [0, 0, 5.5],
-      cup: { position: [2.5, 0, -5], ...CUP },
+      goal: { type: 'cup', position: [2.5, 0, -5], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 1, text: { en: 'Hole in one', zh: '一杆进洞' } },
       pieces: [
         { type: 'floor', min: [-3, 0], max: [3, 7], surface: 'moss' },
@@ -160,7 +160,7 @@ export const FOREST_WORLD: WorldDef = {
       id: 'forest-3',
       par: 3,
       tee: [2, 0, 2.5],
-      cup: { position: [9, 0, 0], ...CUP },
+      goal: { type: 'cup', position: [9, 0, 0], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 2, text: { en: 'Finish in two strokes', zh: '两杆完成' } },
       pieces: [
         { type: 'floor', min: [-5, -3], max: [4, 4], surface: 'moss' },

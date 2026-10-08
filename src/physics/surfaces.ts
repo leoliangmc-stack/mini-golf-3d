@@ -1,4 +1,5 @@
 import { FIXED_DT } from '../core/loop';
+import { hypot } from '../core/math';
 import type { XYZ } from '../core/types';
 import { dot } from '../core/types';
 import type { Ball } from './ball';
@@ -40,8 +41,11 @@ export interface GroundCarrier {
   pointVelocity(point: XYZ): XYZ;
 }
 
-/** What a collider is to the game: something to roll on, to bounce off, or a moving part. */
-export type ColliderKind = 'ground' | 'wall' | 'mover';
+/**
+ * What a collider is to the game: something to roll on, to bounce off, a moving part,
+ * or a loose object (a crate, a pin).
+ */
+export type ColliderKind = 'ground' | 'wall' | 'mover' | 'prop';
 
 /**
  * What the game knows about each collider: its kind and its surface. A collider
@@ -105,14 +109,29 @@ const MIN_GROUND_COS = 0.2;
  * Finds the surface under the ball along the current gravity direction. Looks slightly
  * ahead of a falling ball so its material is already set on the step it lands.
  */
-export function probeGround(world: PhysicsWorld, ball: Ball, map: SurfaceMap): GroundProbe | null {
+export function probeGround(
+  world: PhysicsWorld,
+  ball: Ball,
+  map: SurfaceMap,
+  /** Colliders to look straight through: the other balls, when there are any. */
+  skip?: (collider: RAPIER.Collider) => boolean,
+): GroundProbe | null {
   const up = world.up;
   const r = ball.props.radius;
   // Generous enough to still reach the floor when a gravity zone tilts "down" sideways.
   const reach = 2.5 * r + 2 * ball.speed() * FIXED_DT;
   const origin = ball.position();
   const ray = new RAPIER.Ray(origin, { x: -up.x, y: -up.y, z: -up.z });
-  const hit = world.raw.castRayAndGetNormal(ray, reach, true, undefined, undefined, ball.collider);
+  const hit = world.raw.castRayAndGetNormal(
+    ray,
+    reach,
+    true,
+    undefined,
+    undefined,
+    ball.collider,
+    undefined,
+    skip && ((collider) => !skip(collider)),
+  );
   if (!hit) return null;
   const t = hit.timeOfImpact;
   const point = { x: origin.x - up.x * t, y: origin.y - up.y * t, z: origin.z - up.z * t };
@@ -146,7 +165,7 @@ export function applySurface(ball: Ball, probe: GroundProbe | null): void {
   const rel = { x: v.x - g.x, y: v.y - g.y, z: v.z - g.z };
   const vn = dot(rel, n);
   const t = { x: rel.x - n.x * vn, y: rel.y - n.y * vn, z: rel.z - n.z * vn };
-  const speed = Math.hypot(t.x, t.y, t.z);
+  const speed = hypot(t.x, t.y, t.z);
   if (speed < 1e-9) return;
   const k = Math.max(0, speed * (1 - s.drag * FIXED_DT) - s.rollingResistance * FIXED_DT) / speed;
   ball.body.setLinvel(

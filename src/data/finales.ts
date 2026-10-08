@@ -31,7 +31,7 @@ export const GAUNTLET: FinaleDef = {
       id: 'ch1-finale',
       par: 5,
       tee: [0, 0, 10.5],
-      cup: { position: [15, 0, -18.5], ...CUP },
+      goal: { type: 'cup', position: [15, 0, -18.5], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 4, text: { en: 'Finish in four strokes', zh: '四杆完成' } },
       pieces: [
         // Snow pad and the ice bridge off it: no rails.
@@ -159,7 +159,8 @@ export const COUNTDOWN_RUN: FinaleDef = {
       par: 3,
       timer: { seconds: 20 },
       tee: [0, 6, 8.5],
-      cup: {
+      goal: {
+        type: 'cup',
         position: [1, 2, -11],
         ...CUP,
         motion: { type: 'slide', offset: [6, 0, 0], period: 8, hold: [0.1, 0.1] },

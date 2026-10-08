@@ -1,4 +1,5 @@
 import { FIXED_DT } from '../../core/loop';
+import { hypot } from '../../core/math';
 import { numberParam, type ZoneFactory } from './index';
 
 /**
@@ -24,10 +25,10 @@ export const magnet: ZoneFactory = (def) => {
       const p = ball.position();
       const dx = cx - p.x;
       const dz = cz - p.z;
-      const distance = Math.hypot(dx, dz);
+      const distance = hypot(dx, dz);
       if (distance >= reach || distance < 1e-4) return;
-      const fade = 1 - (distance / reach) ** 2;
-      const accel = Math.sign(strength) * Math.min(maxAccel, Math.abs(strength) / distance ** 2) * fade;
+      const fade = 1 - (distance / reach) * (distance / reach);
+      const accel = Math.sign(strength) * Math.min(maxAccel, Math.abs(strength) / (distance * distance)) * fade;
       const v = ball.velocity();
       const dv = (accel * FIXED_DT) / distance;
       ball.body.setLinvel({ x: v.x + dx * dv, y: v.y, z: v.z + dz * dv }, true);

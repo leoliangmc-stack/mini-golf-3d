@@ -54,7 +54,13 @@ export interface SlingshotHandlers {
   /** Called while dragging, and with null when the aim ends or is cancelled. */
   onAim(pull: Pull | null): void;
   onRelease(pull: Pull): void;
+  /** A press and release on the spot: not a stroke. Used to pick a ball (SPEC v3 2.4). */
+  onTap?(x: number, y: number): void;
 }
+
+/** A press that moves less than this many pixels, and is let go within this long, is a tap. */
+const TAP_SLOP_PX = 10;
+const TAP_MS = 400;
 
 /**
  * Slingshot aiming: press anywhere, drag back, release to shoot. Mouse, touch and pen
@@ -62,7 +68,7 @@ export interface SlingshotHandlers {
  */
 export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers): () => void {
   const active = new Set<number>();
-  let aiming: { id: number; x: number; y: number } | null = null;
+  let aiming: { id: number; x: number; y: number; at: number; moved: boolean } | null = null;
 
   const pullTo = (from: { x: number; y: number }, e: PointerEvent): Pull => {
     const dx = e.clientX - from.x;
@@ -83,7 +89,7 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
     if (active.size > 1) return cancel();
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (!handlers.canAim()) return;
-    aiming = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    aiming = { id: e.pointerId, x: e.clientX, y: e.clientY, at: e.timeStamp, moved: false };
     try {
       target.setPointerCapture(e.pointerId);
     } catch {
@@ -94,6 +100,7 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
 
   const onMove = (e: PointerEvent) => {
     if (aiming?.id !== e.pointerId) return;
+    if (Math.hypot(e.clientX - aiming.x, e.clientY - aiming.y) > TAP_SLOP_PX) aiming.moved = true;
     handlers.onAim(pullTo(aiming, e));
   };
 
@@ -101,9 +108,12 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
     active.delete(e.pointerId);
     if (aiming?.id !== e.pointerId) return;
     const pull = pullTo(aiming, e);
+    const tapped = !aiming.moved && e.timeStamp - aiming.at <= TAP_MS;
     aiming = null;
     handlers.onAim(null);
-    handlers.onRelease(pull);
+    // A tap is never a stroke, however it is read: picking a ball must not play one.
+    if (tapped) handlers.onTap?.(e.clientX, e.clientY);
+    else handlers.onRelease(pull);
   };
 
   const onCancel = (e: PointerEvent) => {

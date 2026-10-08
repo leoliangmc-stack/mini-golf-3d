@@ -511,3 +511,118 @@ body:not([data-mode='play']) #hud {
     animation: none;
   }
 }
+
+/* --- Chapter 3 ---------------------------------------------------------------------- */
+
+/* Time is frozen: the course loses its colour, the ball stays easy to see (SPEC v3 2.11). */
+#view {
+  transition: filter 0.18s;
+}
+
+body[data-frozen] #view {
+  filter: saturate(0.22) contrast(1.06);
+}
+
+/* The freeze button sits under the left thumb: it is pressed while the ball is in flight. */
+.skill {
+  position: absolute;
+  left: calc(var(--safe-left) + 44px);
+  bottom: calc(var(--safe-bottom) + 14px);
+  width: 68px;
+  height: 68px;
+  background: var(--ink);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transition:
+    opacity 0.12s,
+    transform 0.08s;
+}
+
+.skill[hidden] {
+  display: none;
+}
+
+.skill svg {
+  width: 30px;
+  height: 30px;
+}
+
+.skill .icon-run,
+.skill.frozen .icon-freeze {
+  display: none;
+}
+
+.skill.frozen .icon-run {
+  display: block;
+  fill: currentColor;
+}
+
+.skill.frozen {
+  background: #18b6d9;
+}
+
+.skill.unready {
+  opacity: 0.35;
+}
+
+.skill:active {
+  transform: scale(0.94);
+}
+
+#skill-freeze-count {
+  position: absolute;
+  right: -4px;
+  top: -4px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 900;
+  font-size: 14px;
+  line-height: 24px;
+  text-align: center;
+}
+
+/* Pins left to knock down. */
+#pins {
+  width: fit-content;
+  margin: 6px auto 0;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+#pins[hidden] {
+  display: none;
+}
+
+/* After a split: which ball to play on with. Tapping a ball does the same. */
+#ball-picker {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 14px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px;
+  border-radius: 999px;
+  background: var(--panel);
+}
+
+#ball-picker[hidden] {
+  display: none;
+}
+
+#ball-pick-label {
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}

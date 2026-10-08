@@ -1,9 +1,10 @@
 import './debug.css';
 import type { Game } from '../app/game';
 import type { Progress } from '../app/progress';
-import { verifyDeterminism } from '../game/replay';
+import { recordReplay, verifyDeterminism, type ReplayInput } from '../game/replay';
 import { el } from '../ui/dom';
 import { createOverlays } from './overlays';
+import { checkAllReplays, REPLAYS } from './replays';
 import { collectTunables, type Tunable } from './tunables';
 
 const round = (value: number): number => Math.round(value * 1000) / 1000;
@@ -46,16 +47,16 @@ export function mountDebugPanel(game: Game, progress: Progress): void {
   const checkButton = el('button', { type: 'button', textContent: 'CHECK ×10' });
 
   replayButton.addEventListener('click', () => {
-    const shots = [...game.session.shots];
-    if (shots.length === 0) return;
-    game.replay(shots);
-    shotStatus.textContent = `Replaying ${shots.length} stroke(s)…`;
+    const inputs = [...game.session.inputs];
+    if (inputs.length === 0) return;
+    game.replay(inputs);
+    shotStatus.textContent = `Replaying ${inputs.length} input(s)…`;
   });
 
   checkButton.addEventListener('click', () => {
-    const shots = [...game.session.shots];
-    if (shots.length === 0) return;
-    const { identical, outcome } = verifyDeterminism(game.hole, shots, 10);
+    const inputs = [...game.session.inputs];
+    if (inputs.length === 0) return;
+    const { identical, outcome } = verifyDeterminism(game.hole, inputs, 10);
     const where = outcome.position.map((v) => v.toFixed(3)).join(', ');
     shotStatus.textContent = identical
       ? `10/10 identical: ${outcome.holed ? 'holed' : outcome.phase} after ${outcome.strokes}, tick ${outcome.tick}, at (${where})`
@@ -66,17 +67,61 @@ export function mountDebugPanel(game: Game, progress: Progress): void {
   // The round so far, exact to the last digit: what tests/solutions.test.ts records.
   const copyShotsButton = el('button', { type: 'button', textContent: 'COPY STROKES' });
   copyShotsButton.addEventListener('click', () => {
-    const shots = JSON.stringify(game.session.shots);
+    const shots = JSON.stringify(game.session.inputs);
     navigator.clipboard?.writeText(shots).catch(() => {});
     shotStatus.textContent = shots;
     shotStatus.classList.remove('bad');
   });
 
+  // The finished round as the hole's reference solution (SPEC v3 2.9), written to
+  // replays/<hole>.json by the dev server. `npm run replay` then plays it back in Node.
+  const saveReplayButton = el('button', { type: 'button', textContent: 'SAVE REPLAY' });
+  saveReplayButton.addEventListener('click', async () => {
+    const { session } = game;
+    const fail = (text: string) => {
+      shotStatus.textContent = text;
+      shotStatus.classList.add('bad');
+    };
+    if (!session.outcome?.holed) return fail('Finish the hole first: a reference solution has to complete it.');
+    const inputs: ReplayInput[] = [...session.inputs];
+    const file = recordReplay(game.hole, inputs);
+    // Played back without the screen, the round has to end exactly as it just did.
+    const same =
+      file !== null && file.expect.strokes === session.outcome.strokes && file.expect.stars === session.outcome.stars;
+    if (!file || !same) return fail('MISMATCH: played back, this round ends differently. Not saved.');
+    const response = await fetch('/__replay', { method: 'POST', body: JSON.stringify(file) }).catch(() => null);
+    if (!response?.ok) return fail(`Could not save: ${response ? await response.text() : 'no dev server'}`);
+    // The page is not reloaded for the new file, so CHECK ALL REPLAYS is told about it here.
+    REPLAYS[file.hole] = file;
+    shotStatus.textContent = `Saved ${await response.text()}: ${file.expect.strokes} stroke(s), ${file.expect.stars} star(s)`;
+    shotStatus.classList.remove('bad');
+  });
+
+  // Every reference solution, played back in this browser. The numbers must match what
+  // `npm run replay` prints in Node, to the last bit (SPEC v3 5.3 #3).
+  const checkAllButton = el('button', { type: 'button', textContent: 'CHECK ALL REPLAYS' });
+  const replayStatus = el('div', { className: 'dev-status' });
+  checkAllButton.addEventListener('click', () => {
+    const report = checkAllReplays();
+    const exact = report.checks.filter((check) => check.exact).length;
+    const passed = report.checks.filter((check) => check.ok).length;
+    const lines = [`${passed}/${report.checks.length + report.missing.length} holes passed (${exact} exact)`];
+    for (const check of report.checks) if (!check.ok) lines.push(`${check.hole}: ${check.problems.join('; ')}`);
+    for (const check of report.checks) if (check.ok && !check.exact) lines.push(`${check.hole}: within tolerance, not exact`);
+    if (report.missing.length > 0) lines.push(`no replay: ${report.missing.join(', ')}`);
+    if (report.orphans.length > 0) lines.push(`no such hole: ${report.orphans.join(', ')}`);
+    replayStatus.textContent = lines.join('\n');
+    replayStatus.classList.toggle('bad', !report.ok);
+  });
+
   const refreshShots = () => {
     shotList.replaceChildren(
-      ...game.session.shots.map((shot) =>
+      ...game.session.inputs.map((input) =>
         el('li', {
-          textContent: `tick ${shot.tick} · dir ${shot.dir[0].toFixed(2)}, ${shot.dir[2].toFixed(2)} · power ${shot.power.toFixed(3)}`,
+          textContent:
+            input.type === 'shot'
+              ? `tick ${input.tick} · dir ${input.dir[0].toFixed(2)}, ${input.dir[2].toFixed(2)} · power ${input.power.toFixed(3)}${input.ball ? ` · ball ${input.ball}` : ''}`
+              : `tick ${input.tick} · ${input.type === 'skill' ? input.id : 'resume'}`,
         }),
       ),
     );
@@ -168,7 +213,15 @@ export function mountDebugPanel(game: Game, progress: Progress): void {
       el('h2', { textContent: 'Strokes this round' }),
       shotList,
       el('div', { className: 'dev-row' }, replayButton, checkButton, copyShotsButton),
+      el('div', { className: 'dev-row' }, saveReplayButton),
       shotStatus,
+    ),
+    el(
+      'section',
+      {},
+      el('h2', { textContent: 'Reference solutions' }),
+      el('div', { className: 'dev-row' }, checkAllButton),
+      replayStatus,
     ),
     el(
       'section',
@@ -193,7 +246,8 @@ export function mountDebugPanel(game: Game, progress: Progress): void {
       shotStatus.textContent = '';
       rebuildTuning();
     }
-    if (event.type === 'hole' || event.type === 'shot' || event.type === 'reset') refreshShots();
+    const input = event.type === 'shot' || event.type === 'frozen' || event.type === 'resumed';
+    if (event.type === 'hole' || event.type === 'reset' || input) refreshShots();
   });
   holeSelect.value = `${game.worlds.indexOf(game.world)}:${game.holeIndex}`;
   rebuildTuning();

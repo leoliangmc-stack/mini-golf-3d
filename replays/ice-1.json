@@ -1,0 +1,26 @@
+{
+  "hole": "ice-1",
+  "inputs": [
+    {
+      "type": "shot",
+      "tick": 60,
+      "dir": [
+        0,
+        0,
+        -1
+      ],
+      "power": 0.36
+    }
+  ],
+  "expect": {
+    "holed": true,
+    "strokes": 1,
+    "stars": 3,
+    "tick": 243,
+    "position": [
+      0,
+      0.0999310240149498,
+      -6.787927627563477
+    ]
+  }
+}

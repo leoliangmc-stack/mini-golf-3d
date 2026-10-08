@@ -1,0 +1,24 @@
+name: Replay check
+
+# Every push and pull request: typecheck, run the engine tests, and play back the
+# reference solution of every hole (SPEC v3 2.9). The production deploy is gated
+# separately: `npm run build` runs the same replay check, so the hosting build fails,
+# and nothing goes live, when a hole is broken.
+on:
+  push:
+  pull_request:
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run replay

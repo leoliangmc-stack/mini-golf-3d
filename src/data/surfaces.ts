@@ -53,4 +53,22 @@ export function registerSurfaces(): void {
   registerSurface('basalt', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x5d5566 });
   registerSurface('hazard', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0xe6b422 });
   registerSurface('obsidian', { restitution: 0.7, rollingResistance: 0.5, drag: 0.7, color: 0x2e2a36 });
+
+  // --- Chapter 3 ---
+  // Loose objects
+  registerSurface('crate', { restitution: 0.3, rollingResistance: 0.5, drag: 0.7, color: 0xd08a3c });
+  registerSurface('pin', { restitution: 0.25, rollingResistance: 0.5, drag: 0.7, color: 0xfbfaf5 });
+  // Growing ball: a playroom floor and toy blocks
+  registerSurface('playmat', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xf3d9a4 });
+  registerSurface('toyBlock', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0x4f9fe0 });
+  registerSurface('toyBlockRed', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0xe2574c });
+  // Time freeze: an observatory
+  registerSurface('marble', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xcfd6e4 });
+  registerSurface('bronze', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0xb07a3c });
+  // Clone ball: a hall of mirrors
+  registerSurface('tile', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xa9dcd3 });
+  registerSurface('mirror', { restitution: 0.75, rollingResistance: 0.5, drag: 0.7, color: 0x6fc3d6 });
+  // Golf bowling: an oiled lane keeps the ball's speed, and gutter walls are dull
+  registerSurface('lane', { restitution: 0.15, rollingResistance: 0.35, drag: 0.3, color: 0xe4bb7a });
+  registerSurface('gutter', { restitution: 0.45, rollingResistance: 0.5, drag: 0.7, color: 0x48505e });
 }

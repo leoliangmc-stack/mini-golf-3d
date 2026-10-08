@@ -250,7 +250,74 @@ function timeBonusView(def: ZoneDef): ZoneView {
   };
 }
 
+const GROW_GREEN = 0x2fbf71;
+const SHRINK_PURPLE = 0x9b5de5;
+const SPLIT_CYAN = 0x18b6d9;
+
+/**
+ * A pad (SPEC v3 2.2, 2.4): a disc on the ground with a mark on it, and a ball above it
+ * acting out what the pad does. The three are told apart by colour, by mark and by motion.
+ */
+function padView(def: ZoneDef, color: number, kind: 'grow' | 'shrink' | 'split'): ZoneView {
+  const group = new THREE.Group();
+  const radius = def.shape.kind === 'sphere' ? def.shape.radius : 0.45;
+  const flatOn = (mesh: THREE.Mesh, y: number): THREE.Mesh => {
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = y;
+    return mesh;
+  };
+  const fill = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.4, depthWrite: false });
+  const solid = new THREE.MeshBasicMaterial({ color });
+  const ink = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  group.add(
+    flatOn(new THREE.Mesh(new THREE.CircleGeometry(radius * 0.9, 32), fill), 0.012),
+    flatOn(new THREE.Mesh(new THREE.RingGeometry(radius * 0.9, radius, 32), solid), 0.014),
+  );
+
+  // The mark: plus for bigger, minus for smaller, a fork for two.
+  const bar = (length: number, turn: number, x = 0, z = 0) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(length, 0.01, radius * 0.16), ink);
+    mesh.position.set(x, 0.02, z);
+    mesh.rotation.y = turn;
+    return mesh;
+  };
+  if (kind === 'split') {
+    group.add(bar(radius * 0.7, 1.1, -radius * 0.17, 0), bar(radius * 0.7, -1.1, radius * 0.17, 0));
+  } else {
+    group.add(bar(radius * 0.9, 0));
+    if (kind === 'grow') group.add(bar(radius * 0.9, Math.PI / 2));
+  }
+
+  const skin = new THREE.MeshLambertMaterial({ color, flatShading: true });
+  const balls = [0, 1].map(() => new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 1), skin));
+  balls[1].visible = kind === 'split';
+  const floating = new THREE.Group();
+  floating.add(...balls);
+  floating.position.y = 0.8;
+  group.add(floating);
+  group.position.set(def.shape.center[0], def.shape.center[1] - 0.1, def.shape.center[2]);
+
+  return {
+    object: group,
+    update() {
+      // A loop of a second and a half: grow, shrink, or come apart, then start over.
+      const t = (performance.now() / 1500) % 1;
+      const ease = t * t * (3 - 2 * t);
+      if (kind === 'split') {
+        balls[0].position.x = -0.24 * ease;
+        balls[1].position.x = 0.24 * ease;
+      } else {
+        balls[0].scale.setScalar(kind === 'grow' ? 0.6 + 1.1 * ease : 1.7 - 1.1 * ease);
+      }
+      floating.rotation.y = performance.now() / 900;
+    },
+  };
+}
+
 export function registerBuiltinZoneViews(): void {
+  registerZoneView('grow', (def) => padView(def, GROW_GREEN, 'grow'));
+  registerZoneView('shrink', (def) => padView(def, SHRINK_PURPLE, 'shrink'));
+  registerZoneView('split', (def) => padView(def, SPLIT_CYAN, 'split'));
   registerZoneView('launcher', launcherView);
   registerZoneView('magnet', magnetView);
   registerZoneView('gravity', gravityView);

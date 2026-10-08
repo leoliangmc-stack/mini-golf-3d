@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import type { XYZ } from '../core/types';
 import { cupTrack } from '../game/cup';
+import { goalCups } from '../game/goal';
 import type { CompiledHole } from '../level/compile';
-import type { CupDef, HoleDef } from '../level/schema';
+import type { BallSize, CupDef, HoleDef } from '../level/schema';
+import { DEFAULT_BALL, sizedProps } from '../physics/ball';
 import { getSurface } from '../physics/surfaces';
 import { buildDecor } from './decor';
 import type { Occluder } from './occlusion';
@@ -13,7 +15,8 @@ const SIDE_SHADE = 0.68;
 /** The visible course of one hole. */
 export interface HoleView {
   group: THREE.Group;
-  cup: CupView;
+  /** One per cup of the hole's goal, in the same order; none on a hole that is all pins. */
+  cups: CupView[];
   /** Everything that could stand between the camera and the ball. */
   occluders: Occluder[];
 }
@@ -51,11 +54,14 @@ export function buildHoleView(compiled: CompiledHole, hole: HoleDef): HoleView {
   }
   for (const decor of hole.decor ?? []) add(buildDecor(decor));
 
-  const track = buildTrack(hole.cup);
-  if (track) group.add(track);
-  const cup = new CupView(hole.cup);
-  group.add(cup.object);
-  return { group, cup, occluders };
+  const cups = goalCups(hole.goal).map((cup) => {
+    const track = buildTrack(cup);
+    if (track) group.add(track);
+    const view = new CupView(cup);
+    group.add(view.object);
+    return view;
+  });
+  return { group, cups, occluders };
 }
 
 /** Frees the GPU resources of a view built by buildHoleView. */
@@ -156,16 +162,28 @@ function buildTrack(cup: CupDef): THREE.Mesh | null {
   return mesh;
 }
 
+/**
+ * Colours for the one size of ball a cup takes (SPEC v3 2.2). Large and small match the
+ * pads that make the ball that size: green grows, purple shrinks.
+ */
+export const SIZE_COLORS: Record<BallSize, number> = { small: 0x9b5de5, medium: 0xffb703, large: 0x2fbf71 };
+/** Seconds a cup takes to rise out of the ground when its turn comes. */
+const APPEAR_SECONDS = 0.45;
+
 /** The hole in the ground with its flag. Follows a moving cup and shows its lid. */
 export class CupView {
   readonly object: THREE.Group;
   private readonly lid: THREE.Mesh | null = null;
   private readonly rim: THREE.MeshBasicMaterial;
+  private readonly rimColor: number;
+  /** How far out of the ground the cup is, 0..1. */
+  private risen = 1;
 
   constructor(cup: CupDef) {
     const { group, rim } = buildCup(cup);
     this.object = group;
     this.rim = rim;
+    this.rimColor = rim.color.getHex();
     if (cup.hidden) {
       this.lid = new THREE.Mesh(
         new THREE.CircleGeometry(cup.radius + 0.03, 32),
@@ -178,14 +196,22 @@ export class CupView {
     }
   }
 
-  /** `openness` runs from 0, lid shut, to 1, wide open. */
-  update(position: XYZ, openness: number): void {
+  /**
+   * `openness` runs from 0, lid shut, to 1, wide open. A cup that is not `active` is
+   * not there at all; when its turn comes it rises out of the ground.
+   */
+  update(position: XYZ, openness: number, active = true, frameDt = 0): void {
     this.object.position.set(position.x, position.y, position.z);
+    this.risen = active ? Math.min(1, this.risen + frameDt / APPEAR_SECONDS) : 0;
+    this.object.visible = this.risen > 0;
+    // Overshoots a little on the way up, so the eye catches it.
+    const t = this.risen;
+    this.object.scale.setScalar(t < 1 ? Math.max(1e-3, t * (1 + 0.6 * (1 - t))) : 1);
     if (!this.lid) return;
     // The lid closes like an iris; the rim turns red while the cup takes no ball.
     this.lid.scale.setScalar(Math.max(1e-3, 1 - openness));
     this.lid.visible = openness < 1;
-    this.rim.color.setHex(openness > 0 ? 0xffffff : 0xff5a4f);
+    this.rim.color.setHex(openness > 0 ? this.rimColor : 0xff5a4f);
   }
 }
 
@@ -200,8 +226,15 @@ function buildCup(cup: CupDef): { group: THREE.Group; rim: THREE.MeshBasicMateri
   hole.rotation.x = -Math.PI / 2;
   hole.position.y = 0.004;
 
-  const rimMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const rim = new THREE.Mesh(new THREE.RingGeometry(cup.radius, cup.radius + 0.03, 32), rimMaterial);
+  // A cup that takes one size only says so three ways: a thick rim and a flag in that
+  // size's colour, and a ball of exactly that size on top of the pole.
+  const size = cup.acceptSize && cup.acceptSize !== 'any' ? cup.acceptSize : null;
+  const accent = size ? SIZE_COLORS[size] : 0xffffff;
+  const rimMaterial = new THREE.MeshBasicMaterial({ color: accent });
+  const rim = new THREE.Mesh(
+    new THREE.RingGeometry(cup.radius, cup.radius + (size ? 0.08 : 0.03), 32),
+    rimMaterial,
+  );
   rim.rotation.x = -Math.PI / 2;
   rim.position.y = 0.005;
 
@@ -220,10 +253,18 @@ function buildCup(cup: CupDef): { group: THREE.Group; rim: THREE.MeshBasicMateri
   flagShape.computeVertexNormals();
   const flag = new THREE.Mesh(
     flagShape,
-    new THREE.MeshLambertMaterial({ color: 0xff5a4f, side: THREE.DoubleSide }),
+    new THREE.MeshLambertMaterial({ color: size ? accent : 0xff5a4f, side: THREE.DoubleSide }),
   );
   flag.castShadow = true;
 
   group.add(hole, rim, pole, flag);
+  if (size) {
+    const sample = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(sizedProps(DEFAULT_BALL, size).radius, 2),
+      new THREE.MeshLambertMaterial({ color: accent, flatShading: true }),
+    );
+    sample.position.y = 1.3 + sizedProps(DEFAULT_BALL, size).radius;
+    group.add(sample);
+  }
   return { group, rim: rimMaterial };
 }

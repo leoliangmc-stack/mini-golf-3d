@@ -17,7 +17,7 @@ export const DESERT_WORLD: WorldDef = {
       id: 'desert-1',
       par: 2,
       tee: [0, 0, 5],
-      cup: { position: [8, 0, -6], ...CUP },
+      goal: { type: 'cup', position: [8, 0, -6], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 1, text: { en: 'Hole in one', zh: '一杆进洞' } },
       pieces: [
         { type: 'floor', min: [-2, -4], max: [2, 7], surface: 'sandstone' },
@@ -41,7 +41,7 @@ export const DESERT_WORLD: WorldDef = {
       id: 'desert-2',
       par: 3,
       tee: [0, 0, 4.5],
-      cup: { position: [2.5, 0, -5], ...CUP },
+      goal: { type: 'cup', position: [2.5, 0, -5], ...CUP },
       challenge: { type: 'avoidSurface', surface: 'sand', text: { en: 'Never touch the sand', zh: '全程不碰沙坑' } },
       pieces: [
         // Listed first so the sand wins where it overlaps the room.
@@ -66,7 +66,7 @@ export const DESERT_WORLD: WorldDef = {
       id: 'desert-3',
       par: 3,
       tee: [0, 0, 5],
-      cup: { position: [8, 0, -12.5], ...CUP },
+      goal: { type: 'cup', position: [8, 0, -12.5], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 2, text: { en: 'Finish in two strokes', zh: '两杆完成' } },
       pieces: [
         { type: 'floor', min: [-1, -6], max: [1, 6], surface: 'sandstone' },

@@ -1,0 +1,26 @@
+{
+  "hole": "city-1",
+  "inputs": [
+    {
+      "type": "shot",
+      "tick": 60,
+      "dir": [
+        0,
+        0,
+        -1
+      ],
+      "power": 0.75
+    }
+  ],
+  "expect": {
+    "holed": true,
+    "strokes": 1,
+    "stars": 3,
+    "tick": 240,
+    "position": [
+      0,
+      2.0999326705932617,
+      -6.700537204742432
+    ]
+  }
+}

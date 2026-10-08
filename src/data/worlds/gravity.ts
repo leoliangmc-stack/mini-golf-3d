@@ -30,7 +30,7 @@ export const GRAVITY_WORLD: WorldDef = {
       id: 'gravity-1',
       par: 2,
       tee: [0, 0, 4.5],
-      cup: { position: [2, 0, -8], ...CUP },
+      goal: { type: 'cup', position: [2, 0, -8], ...CUP },
       challenge: {
         type: 'noWallHits',
         text: { en: 'Hole out without touching a rail', zh: '不碰任何围栏进洞' },
@@ -52,7 +52,7 @@ export const GRAVITY_WORLD: WorldDef = {
       id: 'gravity-2',
       par: 3,
       tee: [0, 0, 4.5],
-      cup: { position: [-2, 0, -12], ...CUP },
+      goal: { type: 'cup', position: [-2, 0, -12], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 2, text: { en: 'Finish in two strokes', zh: '两杆完成' } },
       pieces: [
         { type: 'floor', min: [-3, -14], max: [3, 6], surface: 'neonFloor' },
@@ -73,7 +73,7 @@ export const GRAVITY_WORLD: WorldDef = {
       id: 'gravity-3',
       par: 3,
       tee: [0, 0, 7.5],
-      cup: { position: [-2.4, 0, -11], ...CUP },
+      goal: { type: 'cup', position: [-2.4, 0, -11], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 2, text: { en: 'Finish in two strokes', zh: '两杆完成' } },
       pieces: [
         { type: 'floor', min: [-2, 4], max: [2, 9], surface: 'neonFloor' },

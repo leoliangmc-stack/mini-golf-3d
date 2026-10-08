@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+import { goalAnchor, goalPins } from '../game/goal';
 import { compileHole } from '../level/compile';
 import type { WorldDef } from '../level/schema';
 import { FollowCamera } from './camera';
 import { buildHoleView, disposeHoleView } from './holeView';
 import { buildMoverView } from './moverView';
+import { buildCrateView, buildPinView } from './propViews';
 import { getTheme } from './theme';
 import { buildZoneView } from './zoneViews';
 
@@ -36,6 +38,8 @@ export function renderThumbnail(
     const zoneView = buildZoneView(zone);
     if (zoneView) view.add(zoneView.object);
   }
+  for (const crate of hole.crates ?? []) view.add(buildCrateView(crate));
+  for (const pin of goalPins(hole.goal)) view.add(buildPinView(pin.at));
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(theme.sky);
@@ -56,8 +60,7 @@ export function renderThumbnail(
   camera.setViewport(width, height);
   camera.configure(hole.camera);
   const [tx, ty, tz] = hole.tee;
-  const [cx, cy, cz] = hole.cup.position;
-  camera.snapTo({ x: tx, y: ty, z: tz }, { x: cx, y: cy, z: cz });
+  camera.snapTo({ x: tx, y: ty, z: tz }, goalAnchor(hole.goal));
 
   const target = new THREE.WebGLRenderTarget(width, height, { samples: 4 });
   const pixels = new Uint8Array(width * height * 4);

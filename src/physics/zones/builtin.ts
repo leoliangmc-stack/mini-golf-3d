@@ -3,6 +3,7 @@ import { registerZone } from './index';
 import { launcher } from './launcher';
 import { magnet } from './magnet';
 import { outOfBounds } from './outOfBounds';
+import { resizer, splitter } from './pads';
 import { timeBonus } from './timeBonus';
 import { tunnel } from './tunnel';
 
@@ -13,4 +14,7 @@ export function registerBuiltinZones(): void {
   registerZone('gravity', gravity);
   registerZone('tunnelPair', tunnel);
   registerZone('timeBonus', timeBonus);
+  registerZone('grow', resizer(1));
+  registerZone('shrink', resizer(-1));
+  registerZone('split', splitter);
 }

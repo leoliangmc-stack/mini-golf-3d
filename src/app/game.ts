@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import type { XYZ } from '../core/types';
-import { cupAnchor, cupLidOpenness } from '../game/cup';
+import { cupLidOpenness } from '../game/cup';
 import { RULES } from '../game/rules';
-import { Session, type SessionEvent, type ShotRecord } from '../game/session';
+import { Session, type InputRecord, type SessionEvent, type ShotRecord } from '../game/session';
 import { attachCameraGestures } from '../input/cameraGestures';
 import { attachSlingshot, type Pull } from '../input/slingshot';
 import { chapterOf, holeNumber } from '../level/chapters';
 import type { ChapterDef, HoleDef, WorldDef } from '../level/schema';
-import { DEFAULT_BALL } from '../physics/ball';
+import { DEFAULT_BALL, type Ball } from '../physics/ball';
 import { AimIndicator } from '../render/aimIndicator';
 import { BallView } from '../render/ballView';
 import { FollowCamera } from '../render/camera';
@@ -15,6 +15,7 @@ import { Explosion } from '../render/explosion';
 import { buildHoleView, disposeHoleView, type HoleView } from '../render/holeView';
 import { buildMoverView, updateMoverView } from '../render/moverView';
 import { OcclusionFader } from '../render/occlusion';
+import { buildCrateView, buildPinView, updatePropView } from '../render/propViews';
 import type { Stage } from '../render/scene';
 import { getTheme } from '../render/theme';
 import { buildZoneView, type ZoneView } from '../render/zoneViews';
@@ -32,8 +33,13 @@ export type GameEvent =
 const RESTART_TICKS = 50;
 /** How many times in a row the countdown may run out before the player is offered a way on. */
 const EXPLOSIONS_BEFORE_OFFER = 3;
+/**
+ * How close to a ball on screen a tap has to land to pick it, in CSS pixels. Far more
+ * than the ball covers, since a finger hides what it is aiming at (SPEC v3 2.4).
+ */
+const PICK_RADIUS_PX = 56;
 
-/** What a zone cue does to the picture of the ball. */
+/** What a zone cue does to the picture of a ball that a zone has hold of. */
 const BALL_CUES: Record<string, 'vanish' | 'appear'> = { tunnelEnter: 'vanish', tunnelExit: 'appear' };
 
 /**
@@ -50,18 +56,24 @@ export class Game {
   /** Freezes the simulation, moving parts and countdown included. */
   paused = false;
 
-  private readonly ballView = new BallView(DEFAULT_BALL.radius);
+  /** One picture per ball, by ball id. A ball's picture can outlive it for a moment, to fade. */
+  private readonly ballViews = new Map<number, BallView>();
+  /** Which cup each sinking ball is dropping into. */
+  private readonly sinking = new Map<number, number>();
   private readonly aim = new AimIndicator();
   private readonly explosion = new Explosion();
   private readonly fader = new OcclusionFader();
   private holeView: HoleView | null = null;
   private moverViews: THREE.Object3D[] = [];
+  private crateViews: THREE.Object3D[] = [];
+  private pinViews: THREE.Object3D[] = [];
   /** One entry per zone of the hole, in order; null for zones that have nothing to show. */
   private zoneViews: (ZoneView | null)[] = [];
   private pull: Pull | null = null;
-  /** Where the camera frames the cup: a point that stays put even when the cup does not. */
-  private anchor: XYZ = { x: 0, y: 0, z: 0 };
-  private readonly cupPoint = new THREE.Vector3();
+  private readonly cupPoints: THREE.Vector3[] = [];
+  /** Where the selected ball is drawn this frame. */
+  private readonly focus = new THREE.Vector3();
+  private readonly others: XYZ[] = [];
   /** Times in a row the countdown has run out on this hole. */
   private explosions = 0;
   /** Ticks until the hole starts over after the countdown ran out; 0 when it is not about to. */
@@ -77,7 +89,7 @@ export class Game {
     /** Everything that can be loaded, in play order: the chapters' worlds and finales, plus any extras. */
     readonly worlds: readonly WorldDef[],
   ) {
-    stage.scene.add(this.ballView.object, this.aim.object, this.explosion.object);
+    stage.scene.add(this.aim.object, this.explosion.object);
     stage.onResize((w, h) => this.camera.setViewport(w, h));
     attachCameraGestures(canvas, this.camera);
     attachSlingshot(canvas, {
@@ -89,6 +101,7 @@ export class Game {
       onRelease: (pull) => {
         if (this.canAim()) this.session.shoot(this.shotDirection(pull), pull.power);
       },
+      onTap: (x, y) => this.pickAt(x, y),
     });
   }
 
@@ -116,6 +129,12 @@ export class Game {
     return chapter && this.isFinale ? holeNumber(chapter, this.world, this.holeIndex) : this.holeIndex + 1;
   }
 
+  /** True when the player has more than one ball to choose from for the next stroke. */
+  get choosing(): boolean {
+    const { session } = this;
+    return session.balls.live.length > 1 && (session.phase === 'aiming' || session.frozen);
+  }
+
   on(listener: (event: GameEvent) => void): void {
     this.listeners.add(listener);
   }
@@ -139,7 +158,9 @@ export class Game {
     this.holeView = buildHoleView(this.session.compiled, hole);
     const { group } = this.holeView;
     this.moverViews = (hole.movers ?? []).map(buildMoverView);
-    for (const view of this.moverViews) group.add(view);
+    this.crateViews = (hole.crates ?? []).map(buildCrateView);
+    this.pinViews = this.session.goal.pins.map((pin) => buildPinView(pin.def.at));
+    for (const view of [...this.moverViews, ...this.crateViews, ...this.pinViews]) group.add(view);
     this.zoneViews = hole.zones.map(buildZoneView);
     for (const view of this.zoneViews) if (view) group.add(view.object);
     this.stage.scene.add(group);
@@ -147,7 +168,6 @@ export class Game {
     this.stage.applyTheme(getTheme(world.theme));
     this.stage.fitShadows(this.session.compiled.bounds);
     this.camera.configure(hole.camera);
-    this.anchor = cupAnchor(hole.cup);
     this.explosions = 0;
     this.resetView();
     this.emit({ type: 'hole', intro });
@@ -167,8 +187,43 @@ export class Game {
     this.session.concede();
   }
 
-  replay(shots: readonly ShotRecord[]): void {
-    this.session.replay(shots);
+  replay(inputs: readonly (InputRecord | ShotRecord)[]): void {
+    this.session.replay(inputs);
+  }
+
+  /** Uses a skill the hole gives, if it can be used right now. */
+  useSkill(id: string): boolean {
+    return !this.paused && !this.session.replaying && this.session.useSkill(id);
+  }
+
+  /** Lets time run again after a freeze, without a stroke. */
+  resume(): boolean {
+    return !this.paused && this.session.resume();
+  }
+
+  /** Picks the next ball (`step` 1) or the one before (-1) for the coming stroke. */
+  pickNext(step: 1 | -1): void {
+    if (!this.choosing) return;
+    const { live, selected } = this.session.balls;
+    this.session.select(live[(live.indexOf(selected) + step + live.length) % live.length]);
+  }
+
+  /** Picks the ball nearest to a point on screen, if one is near enough. */
+  pickAt(x: number, y: number): void {
+    if (!this.choosing || this.inputBlocked || this.paused) return;
+    let best: Ball | null = null;
+    let bestDistance = PICK_RADIUS_PX;
+    for (const ball of this.session.balls.live) {
+      const view = this.ballViews.get(ball.id);
+      if (!view) continue;
+      const at = this.screenPosition(view.object.position);
+      const distance = Math.hypot(at.x - x, at.y - y);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = ball;
+      }
+    }
+    if (best) this.session.select(best);
   }
 
   step(): void {
@@ -204,75 +259,147 @@ export class Game {
     return { level, attracts };
   }
 
-  render(alpha: number, frameDt: number): void {
+  render(frameAlpha: number, frameDt: number): void {
     const { session } = this;
-    // The session rebuilds its movers and zones on every retry, so look them up afresh.
+    // While time is frozen nothing is between two steps: everything is where the last one left it.
+    const alpha = session.frozen ? 1 : frameAlpha;
+    // The session rebuilds its movers, crates and zones on every retry, so look them up afresh.
     this.moverViews.forEach((view, i) => updateMoverView(view, session.movers[i], alpha));
+    this.crateViews.forEach((view, i) => updatePropView(view, session.crates[i], alpha));
+    this.pinViews.forEach((view, i) => updatePropView(view, session.goal.pins[i], alpha));
     this.zoneViews.forEach((view, i) => view?.update?.(session.zones[i]));
-    const { prevPosition: was, position: now } = session.cup;
-    this.cupPoint.set(was.x + (now.x - was.x) * alpha, was.y + (now.y - was.y) * alpha, was.z + (now.z - was.z) * alpha);
-    this.holeView?.cup.update(this.cupPoint, cupLidOpenness(session.hole.cup, session.world.tick));
+    session.goal.cups.forEach((cup, i) => {
+      const { prevPosition: was, position: now } = cup.pose;
+      const point = (this.cupPoints[i] ??= new THREE.Vector3());
+      point.set(was.x + (now.x - was.x) * alpha, was.y + (now.y - was.y) * alpha, was.z + (now.z - was.z) * alpha);
+      this.holeView?.cups[i].update(point, cupLidOpenness(cup.def, session.world.tick), cup.active, frameDt);
+    });
 
-    const ball = this.ballView.update(session.pose, alpha, frameDt, this.cupPoint);
-    this.camera.update(ball, this.anchor, frameDt);
-    this.fader.update(this.camera.camera.position, ball, frameDt);
+    const selected = session.ball;
+    const choosing = this.choosing;
+    this.others.length = 0;
+    const drawn = new Set<number>();
+    for (const ball of [...session.balls.live, ...session.balls.sunk]) {
+      const view = this.viewOf(ball);
+      drawn.add(ball.id);
+      const cup = this.cupPoints[this.sinking.get(ball.id) ?? 0] ?? this.focus;
+      const at = view.update(ball.pose, alpha, frameDt, cup);
+      view.setPassedOver(choosing && ball !== selected);
+      if (ball === selected) this.focus.copy(at);
+      else if (session.balls.live.includes(ball)) this.others.push({ x: at.x, y: at.y, z: at.z });
+    }
+    // Balls taken off the course fade out where they were, then their pictures go.
+    for (const [id, view] of this.ballViews) {
+      if (drawn.has(id)) continue;
+      view.update({ prevPosition: view.object.position, position: view.object.position }, 1, frameDt, this.focus);
+      if (view.gone) this.dropView(id);
+    }
+
+    this.camera.update(this.focus, session.goal.focus(), frameDt, this.others);
+    this.fader.update(this.camera.camera.position, this.focus, frameDt);
     this.explosion.update(frameDt);
     const pull = this.pull;
-    const radius = session.ball.props.radius;
-    if (session.phase !== 'aiming' || session.replaying) this.aim.hide();
-    else if (pull && pull.power >= RULES.minPower) this.aim.showAim(ball, this.shotDirection(pull), pull.power, radius);
-    else this.aim.showReady(ball, radius, frameDt);
+    const radius = selected.props.radius;
+    const aiming = session.phase === 'aiming' || session.frozen;
+    if (!aiming || session.replaying) this.aim.hide();
+    else if (pull && pull.power >= RULES.minPower) this.aim.showAim(this.focus, this.shotDirection(pull), pull.power, radius);
+    else this.aim.showReady(this.focus, radius, frameDt);
     for (const listener of this.frameListeners) listener();
     this.stage.renderer.render(this.stage.scene, this.camera.camera);
   }
 
-  /** Where the ball is on screen, in CSS pixels. */
+  /** Where the selected ball is on screen, in CSS pixels. */
   ballScreenPosition(): { x: number; y: number } {
-    const p = this.projected.copy(this.ballView.object.position).project(this.camera.camera);
+    return this.screenPosition(this.focus);
+  }
+
+  private screenPosition(point: THREE.Vector3): { x: number; y: number } {
+    const p = this.projected.copy(point).project(this.camera.camera);
     return { x: ((p.x + 1) / 2) * window.innerWidth, y: ((1 - p.y) / 2) * window.innerHeight };
   }
 
   private canAim(): boolean {
-    return !this.inputBlocked && !this.paused && !this.session.replaying && this.session.phase === 'aiming';
+    const { session } = this;
+    const open = session.phase === 'aiming' || session.frozen;
+    return !this.inputBlocked && !this.paused && !session.replaying && open;
   }
 
   private shotDirection(pull: Pull): XYZ {
     return this.camera.screenToGround(-pull.x, -pull.y);
   }
 
+  /** The picture of a ball, made on first sight at the size the ball is. */
+  private viewOf(ball: Ball): BallView {
+    let view = this.ballViews.get(ball.id);
+    if (!view) {
+      view = new BallView(DEFAULT_BALL.radius);
+      view.setSize(ball.props.radius / DEFAULT_BALL.radius, true);
+      this.ballViews.set(ball.id, view);
+      this.stage.scene.add(view.object);
+    }
+    return view;
+  }
+
+  private dropView(id: number): void {
+    const view = this.ballViews.get(id);
+    if (!view) return;
+    this.stage.scene.remove(view.object);
+    disposeHoleView(view.object);
+    this.ballViews.delete(id);
+    this.sinking.delete(id);
+  }
+
   private resetView(): void {
     this.restartIn = 0;
     this.explosion.stop();
-    this.ballView.reset();
-    this.camera.snapTo(this.session.pose.position, this.anchor);
+    for (const id of [...this.ballViews.keys()]) this.dropView(id);
+    this.sinking.clear();
+    const start = this.session.pose.position;
+    this.focus.set(start.x, start.y, start.z);
+    this.camera.snapTo(start, this.session.goal.focus());
   }
 
   private onSessionEvent(event: SessionEvent): void {
     switch (event.type) {
       case 'holed':
-        this.ballView.startSink();
+        this.sinking.set(event.ball, event.cup);
+        this.ballViews.get(event.ball)?.startSink();
         break;
       case 'finished':
         this.explosions = 0;
-        this.ballView.setAlert(false);
+        for (const view of this.ballViews.values()) view.setAlert(false);
         break;
       case 'reset':
         this.resetView();
         break;
+      case 'ballRemoved':
+        this.ballViews.get(event.ball)?.vanish();
+        break;
+      case 'resized': {
+        const ball = this.session.balls.live.find((b) => b.id === event.ball);
+        if (ball) this.viewOf(ball).setSize(ball.props.radius / DEFAULT_BALL.radius);
+        break;
+      }
       case 'cue': {
         const effect = BALL_CUES[event.name];
-        if (effect) this.ballView[effect]();
-        else if (event.name === 'timerWarn') this.ballView.setAlert(true);
+        if (effect) {
+          // The cue does not say which ball: it is the one a zone has taken out of the simulation.
+          for (const ball of this.session.balls.live) {
+            if (!ball.body.isEnabled()) this.ballViews.get(ball.id)?.[effect]();
+          }
+        } else if (event.name === 'timerWarn') {
+          for (const view of this.ballViews.values()) view.setAlert(true);
+        }
         break;
       }
       case 'timeAdded':
-        this.ballView.setAlert(false);
+        for (const view of this.ballViews.values()) view.setAlert(false);
         break;
       case 'exploded':
         this.explosions++;
         this.restartIn = RESTART_TICKS;
-        this.explosion.start(this.ballView.object.position);
-        this.ballView.hide();
+        this.explosion.start(this.focus);
+        for (const view of this.ballViews.values()) view.hide();
         break;
     }
     this.emit(event);

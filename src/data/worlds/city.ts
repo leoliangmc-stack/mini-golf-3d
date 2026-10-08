@@ -87,7 +87,7 @@ export const CITY_WORLD: WorldDef = {
       id: 'city-1',
       par: 2,
       tee: [0, 4, 6.5],
-      cup: { position: [0, 2, -6.5], ...CUP },
+      goal: { type: 'cup', position: [0, 2, -6.5], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 1, text: { en: 'Hole in one', zh: '一杆进洞' } },
       pieces: [
         high1.roof,
@@ -121,7 +121,7 @@ export const CITY_WORLD: WorldDef = {
       id: 'city-2',
       par: 3,
       tee: [3.5, 6, 6.5],
-      cup: { position: [-2.5, 2, -0.5], ...CUP },
+      goal: { type: 'cup', position: [-2.5, 2, -0.5], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 2, text: { en: 'Finish in two strokes', zh: '两杆完成' } },
       pieces: [
         top2.roof,
@@ -166,7 +166,7 @@ export const CITY_WORLD: WorldDef = {
       id: 'city-3',
       par: 4,
       tee: [0, 8, 8.5],
-      cup: { position: [6.5, 2, -7], ...CUP },
+      goal: { type: 'cup', position: [6.5, 2, -7], ...CUP },
       challenge: { type: 'maxStrokes', strokes: 2, text: { en: 'Finish in two strokes', zh: '两杆完成' } },
       pieces: [
         ...b3.map((b) => b.roof),

@@ -1,4 +1,5 @@
 import type { Game } from '../app/game';
+import { goalCups } from '../game/goal';
 import { RULES } from '../game/rules';
 import { INPUT } from '../input/slingshot';
 import { getSurface } from '../physics/surfaces';
@@ -96,13 +97,17 @@ export function collectTunables(game: Game): TunableGroup[] {
           },
         ]
       : []),
-    {
-      title: `Cup (${hole.id})`,
-      items: [
-        field(`cup.${hole.id}.radius`, 'radius', hole.cup, 'radius', [0.12, 0.5, 0.01], true),
-        field(`cup.${hole.id}.captureSpeed`, 'capture speed', hole.cup, 'captureSpeed', [1, 8, 0.1], true),
-      ],
-    },
+    ...goalCups(hole.goal).map((cup, i) => {
+      // The first cup keeps the name it had when holes had only the one.
+      const key = i === 0 ? `cup.${hole.id}` : `cup.${hole.id}.${i}`;
+      return {
+        title: `Cup (${hole.id}${i === 0 ? '' : ` #${i + 1}`})`,
+        items: [
+          field(`${key}.radius`, 'radius', cup, 'radius', [0.12, 0.5, 0.01], true),
+          field(`${key}.captureSpeed`, 'capture speed', cup, 'captureSpeed', [1, 8, 0.1], true),
+        ],
+      };
+    }),
     ...surfaceIds.map((id) => {
       const surface = getSurface(id);
       return {

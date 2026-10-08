@@ -3,6 +3,7 @@ import { CHAPTERS } from '../src/data/chapters';
 import { TEST_WORLD } from '../src/data/worlds/test';
 import { verifyDeterminism } from '../src/game/replay';
 import { cupTrack } from '../src/game/cup';
+import { goalCups, goalPins } from '../src/game/goal';
 import { Session } from '../src/game/session';
 import { stagesOf } from '../src/level/chapters';
 import { headingVector, tunnelEnds, tunnelRadius } from '../src/physics/zones/tunnel';
@@ -36,11 +37,20 @@ describe('world data', () => {
   it.each(holes)('$hole.id is well formed', ({ hole }) => {
     const session = new Session(hole);
     const { ground } = session.compiled;
-    // The cup is on the ground, and stays on it wherever its track takes it.
-    for (const point of cupTrack(hole.cup)) {
-      expect(point.y).toBe(hole.cup.position[1]);
-      expect(ground!.surfaceAt(point)).not.toBeNull();
+    // Every hole can be finished: it has a cup or pins.
+    const cups = goalCups(hole.goal);
+    const pins = goalPins(hole.goal);
+    expect(cups.length + pins.length).toBeGreaterThan(0);
+    // A cup is on the ground, and stays on it wherever its track takes it.
+    for (const cup of cups) {
+      for (const point of cupTrack(cup)) {
+        expect(point.y).toBe(cup.position[1]);
+        expect(ground!.surfaceAt(point)).not.toBeNull();
+      }
     }
+    // Pins stand on the ground too, and there are never more than 15 (SPEC v3 2.5).
+    expect(pins.length).toBeLessThanOrEqual(15);
+    for (const pin of pins) expect(ground!.surfaceAt({ x: pin.at[0], y: pin.at[1], z: pin.at[2] })).not.toBeNull();
     expect(hole.zones.some((zone) => zone.type === 'outOfBounds')).toBe(true);
 
     // A tunnel mouth must not point straight at its partner (SPEC v2 2.3): a ball coming

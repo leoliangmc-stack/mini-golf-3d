@@ -45,11 +45,18 @@ export interface HoleDef {
   strokeLimit?: number;
   /** Point on the ground where the ball starts. */
   tee: Vec3;
-  cup: CupDef;
+  /** What finishes the hole: a cup to sink the ball in, pins to knock down, or one after the other. */
+  goal: GoalDef;
   pieces: readonly PieceDef[];
   zones: readonly ZoneDef[];
   /** Moving parts. They keep moving while the player aims. */
   movers?: readonly MoverDef[];
+  /** Loose boxes the ball can shove around, if it is heavy enough. */
+  crates?: readonly CrateDef[];
+  /** How many balls a split may leave on the course at once, 1 to 4. Defaults to 1: no splitting. */
+  maxBalls?: number;
+  /** Skills the player may use on this hole, and how many times each: `{ freeze: 2 }`. */
+  skills?: Readonly<Record<string, number>>;
   /** Scenery. It has no collision and no rules. */
   decor?: readonly DecorDef[];
   /**
@@ -93,6 +100,42 @@ export interface CameraOverride {
   maxDistance?: number;
 }
 
+/** The three sizes a ball can be (SPEC v3 2.2). */
+export type BallSize = 'small' | 'medium' | 'large';
+
+/**
+ * What the player has to do to finish a hole (SPEC v3 2.8).
+ *
+ * - `cup`: sink a ball in it.
+ * - `knockdown`: knock every pin over. There is no cup.
+ * - `sequence`: the steps one after the other. A cup that is not the current step is
+ *   not there yet: it appears when the steps before it are done. A cup ends the round
+ *   for the ball that drops into it, so it belongs at the end.
+ */
+export type GoalDef = CupGoal | KnockdownGoal | SequenceGoal;
+
+export interface CupGoal extends CupDef {
+  type: 'cup';
+}
+
+export interface KnockdownGoal {
+  type: 'knockdown';
+  pins: readonly PinDef[];
+  /** A pin leaning further than this from upright, in degrees, is down. Defaults to 60. */
+  tiltThreshold?: number;
+}
+
+export interface SequenceGoal {
+  type: 'sequence';
+  steps: readonly GoalDef[];
+}
+
+/** One bowling pin. */
+export interface PinDef {
+  /** Point on the ground the pin stands on. */
+  at: Vec3;
+}
+
 export interface CupDef {
   /** Point on the ground at the center of the cup; where its cycle starts if it moves. */
   position: Vec3;
@@ -106,6 +149,24 @@ export interface CupDef {
   motion?: MotionDef;
   /** A lid that opens and shuts on a fixed schedule. Shut, the cup is plain ground. */
   hidden?: LidDef;
+  /** The one ball size the cup takes. Defaults to any. */
+  acceptSize?: BallSize | 'any';
+}
+
+/**
+ * A loose box. It slides when something heavy enough runs into it and soon stops by
+ * itself; it never turns or tips over. The medium ball weighs 0.05 kg and barely moves one.
+ */
+export interface CrateDef {
+  /** Width (x), height (y) and depth (z) before rotation. */
+  size: Vec3;
+  /** Point on the ground under the middle of the crate. */
+  at: Vec3;
+  /** Rotation about the vertical axis, in degrees. */
+  yaw?: number;
+  /** In kilograms. Defaults to 6. */
+  mass?: number;
+  surface: string;
 }
 
 export interface LidDef {
@@ -131,7 +192,7 @@ export interface DecorDef {
   color?: number;
 }
 
-export type PieceDef = FloorPiece | RampPiece | WallPiece | PillarPiece;
+export type PieceDef = FloorPiece | RampPiece | WallPiece | PillarPiece | BeamPiece;
 
 /**
  * Flat rectangle of ground. Bounds must be multiples of FLOOR_CELL so that
@@ -174,6 +235,26 @@ export interface WallPiece {
   to: Vec2;
   /** Height of the ground the wall stands on: one value, or [at from, at to] for a rail along a ramp. */
   y?: number | readonly [number, number];
+  height?: number;
+  thickness?: number;
+  surface: string;
+}
+
+/**
+ * A bar across the course with a gap under it, like a limbo bar: a ball rolls under only
+ * if it is no taller than `clearance`. Balls are 0.12, 0.2 and 0.34 m tall (SPEC v3 2.2),
+ * so 0.16 lets the small one through and 0.26 the small and the medium. Unlike a gap
+ * between two walls, the way through is as wide as the bar is long: no careful aim needed.
+ */
+export interface BeamPiece {
+  type: 'beam';
+  from: Vec2;
+  to: Vec2;
+  /** Height of the ground under the bar. Defaults to 0. */
+  y?: number;
+  /** Height of the gap between the ground and the underside of the bar. */
+  clearance: number;
+  /** How tall the bar itself is. */
   height?: number;
   thickness?: number;
   surface: string;

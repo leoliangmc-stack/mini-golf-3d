@@ -1,4 +1,5 @@
 import { FIXED_DT } from '../core/loop';
+import { cos, hypot, sin } from '../core/math';
 import type { Vec3, XYZ } from '../core/types';
 import type { CycleDef, MotionDef, MoverDef } from '../level/schema';
 import type { Ball } from './ball';
@@ -30,7 +31,7 @@ export function cycleValue(tick: number, def: CycleDef): number {
   const u = cyclePhase(tick, def.period, def.phase);
   const [holdStart, holdEnd] = def.hold ?? [0, 0];
   const move = (1 - holdStart - holdEnd) / 2;
-  const ease = (x: number) => 0.5 - 0.5 * Math.cos(Math.PI * x);
+  const ease = (x: number) => 0.5 - 0.5 * cos(Math.PI * x);
   if (u < holdStart) return 0;
   if (u < holdStart + move) return ease((u - holdStart) / move);
   if (u < holdStart + move + holdEnd) return 1;
@@ -58,10 +59,10 @@ export function motionPose(position: Vec3, yaw: number, motion: MotionDef, tick:
   const [px, pz] = motion.pivot;
   const dx = x - px;
   const dz = z - pz;
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
+  const c = cos(angle);
+  const s = sin(angle);
   return {
-    position: { x: px + dx * cos + dz * sin, y, z: pz - dx * sin + dz * cos },
+    position: { x: px + dx * c + dz * s, y, z: pz - dx * s + dz * c },
     yaw: yaw + angle,
   };
 }
@@ -76,12 +77,12 @@ function carry(point: XYZ, from: MoverPose, to: MoverPose): XYZ {
   const dx = point.x - from.position.x;
   const dz = point.z - from.position.z;
   const turn = to.yaw - from.yaw;
-  const cos = Math.cos(turn);
-  const sin = Math.sin(turn);
+  const c = cos(turn);
+  const s = sin(turn);
   return {
-    x: to.position.x + dx * cos + dz * sin,
+    x: to.position.x + dx * c + dz * s,
     y: point.y + to.position.y - from.position.y,
-    z: to.position.z - dx * sin + dz * cos,
+    z: to.position.z - dx * s + dz * c,
   };
 }
 
@@ -119,14 +120,16 @@ export class Mover implements GroundCarrier {
   }
 
   /** Schedules the move for the coming step. Call before stepping the world. */
-  preStep(world: PhysicsWorld, ball: Ball): void {
+  preStep(world: PhysicsWorld, balls: readonly Ball[]): void {
     this.nextPose = moverPose(this.def, world.tick + 1);
     this.body.setNextKinematicTranslation(this.nextPose.position);
     this.body.setNextKinematicRotation(yawRotation(this.nextPose.yaw));
     if (this.def.role === 'platform') {
       // A platform only exists for a ball that is above its top. A ball rolling up to it
       // from level ground would otherwise trip on its edge (see tests/seams.test.ts).
-      this.collider.setCollisionGroups(this.isUnder(ball.position()) ? SOLID : GHOST);
+      // One collider cannot be solid for one ball and absent for another: with several
+      // balls about, it is there as soon as any of them is over it.
+      this.collider.setCollisionGroups(balls.some((ball) => this.isUnder(ball.position())) ? SOLID : GHOST);
     }
   }
 
@@ -141,10 +144,10 @@ export class Mover implements GroundCarrier {
     const { position, yaw } = this.pose;
     const dx = point.x - position.x;
     const dz = point.z - position.z;
-    const cos = Math.cos(yaw);
-    const sin = Math.sin(yaw);
-    const localX = dx * cos - dz * sin;
-    const localZ = dx * sin + dz * cos;
+    const c = cos(yaw);
+    const s = sin(yaw);
+    const localX = dx * c - dz * s;
+    const localZ = dx * s + dz * c;
     const [width, height, depth] = this.def.size;
     return Math.abs(localX) <= width / 2 && Math.abs(localZ) <= depth / 2 && point.y >= position.y + height / 2;
   }
@@ -168,7 +171,7 @@ export class Mover implements GroundCarrier {
     let best: Vec3 | null = null;
     let bestDistance = Infinity;
     for (const rest of this.def.rest ?? []) {
-      const d = Math.hypot(rest[0] - point.x, rest[1] - point.y, rest[2] - point.z);
+      const d = hypot(rest[0] - point.x, rest[1] - point.y, rest[2] - point.z);
       if (d < bestDistance) {
         bestDistance = d;
         best = rest;
@@ -179,5 +182,5 @@ export class Mover implements GroundCarrier {
 }
 
 function yawRotation(yaw: number): { x: number; y: number; z: number; w: number } {
-  return { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) };
+  return { x: 0, y: sin(yaw / 2), z: 0, w: cos(yaw / 2) };
 }

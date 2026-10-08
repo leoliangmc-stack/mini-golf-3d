@@ -174,7 +174,11 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
         }
         break;
       case 'shot':
-        audio.hit(event.power);
+        if (event.frozen) audio.airShot(event.power);
+        else audio.hit(event.power);
+        break;
+      case 'pinDown':
+        audio.pinDown();
         break;
       case 'bounce':
         if (event.kind === 'ground' && event.speed >= HARD_LANDING) audio.land(event.speed);
@@ -200,6 +204,13 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
         else if (event.name === 'cupShut') audio.cupLid(false);
         else if (event.name === 'timerTick') audio.timerTick();
         else if (event.name === 'timerWarn') audio.timerWarn();
+        else if (event.name === 'grow') audio.grow();
+        else if (event.name === 'shrink') audio.shrink();
+        else if (event.name === 'split') audio.split();
+        else if (event.name === 'freeze') audio.freeze();
+        else if (event.name === 'resume') audio.resume();
+        else if (event.name === 'strike') audio.strike();
+        else if (event.name === 'cupAppear') audio.cupAppear();
         break;
       case 'timeAdded':
         audio.timeBonus();

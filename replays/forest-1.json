@@ -1,0 +1,26 @@
+{
+  "hole": "forest-1",
+  "inputs": [
+    {
+      "type": "shot",
+      "tick": 60,
+      "dir": [
+        0,
+        0,
+        -1
+      ],
+      "power": 0.78
+    }
+  ],
+  "expect": {
+    "holed": true,
+    "strokes": 1,
+    "stars": 3,
+    "tick": 198,
+    "position": [
+      6.320898056030273,
+      0.0999310240149498,
+      -7
+    ]
+  }
+}

@@ -18,7 +18,7 @@ const cup = { position: [0, 0, -2] as const, radius: 0.22, captureSpeed: 3.5 };
 
 describe('cup capture (SPEC 5.2 #6)', () => {
   it('holes a slow ball rolling over the cup', () => {
-    const session = new Session(boxHole({ cup }));
+    const session = new Session(boxHole({ goal: { type: 'cup', ...cup } }));
     const events: SessionEvent[] = [];
     session.on((e) => events.push(e));
     // Launched below the capture speed, so the result does not depend on power tuning.
@@ -32,7 +32,7 @@ describe('cup capture (SPEC 5.2 #6)', () => {
   });
 
   it('lets a fast ball roll straight over the cup', () => {
-    const session = new Session(boxHole({ cup }));
+    const session = new Session(boxHole({ goal: { type: 'cup', ...cup } }));
     session.shoot({ x: 0, y: 0, z: -1 }, 1);
     let passed = false;
     for (let i = 0; i < 30 && !passed; i++) {

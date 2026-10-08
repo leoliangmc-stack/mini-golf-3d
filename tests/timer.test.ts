@@ -98,19 +98,19 @@ describe('hole countdown (SPEC v2 2.6)', () => {
 
   it('counts a ball that drops on the very last tick as holed, not blown up', () => {
     // Find how long the putt takes, then give exactly that long.
-    const probe = new Session(boxHole({ cup }));
+    const probe = new Session(boxHole({ goal: { type: 'cup', ...cup } }));
     probe.shoot({ x: 0, y: 0, z: -1 }, speed(2.8));
     const ticks = runUntilSettled(probe);
     expect(probe.outcome?.holed).toBe(true);
     probe.dispose();
 
-    const session = new Session(timed(ticks / 60, { cup }));
+    const session = new Session(timed(ticks / 60, { goal: { type: 'cup', ...cup } }));
     session.shoot({ x: 0, y: 0, z: -1 }, speed(2.8));
     runUntilSettled(session);
     expect(session.outcome?.holed).toBe(true);
     expect(session.phase).toBe('done');
 
-    const late = new Session(timed((ticks - 1) / 60, { cup }));
+    const late = new Session(timed((ticks - 1) / 60, { goal: { type: 'cup', ...cup } }));
     late.shoot({ x: 0, y: 0, z: -1 }, speed(2.8));
     runUntilSettled(late);
     expect(late.phase).toBe('exploded');
@@ -252,7 +252,7 @@ describe('challenges on timed holes', () => {
   });
 
   it('records the time left when the hole is finished', () => {
-    const hole = timed(10, { cup, challenge: { type: 'timeLeft', seconds: 8, text } });
+    const hole = timed(10, { goal: { type: 'cup', ...cup }, challenge: { type: 'timeLeft', seconds: 8, text } });
     const session = new Session(hole);
     session.shoot({ x: 0, y: 0, z: -1 }, speed(2.8));
     const ticks = runUntilSettled(session);

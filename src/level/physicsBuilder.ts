@@ -11,7 +11,14 @@ import type { CompiledBody, CompiledHole } from './compile';
 const BODY_TOP_GAP = 0.05;
 
 /**
- * Creates the static colliders of a hole. Everything is frictionless; see physics/ball.ts.
+ * How much the ground grips loose objects (crates, pins). The ball never feels it: its
+ * own friction is zero and its combine rule takes the smaller value.
+ */
+const GROUND_GRIP = 1;
+
+/**
+ * Creates the static colliders of a hole. For the ball everything is frictionless; see
+ * physics/ball.ts.
  *
  * The ground is one mesh carrying many surfaces, so it cannot hold per-surface
  * restitution itself. Instead the ball carries the value of the surface under it
@@ -23,7 +30,7 @@ const BODY_TOP_GAP = 0.05;
 export function buildHolePhysics(compiled: CompiledHole, world: PhysicsWorld, surfaces: SurfaceMap): void {
   const { ground, bodies, boxes, cylinders } = compiled;
   const passThrough = (desc: RAPIER.ColliderDesc) =>
-    desc.setFriction(0).setRestitution(0).setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Max);
+    desc.setFriction(GROUND_GRIP).setRestitution(0).setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Max);
 
   if (ground) {
     const collider = world.raw.createCollider(
