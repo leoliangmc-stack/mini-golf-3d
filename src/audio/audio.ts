@@ -65,6 +65,15 @@ export class AudioEngine {
       if (document.hidden) void ctx.suspend();
       else void ctx.resume();
     });
+    // A call, Siri or another app's sound interrupts the context on iOS, and a resume
+    // from outside a gesture may be refused: the next tap anywhere starts it again.
+    document.addEventListener(
+      'pointerdown',
+      () => {
+        if (ctx.state !== 'running') void ctx.resume();
+      },
+      { passive: true },
+    );
   }
 
   setSfx(on: boolean): void {
@@ -339,6 +348,10 @@ export class AudioEngine {
     gain.gain.setValueAtTime(spec.level, start);
     gain.gain.exponentialRampToValueAtTime(0.0008, start + spec.length);
     source.connect(filter).connect(gain).connect(sfxBus);
-    source.start(start, Math.random() * 0.5, spec.length + 0.02);
+    // Start somewhere in the buffer for variety, but never so late that it runs out
+    // before the sound has ended.
+    const play = spec.length + 0.02;
+    const offset = Math.random() * Math.max(0, noiseBuffer.duration - play);
+    source.start(start, offset, play);
   }
 }

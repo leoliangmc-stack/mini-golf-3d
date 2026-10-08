@@ -204,6 +204,42 @@ describe('platforms', () => {
     session.dispose();
   });
 
+  it('carries a ball lying on it along as it moves', () => {
+    // A long slab sliding sideways, 3 m in 3 s, with the ball starting on top of it.
+    const slab: MoverDef = {
+      role: 'platform',
+      size: [2, 0.3, 8],
+      position: [0, -0.144, 0],
+      surface: 'grass',
+      motion: { type: 'slide', offset: [3, 0, 0], period: 6, hold: [0, 0] },
+    };
+    const session = new Session({
+      ...boxHole({ tee: [0, 0, 0] }),
+      pieces: [{ type: 'floor', min: [-6, -6], max: [6, 6], surface: 'grass' }],
+      movers: [slab],
+    });
+    // A nudge along the slab, across the way it slides.
+    session.shoot({ x: 0, y: 0, z: -1 }, speed(1));
+    stepTicks(session, 60);
+    const slabAt = (tick: number) => moverPose(slab, tick).position.x;
+    // The slab is well under way (the slide eases in). The ball is drawn along with it
+    // by its rolling resistance, so it trails a little, but it is moving: left behind
+    // it would still be at 0. Judged against the slab, it counts as still, so the stroke
+    // is already over and it rides on while the player aims.
+    expect(slabAt(60)).toBeGreaterThan(0.5);
+    expect(session.phase).toBe('aiming');
+    expect(session.ball.position().x).toBeGreaterThan(0.25);
+    stepTicks(session, 90);
+    const ball = session.ball.position();
+    expect(slabAt(150)).toBeGreaterThan(2.5);
+    expect(ball.x).toBeGreaterThan(1.8);
+    expect(slabAt(150) - ball.x).toBeLessThan(0.8);
+    // Still on top of the slab, not dropped onto the floor beside it.
+    expect(ball.y).toBeCloseTo(r + 0.006, 2);
+    expect(session.stats.outOfBounds).toBe(0);
+    session.dispose();
+  });
+
   it('never leaves the ball on the bridge', () => {
     const session = new Session(hole);
     session.shoot({ x: 0, y: 0, z: -1 }, speed(3.5));

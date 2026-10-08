@@ -158,6 +158,19 @@ describe('save migration (SPEC v2 2.11)', () => {
     expect(data.settings).toEqual({ lang: null, sfx: true, music: true, quality: 'auto' });
     expect(data.last).toBeNull();
   });
+
+  it('falls back to the default for each setting it does not understand', () => {
+    // A value from an edited store, or from a newer build before a rollback, must not
+    // reach the renderer or the text tables: that would stop the game from starting.
+    const raw = JSON.stringify({
+      version: 3,
+      holes: {},
+      settings: { lang: 'fr', quality: 'ultra', sfx: 'yes', music: false },
+      last: null,
+    });
+    const { data } = readSave(raw, known)!;
+    expect(data.settings).toEqual({ lang: null, sfx: true, music: false, quality: 'auto' });
+  });
 });
 
 describe('migrating once', () => {

@@ -17,7 +17,7 @@ function memoryStorage(initial: Record<string, string> = {}): StorageLike & { da
   return { data, getItem: (k) => data[k] ?? null, setItem: (k, v) => void (data[k] = v) };
 }
 
-const [chapter1, chapter2] = CHAPTERS;
+const [chapter1, chapter2, chapter3] = CHAPTERS;
 const [ice, desert] = chapter1.worlds;
 const KEY = 'minigolf.save.v3';
 
@@ -48,7 +48,6 @@ describe('progress (SPEC 2.7)', () => {
     const gravity = chapter1.worlds.at(-1)!;
     expect(new Progress(CHAPTERS, null).next(gravity, 2)).toEqual({ world: chapter1.finale, index: 0 });
     expect(new Progress(CHAPTERS, null).next(chapter1.finale, 0)).toEqual({ world: chapter2.worlds[0], index: 0 });
-    const chapter3 = CHAPTERS[2];
     expect(new Progress(CHAPTERS, null).next(chapter2.finale, 0)).toEqual({ world: chapter3.worlds[0], index: 0 });
     expect(new Progress(CHAPTERS, null).next(chapter3.finale, 0)).toBeNull();
 
@@ -139,6 +138,21 @@ describe('progress (SPEC 2.7)', () => {
     const stuck = new Progress(CHAPTERS, full);
     expect(() => stuck.complete('ice-1', outcome(2, 2))).not.toThrow();
     expect(stuck.record('ice-1')).toEqual({ stars: 2, strokes: 2 });
+  });
+
+  it('does not throw away a hole finished in another tab', () => {
+    const storage = memoryStorage();
+    const first = new Progress(CHAPTERS, storage);
+    const second = new Progress(CHAPTERS, storage);
+    first.complete('ice-1', outcome(3, 2));
+    first.complete('ice-2', outcome(1, 6));
+    second.complete('ice-2', outcome(2, 4));
+    // The second tab never saw ice-1, and had a worse ice-2 in memory than the first.
+    second.setLast('ice-2');
+    const written = new Progress(CHAPTERS, storage);
+    expect(written.record('ice-1')).toEqual({ stars: 3, strokes: 2 });
+    expect(written.record('ice-2')).toEqual({ stars: 2, strokes: 4 });
+    expect(written.isUnlocked(ice, 2)).toBe(true);
   });
 
   it('has a development switch that opens everything', () => {

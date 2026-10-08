@@ -76,7 +76,8 @@ export const CLONE_WORLD: WorldDef = {
 
     // 3. Challenge: three pads make four balls, fanning out across the room. The far
     //    left one rolls into a tunnel that comes out on the raised green; the two in the
-    //    middle run up the ramps to it; the far right one finds the gap in the wall.
+    //    middle run up the ramps to it; the far right one leaves the course through the
+    //    gap in the wall, which costs nothing while the others are still playing.
     {
       id: 'clone-3',
       par: 3,
@@ -91,18 +92,23 @@ export const CLONE_WORLD: WorldDef = {
         // The right-hand wall stops short: the gap is the way off the course.
         { type: 'wall', from: [5, 10.5], to: [5, 0.5], surface: 'mirror' },
         ...doorway(6.5, -5, 5),
-        // Two ramps up to the green, with a block between them
+        // Two ramps up to the green. The slot between them is open to the drop, so it is
+        // railed off at the floor, at the green and along both ramps; the outer edges of
+        // the ramps stay open.
         { type: 'ramp', min: [-2, -8], max: [-0.5, -4], along: 'z', yFrom: 1, yTo: 0, surface: 'tile' },
         { type: 'ramp', min: [0.5, -8], max: [2, -4], along: 'z', yFrom: 1, yTo: 0, surface: 'tile' },
         { type: 'wall', from: [-5, -4], to: [-2, -4], surface: 'mirror' },
         { type: 'wall', from: [2, -4], to: [5, -4], surface: 'mirror' },
         { type: 'wall', from: [-0.5, -4], to: [0.5, -4], surface: 'mirror' },
+        { type: 'wall', from: [-0.5, -8], to: [-0.5, -4], y: [1, 0], surface: 'mirror' },
+        { type: 'wall', from: [0.5, -8], to: [0.5, -4], y: [1, 0], surface: 'mirror' },
         // The green
         { type: 'floor', min: [-3, -12], max: [3, -8], y: 1, depth: 1.45, surface: 'tile' },
         { type: 'wall', from: [-3, -8], to: [-3, -12], y: 1, surface: 'mirror' },
         { type: 'wall', from: [-3, -12], to: [3, -12], y: 1, height: 0.6, surface: 'mirror' },
         { type: 'wall', from: [3, -12], to: [3, -8], y: 1, surface: 'mirror' },
         { type: 'wall', from: [-3, -8], to: [-2, -8], y: 1, surface: 'mirror' },
+        { type: 'wall', from: [-0.5, -8], to: [0.5, -8], y: 1, surface: 'mirror' },
         { type: 'wall', from: [2, -8], to: [3, -8], y: 1, surface: 'mirror' },
       ],
       zones: [

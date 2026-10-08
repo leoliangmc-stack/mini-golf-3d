@@ -66,7 +66,9 @@ export class FollowCamera {
   }
 
   setViewport(width: number, height: number): void {
-    this.camera.aspect = width / height;
+    // A viewport of no size (a tab opened in the background) must not put NaN into the
+    // framing, where it would stay until the next hole.
+    this.camera.aspect = width > 0 && height > 0 ? width / height : 1;
     this.camera.updateProjectionMatrix();
   }
 

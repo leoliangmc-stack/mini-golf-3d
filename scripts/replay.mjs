@@ -25,6 +25,15 @@ const update = flag('--update');
 const importAt = args.indexOf('--import');
 const importFile = importAt >= 0 ? args.splice(importAt, 2)[1] : null;
 
+const usage = () => {
+  console.error('usage: npm run replay [-- <holeId>...]');
+  console.error('       npm run replay -- --update <holeId>...');
+  console.error('       npm run replay -- --import <file.json>');
+  process.exit(1);
+};
+// A mistyped command must not pass as "nothing to do".
+if ((importAt >= 0 && !importFile) || (update && args.length === 0) || (update && importAt >= 0)) usage();
+
 const server = await createServer({
   root,
   appType: 'custom',
@@ -76,11 +85,15 @@ try {
     }
     for (const id of report.missing) console.log(`✗ ${id.padEnd(12)} no replay file`);
     for (const id of report.orphans) console.log(`✗ ${id.padEnd(12)} replay file for a hole that does not exist`);
+    // A hole id that was asked for but matched nothing is a typo, not a pass.
+    const seen = new Set([...report.checks.map((check) => check.hole), ...report.missing]);
+    const unknown = args.filter((id) => !seen.has(id));
+    for (const id of unknown) console.log(`✗ ${id.padEnd(12)} no such hole`);
     const passed = report.checks.filter((check) => check.ok).length;
     const exact = report.checks.filter((check) => check.exact).length;
-    const total = report.checks.length + report.missing.length;
+    const total = report.checks.length + report.missing.length + unknown.length;
     console.log(`\n${passed}/${total} holes passed (${exact} exact) in ${seconds} s`);
-    process.exitCode = report.ok ? 0 : 1;
+    process.exitCode = report.ok && unknown.length === 0 ? 0 : 1;
   }
 } finally {
   await runner.close();

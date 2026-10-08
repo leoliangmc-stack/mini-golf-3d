@@ -147,6 +147,27 @@ describe('time freeze (SPEC v3 2.3)', () => {
     session.dispose();
   });
 
+  it('counts a frozen stroke played from the ground as a stroke from the ground', () => {
+    const session = new Session(jump());
+    stepTicks(session, 10);
+    session.shoot({ x: 0, y: 0, z: -1 }, 0.5);
+    // Frozen while still rolling along the deck, nowhere near the edge.
+    stepTicks(session, 8);
+    expect(session.ball.position().z).toBeGreaterThan(2);
+    expect(session.ball.position().y).toBeCloseTo(2 + r, 2);
+    expect(session.useSkill('freeze')).toBe(true);
+    const from = { ...session.ball.position() };
+    // Struck sideways off the deck, into the drop: it comes back to where that stroke
+    // was played, not to the tee.
+    expect(session.shoot({ x: -1, y: 0, z: 0 }, 0.6)).toBe(true);
+    runUntilSettled(session);
+    expect(session.stats.outOfBounds).toBe(1);
+    const back = session.ball.position();
+    expect(back.x).toBeCloseTo(from.x, 6);
+    expect(back.z).toBeCloseTo(from.z, 6);
+    session.dispose();
+  });
+
   it('does not let the stroke limit be passed in mid-air', () => {
     const session = new Session(jump({ par: 1, strokeLimit: 1 }));
     launch(session);

@@ -58,9 +58,11 @@ export interface SlingshotHandlers {
   onTap?(x: number, y: number): void;
 }
 
-/** A press that moves less than this many pixels, and is let go within this long, is a tap. */
+/**
+ * A press that never moves further than this is a tap, however long it is held: a
+ * finger that only wavers in place must not play a stroke of nearly no power.
+ */
 const TAP_SLOP_PX = 10;
-const TAP_MS = 400;
 
 /**
  * Slingshot aiming: press anywhere, drag back, release to shoot. Mouse, touch and pen
@@ -68,7 +70,7 @@ const TAP_MS = 400;
  */
 export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers): () => void {
   const active = new Set<number>();
-  let aiming: { id: number; x: number; y: number; at: number; moved: boolean } | null = null;
+  let aiming: { id: number; x: number; y: number; moved: boolean } | null = null;
 
   const pullTo = (from: { x: number; y: number }, e: PointerEvent): Pull => {
     const dx = e.clientX - from.x;
@@ -89,7 +91,7 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
     if (active.size > 1) return cancel();
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (!handlers.canAim()) return;
-    aiming = { id: e.pointerId, x: e.clientX, y: e.clientY, at: e.timeStamp, moved: false };
+    aiming = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
     try {
       target.setPointerCapture(e.pointerId);
     } catch {
@@ -108,7 +110,7 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
     active.delete(e.pointerId);
     if (aiming?.id !== e.pointerId) return;
     const pull = pullTo(aiming, e);
-    const tapped = !aiming.moved && e.timeStamp - aiming.at <= TAP_MS;
+    const tapped = !aiming.moved;
     aiming = null;
     handlers.onAim(null);
     // A tap is never a stroke, however it is read: picking a ball must not play one.
@@ -121,13 +123,27 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
     if (aiming?.id === e.pointerId) cancel();
   };
 
+  // A release the page never sees (the window losing focus, the app being switched
+  // away from under a finger) would otherwise leave a ghost pointer in `active`, and
+  // every press after it would count as a second finger: no stroke could be played.
+  const forget = () => {
+    active.clear();
+    cancel();
+  };
+  const onHidden = () => {
+    if (document.hidden) forget();
+  };
+
   const block = (e: Event) => e.preventDefault();
 
   target.addEventListener('pointerdown', onDown);
   target.addEventListener('pointermove', onMove);
   target.addEventListener('pointerup', onUp);
   target.addEventListener('pointercancel', onCancel);
+  target.addEventListener('lostpointercapture', onCancel);
   target.addEventListener('contextmenu', block);
+  window.addEventListener('blur', forget);
+  document.addEventListener('visibilitychange', onHidden);
   // iOS Safari ignores user-scalable=no; these stop pinch and double-tap zoom.
   document.addEventListener('gesturestart', block);
   document.addEventListener('dblclick', block);
@@ -137,7 +153,10 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
     target.removeEventListener('pointermove', onMove);
     target.removeEventListener('pointerup', onUp);
     target.removeEventListener('pointercancel', onCancel);
+    target.removeEventListener('lostpointercapture', onCancel);
     target.removeEventListener('contextmenu', block);
+    window.removeEventListener('blur', forget);
+    document.removeEventListener('visibilitychange', onHidden);
     document.removeEventListener('gesturestart', block);
     document.removeEventListener('dblclick', block);
   };

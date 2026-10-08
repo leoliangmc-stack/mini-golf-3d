@@ -20,12 +20,15 @@ const KEY = 'minigolf.save.v3';
  */
 const LEGACY_KEYS = ['minigolf.save', 'minigolf.save.v1'];
 
-/** localStorage if it works here, otherwise null: private browsing may block it. */
+/**
+ * localStorage if it can be read here, otherwise null: private browsing may block it.
+ * Only reading is probed. A store that is full can still hand back the save it holds,
+ * and `save` already copes with a write that fails.
+ */
 export function safeStorage(): StorageLike | null {
   try {
     const storage = window.localStorage;
-    storage.setItem(`${KEY}.probe`, '1');
-    storage.removeItem(`${KEY}.probe`);
+    storage.getItem(KEY);
     return storage;
   } catch {
     return null;
@@ -175,9 +178,33 @@ export class Progress {
 
   private save(): void {
     try {
+      this.absorbStored();
       this.storage?.setItem(KEY, JSON.stringify(this.data));
     } catch {
       // Storage full or blocked: keep playing with what is in memory.
+    }
+  }
+
+  /**
+   * Takes in any score written to the store by another tab since this one loaded,
+   * keeping the better of the two for each hole, so that writing the whole save back
+   * cannot throw away a hole finished elsewhere. Settings and the hole last played
+   * are this tab's own.
+   */
+  private absorbStored(): void {
+    if (!this.storage) return;
+    const known = new Set(allHoles(this.chapters).map((hole) => hole.id));
+    const stored = readSave(this.storage.getItem(KEY), known);
+    if (!stored) return;
+    for (const [id, record] of Object.entries(stored.data.holes)) {
+      const mine = this.data.holes[id];
+      if (!mine) this.data.holes[id] = record;
+      else if (record.stars > mine.stars || record.strokes < mine.strokes) {
+        this.data.holes[id] = {
+          stars: Math.max(record.stars, mine.stars) as 1 | 2 | 3,
+          strokes: Math.min(record.strokes, mine.strokes),
+        };
+      }
     }
   }
 }

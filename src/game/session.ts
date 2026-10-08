@@ -251,6 +251,12 @@ export class Session implements SkillHost {
       this.frozen = false;
       // The stroke before this one ended here, in a manner of speaking.
       this.stats.rests.push(from);
+      // Time can be frozen while the ball lies on the ground waiting for a pin to
+      // settle; a stroke played then is a stroke from the ground like any other.
+      if (this.track(ball).probe?.grounded) {
+        this.lastShotPosition = from;
+        this.lastShotSize = ball.state.size;
+      }
     } else {
       for (const other of [...this.balls.live]) {
         if (other === ball) continue;
@@ -359,6 +365,10 @@ export class Session implements SkillHost {
       }
       this.handleZoneEvents();
     }
+    // Before the ground is probed: a platform's speed is read from where its next
+    // pose is, and until it is scheduled that pose is still the current one, which
+    // would make every moving platform look still and carry nothing.
+    for (const mover of this.movers) mover.preStep(world, balls);
     if (this.playing) {
       // With several balls about, one must not take another for the ground under it.
       const others =
@@ -382,8 +392,6 @@ export class Session implements SkillHost {
         this.tilted = tilted;
       }
     }
-    for (const mover of this.movers) mover.preStep(world, balls);
-
     for (const ball of balls) this.track(ball).before = { ...ball.velocity() };
     world.step();
     for (const mover of this.movers) mover.postStep();

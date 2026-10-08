@@ -1,6 +1,5 @@
-import type { WorldDef } from '../../level/schema';
+import type { PieceDef, WorldDef } from '../../level/schema';
 import { growPad, shrinkPad } from '../../physics/zones/pads';
-import type { PieceDef } from '../../level/schema';
 import { CUP, FALL, walledRoom } from './common';
 
 /**

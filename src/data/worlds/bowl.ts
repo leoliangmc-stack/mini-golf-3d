@@ -65,10 +65,12 @@ export const BOWL_WORLD: WorldDef = {
       },
       challenge: { type: 'maxStrokes', strokes: 3, text: { en: 'Finish in three strokes', zh: '三杆完成' } },
       pieces: [
-        // The deck, and the landing the ramp comes up to
+        // The deck, and the landing the ramp comes up to. The ramp is as wide as the
+        // landing and runs right up against the deck's wall: a gap there would be a slot
+        // for the ball to fall through.
         { type: 'floor', min: [-2, 2.5], max: [2, 9.5], y: 1, depth: 1.45, surface: 'lane' },
         { type: 'floor', min: [2, 7.5], max: [3.5, 9.5], y: 1, depth: 1.45, surface: 'lane' },
-        { type: 'ramp', min: [2.5, 2.5], max: [3.5, 7.5], along: 'z', yFrom: 0, yTo: 1, surface: 'lane' },
+        { type: 'ramp', min: [2, 2.5], max: [3.5, 7.5], along: 'z', yFrom: 0, yTo: 1, surface: 'lane' },
         { type: 'wall', from: [-2, 9.5], to: [3.5, 9.5], y: 1, surface: 'gutter' },
         { type: 'wall', from: [-2, 9.5], to: [-2, 2.5], y: 1, surface: 'gutter' },
         { type: 'wall', from: [3.5, 9.5], to: [3.5, 7.5], y: 1, surface: 'gutter' },

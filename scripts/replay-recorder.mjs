@@ -24,6 +24,10 @@ export function replayRecorder() {
         };
         // The dev server is open to the local network so phones can play; writing files is not.
         if (req.method !== 'POST' || !LOCAL.has(req.socket.remoteAddress ?? '')) return reply(403, 'Local POST only');
+        // Nor is it open to other pages in the same browser: a POST from any other site
+        // would reach here from the local address too. Browsers set Origin on every POST.
+        const origin = req.headers.origin;
+        if (typeof origin !== 'string' || !origin.endsWith(`//${req.headers.host}`)) return reply(403, 'Same-origin POST only');
         let body = '';
         req.on('data', (chunk) => {
           body += chunk;

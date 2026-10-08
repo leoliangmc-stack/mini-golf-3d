@@ -208,6 +208,19 @@ describe('sequence goals (SPEC v3 2.6)', () => {
     ],
   };
 
+  it('rejects a cup anywhere but in the last step: the ball it takes is out of play', () => {
+    const wrong: GoalDef = {
+      type: 'sequence',
+      steps: [
+        { type: 'cup', position: [1.4, 0, -4], ...CUP },
+        { type: 'knockdown', pins: triangle(0, 1, 2) },
+      ],
+    };
+    expect(() => new Session(alley({ type: 'knockdown', pins: [] }, { goal: wrong }))).toThrow(/last step/);
+    const nested: GoalDef = { type: 'sequence', steps: [wrong, { type: 'knockdown', pins: triangle(0, 1, 2) }] };
+    expect(() => new Session(alley({ type: 'knockdown', pins: [] }, { goal: nested }))).toThrow(/last step/);
+  });
+
   it('the cup is not there until the pins are down', () => {
     const session = new Session(alley({ type: 'knockdown', pins: [] }, { goal: steps, par: 3 }));
     expect(session.goal.cups[0].active).toBe(false);

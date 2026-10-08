@@ -1,9 +1,11 @@
 name: Replay check
 
-# Every push and pull request: typecheck, run the engine tests, and play back the
-# reference solution of every hole (SPEC v3 2.9). The production deploy is gated
-# separately: `npm run build` runs the same replay check, so the hosting build fails,
-# and nothing goes live, when a hole is broken.
+# Every push and pull request: run the engine tests, then the same `npm run build` the
+# hosting runs (typecheck, play back the reference solution of every hole, SPEC v3 2.9,
+# and bundle). The production deploy is gated separately: `npm run build` runs the
+# replay check itself, so the hosting build fails, and nothing goes live, when a hole
+# is broken. Running the bundling here too keeps a build error from showing up only
+# on the host.
 on:
   push:
   pull_request:
@@ -19,6 +21,5 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
       - run: npm test
-      - run: npm run replay
+      - run: npm run build

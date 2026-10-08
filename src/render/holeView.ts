@@ -68,6 +68,8 @@ export function buildHoleView(compiled: CompiledHole, hole: HoleDef): HoleView {
 export function disposeHoleView(group: THREE.Object3D): void {
   group.traverse((object) => {
     if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.Line)) return;
+    // An instanced mesh keeps its per-instance buffers apart from the geometry.
+    if (object instanceof THREE.InstancedMesh) object.dispose();
     object.geometry.dispose();
     for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
       material.dispose();

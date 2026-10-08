@@ -8,7 +8,13 @@ function detectLang(): Lang {
   return navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en';
 }
 
+/** Tells the browser (screen readers, CJK font selection) which language the page is in. */
+function markDocument(current: Lang): void {
+  document.documentElement.lang = current === 'zh' ? 'zh-Hans' : 'en';
+}
+
 let lang: Lang = detectLang();
+markDocument(lang);
 const listeners = new Set<() => void>();
 
 export const getLang = (): Lang => lang;
@@ -17,7 +23,7 @@ export const getLang = (): Lang => lang;
 export function setLang(next: Lang): void {
   if (next === lang) return;
   lang = next;
-  document.documentElement.lang = next === 'zh' ? 'zh-Hans' : 'en';
+  markDocument(next);
   for (const listener of listeners) listener();
 }
 

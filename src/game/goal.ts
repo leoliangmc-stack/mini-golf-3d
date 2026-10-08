@@ -109,6 +109,14 @@ export class Goal {
       this.pins.push(...group.pins);
       return { kind: 'pins', group };
     }
+    // A cup ends the round for the ball that drops in, so a step with a cup in it can
+    // only be the last: after an earlier one there would be no ball left to play the
+    // rest with, and no way for the round to end.
+    def.steps.forEach((step, i) => {
+      if (i < def.steps.length - 1 && goalCups(step).length > 0) {
+        throw new Error(`A cup in a goal sequence must be in its last step, not step ${i + 1} of ${def.steps.length}`);
+      }
+    });
     return { kind: 'sequence', steps: def.steps.map((step) => this.build(step, world, surfaces)) };
   }
 

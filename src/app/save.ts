@@ -1,4 +1,5 @@
-export type Quality = 'auto' | 'low' | 'medium' | 'high';
+export const QUALITIES = ['auto', 'low', 'medium', 'high'] as const;
+export type Quality = (typeof QUALITIES)[number];
 
 export interface Settings {
   /** Null follows the browser language. */
@@ -92,7 +93,17 @@ export function readSave(raw: string | null | undefined, knownHoles: ReadonlySet
     if (knownHoles.has(id) && valid) data.holes[id] = { stars, strokes };
   }
   if (typeof save.settings === 'object' && save.settings !== null) {
-    data.settings = { ...DEFAULT_SETTINGS, ...(save.settings as Partial<Settings>) };
+    // Field by field: a value this build does not know (an edited store, or a save
+    // written by a newer build before a rollback) falls back to the default instead
+    // of reaching the renderer or the text tables, where it would stop the game from
+    // starting at all, every time, with nothing ever rewriting the save.
+    const stored = save.settings as Loose;
+    const settings = { ...DEFAULT_SETTINGS };
+    if (stored.lang === 'en' || stored.lang === 'zh') settings.lang = stored.lang;
+    if (QUALITIES.includes(stored.quality as Quality)) settings.quality = stored.quality as Quality;
+    if (typeof stored.sfx === 'boolean') settings.sfx = stored.sfx;
+    if (typeof stored.music === 'boolean') settings.music = stored.music;
+    data.settings = settings;
   }
   data.last = typeof save.last === 'string' ? save.last : null;
   if (stored < SAVE_VERSION) data.migratedFrom = stored;
