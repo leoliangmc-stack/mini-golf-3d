@@ -1,3 +1,4 @@
+import { Crumble, Float, Valve, Water } from './elements';
 import { registerPart } from './field';
 import { Bell, Coin, Dragon, Fire } from './hoard';
 import { Crystal, Emitter, Receiver } from './light';
@@ -17,4 +18,8 @@ export function registerBuiltinParts(): void {
   registerPart('bell', (def, field, id) => new Bell(def, field, id));
   registerPart('dragon', (def, field, id) => new Dragon(def, field, id));
   registerPart('fire', (def, field, id) => new Fire(def, field, id));
+  registerPart('valve', (def, field, id) => new Valve(def, field, id));
+  registerPart('water', (def, field, id) => new Water(def, field, id));
+  registerPart('float', (def, field, id) => new Float(def, field, id));
+  registerPart('crumble', (def, field, id) => new Crumble(def, field, id));
 }

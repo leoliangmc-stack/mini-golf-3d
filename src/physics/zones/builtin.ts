@@ -6,6 +6,8 @@ import { outOfBounds } from './outOfBounds';
 import { resizer, splitter } from './pads';
 import { timeBonus } from './timeBonus';
 import { tunnel } from './tunnel';
+import { bubbleLift, current } from './water';
+import { wind } from './wind';
 
 export function registerBuiltinZones(): void {
   registerZone('outOfBounds', outOfBounds);
@@ -17,4 +19,7 @@ export function registerBuiltinZones(): void {
   registerZone('grow', resizer(1));
   registerZone('shrink', resizer(-1));
   registerZone('split', splitter);
+  registerZone('current', current);
+  registerZone('bubbleLift', bubbleLift);
+  registerZone('wind', wind);
 }

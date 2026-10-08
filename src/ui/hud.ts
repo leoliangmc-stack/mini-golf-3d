@@ -3,6 +3,7 @@ import { FIXED_DT } from '../core/loop';
 import { goalCups } from '../game/goal';
 import type { Outcome } from '../game/session';
 import { byId } from './dom';
+import { isWind } from '../physics/zones/wind';
 import { onLangChange, TEXT, tr } from './i18n';
 
 /** Delay before the result panel, so the ball is seen dropping into the cup first. */
@@ -44,6 +45,10 @@ export function createHud(game: Game, actions: HudActions): void {
   const undo = byId<HTMLButtonElement>('undo');
   const gold = byId('gold');
   const alert = byId('alert');
+  const wind = byId('wind');
+  const windArrow = byId('wind-arrow');
+  const windLeft = byId('wind-left');
+  const windLabel = byId('wind-label');
 
   let toastTimer = 0;
   let resultTimer = 0;
@@ -143,6 +148,36 @@ export function createHud(game: Game, actions: HudActions): void {
     }
   };
 
+  /**
+   * The wind (SPEC v5 3.3): an arrow that points the way it blows as seen on screen,
+   * whichever way the player has turned the view, and a bar that runs down to the next
+   * change. Touches the page only when what it shows has changed.
+   */
+  let windShown = '';
+  const drawWind = () => {
+    const zone = game.session.zones.find(isWind);
+    if (!zone) {
+      if (windShown !== '') {
+        windShown = '';
+        wind.hidden = true;
+      }
+      return;
+    }
+    const { x, z, left, turning } = zone.gust;
+    const calm = x === 0 && z === 0;
+    const onScreen = game.camera.groundToScreen(x, z);
+    const degrees = calm ? 0 : Math.round((Math.atan2(onScreen.right, onScreen.up) * 180) / Math.PI);
+    const shown = `${calm}|${degrees}|${Math.round(left * 46)}|${turning}`;
+    if (shown === windShown) return;
+    windShown = shown;
+    wind.hidden = false;
+    wind.classList.toggle('calm', calm);
+    wind.classList.toggle('turning', turning);
+    windLabel.textContent = calm ? TEXT.windCalm() : TEXT.wind();
+    windArrow.style.transform = `rotate(${degrees}deg)`;
+    windLeft.style.transform = `scaleX(${left.toFixed(3)})`;
+  };
+
   const fillResult = (outcome: Outcome) => {
     const { challenge, par, goal } = game.hole;
     // A hole with no cup is not "holed": its pins are cleared.
@@ -195,6 +230,7 @@ export function createHud(game: Game, actions: HudActions): void {
     byId('ball-prev').setAttribute('aria-label', TEXT.previousBall());
     byId('ball-next').setAttribute('aria-label', TEXT.nextBall());
     extrasShown = '';
+    windShown = '';
     holeName.textContent = TEXT.holeTitle(tr(game.world.name), game.holeNumber);
     byId('rule-tag').textContent = tr(game.world.ruleTag);
     byId('challenge').textContent = game.hole.challenge ? TEXT.challenge(tr(game.hole.challenge.text)) : '';
@@ -268,6 +304,7 @@ export function createHud(game: Game, actions: HudActions): void {
   game.onFrame(() => {
     drawTimer();
     drawExtras();
+    drawWind();
     if (!hint.classList.contains('show')) return;
     const p = game.ballScreenPosition();
     hint.style.transform = `translate(${p.x}px, ${p.y}px)`;

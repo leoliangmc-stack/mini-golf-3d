@@ -89,6 +89,8 @@ export function registerBuiltinChallenges(): void {
     'minCues',
     (stats, def) => (stats.cues[need(def.cue, def, 'cue')] ?? 0) >= need(def.count, def, 'count'),
   );
+  /** No stroke was taken back (SPEC v5 3.6). */
+  registerChallenge('noUndo', (stats) => stats.undos === 0);
   /** Every coin was picked up (SPEC v4 3.6). */
   registerChallenge('allCoins', (stats) => stats.coinsLeft === 0);
   /** The part called `part` was never set off, or only in a stroke that was taken back: the dragon is still asleep. */

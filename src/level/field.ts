@@ -1,5 +1,6 @@
 import type { Vec2, Vec3 } from '../core/types';
 import type { ZoneShape } from '../physics/zones/shape';
+import type { CycleDef } from './schema';
 
 /**
  * The works of a hole (SPEC v4 3, 4): plates, gates, stones, crystals, light, moving
@@ -197,7 +198,87 @@ export interface FireDef extends Driven {
   rest: readonly Vec3[];
 }
 
+/**
+ * A valve wheel on a post (SPEC v5 3.4). A knock turns it: open, shut, open again. Its
+ * signal is on while it is open. Nothing a valve does cannot be undone by one more knock.
+ */
+export interface ValveDef {
+  kind: 'valve';
+  id: string;
+  at: Vec3;
+  /** How far below `at` the post reaches, for a valve that can also be struck from a raft lying low. Defaults to 0. */
+  depth?: number;
+  /** Starts open. */
+  open?: boolean;
+}
+
+/**
+ * A body of water over a rectangle of the course (SPEC v5 3.4). A ball that goes under
+ * its surface is out of bounds. The surface stands at `level` unless one of `levels`
+ * is called for, or, with a `tide`, rises and falls on the hole's clock.
+ */
+export interface WaterDef {
+  kind: 'water';
+  id: string;
+  min: Vec2;
+  max: Vec2;
+  /** Height of the surface when nothing calls for another. */
+  level: number;
+  /** Other heights, each with the signal that calls for it. The first whose signal is on wins. */
+  levels?: readonly { level: number; when: When }[];
+  /**
+   * Makes the surface go from `level` to `to` and back on the hole's clock, the way a
+   * moving part goes back and forth, whatever any valve does.
+   */
+  tide?: { to: number } & CycleDef;
+  /** How fast the surface moves when a valve changes it, in m/s. Defaults to 1.2. */
+  speed?: number;
+}
+
+/**
+ * A raft (SPEC v5 3.4). It lies on a body of water and goes up and down with it, never
+ * sideways: nothing on this course has grip, so a raft that drifted would leave the
+ * ball behind.
+ */
+export interface FloatDef {
+  kind: 'float';
+  id?: string;
+  /** Id of the water it lies on. */
+  water: string;
+  /** Its middle, on the ground. */
+  at: Vec2;
+  /** Width (x), height (y) and depth (z). */
+  size: Vec3;
+  /** How far its top stands out of the water. Defaults to 0.1. */
+  freeboard?: number;
+  /** The lowest and the highest its top can go: it settles on the bottom, or stops under a ledge. */
+  stops?: readonly [number, number];
+  /** On water with a tide a ball may not be left on it: where to put one that stopped there. */
+  rest?: readonly Vec3[];
+  surface: string;
+}
+
+/**
+ * A cracked slab of a bridge (SPEC v5 3.5). It falls once the ball has left it, so it
+ * can be crossed, and stood on, exactly once. With a `delay` it does not wait for the
+ * ball to leave: it falls that many physics ticks after it was first touched.
+ */
+export interface CrumbleDef {
+  kind: 'crumble';
+  id?: string;
+  /** Middle of its top face, level with the ground it joins. */
+  at: Vec3;
+  /** Width (x) and depth (z). Let it reach a little under the ground and the slabs it joins. */
+  size: Vec2;
+  delay?: number;
+  surface?: string;
+}
+
 export type PartDef =
+  | ValveDef
+  | WaterDef
+  | FloatDef
+  | CrumbleDef
   | PlateDef
   | GateDef
   | StoneDef

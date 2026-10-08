@@ -3,7 +3,7 @@ import { CHAPTERS } from '../src/data/chapters';
 import { allHoles, chapterOf, holeNumber, isFinale, stagesOf } from '../src/level/chapters';
 import { TEST_WORLD } from '../src/data/worlds/test';
 
-const [chapter1, chapter2, chapter3, chapter4] = CHAPTERS;
+const [chapter1, chapter2, chapter3, chapter4, chapter5] = CHAPTERS;
 
 describe('chapters (SPEC v2 2.1)', () => {
   it('puts the finale after the worlds, as one more stage', () => {
@@ -12,6 +12,7 @@ describe('chapters (SPEC v2 2.1)', () => {
     expect(stagesOf(chapter2).map((stage) => stage.id)).toEqual(['forest', 'city', 'moving', 'bomb', 'ch2-finale']);
     expect(stagesOf(chapter3).map((stage) => stage.id)).toEqual(['grow', 'freeze', 'clone', 'bowl', 'ch3-finale']);
     expect(stagesOf(chapter4).map((stage) => stage.id)).toEqual(['tomb', 'cavern', 'jungle', 'hoard', 'ch4-finale']);
+    expect(stagesOf(chapter5).map((stage) => stage.id)).toEqual(['reef', 'polar', 'dam', 'canyon', 'ch5-finale']);
   });
 
   it('numbers a finale as the last hole of its chapter: 19, then 13 each', () => {
@@ -22,6 +23,7 @@ describe('chapters (SPEC v2 2.1)', () => {
     expect(holeNumber(chapter2, chapter2.finale, 0)).toBe(13);
     expect(holeNumber(chapter3, chapter3.finale, 0)).toBe(13);
     expect(holeNumber(chapter4, chapter4.finale, 0)).toBe(13);
+    expect(holeNumber(chapter5, chapter5.finale, 0)).toBe(13);
   });
 
   it('finds the chapter a world or a finale belongs to', () => {
@@ -32,7 +34,8 @@ describe('chapters (SPEC v2 2.1)', () => {
     expect(isFinale(CHAPTERS, chapter1.worlds[0])).toBe(false);
     expect(chapterOf(CHAPTERS, chapter3.worlds[0])).toBe(chapter3);
     expect(chapterOf(CHAPTERS, chapter4.finale)).toBe(chapter4);
-    expect(allHoles(CHAPTERS)).toHaveLength(58);
+    expect(chapterOf(CHAPTERS, chapter5.worlds[2])).toBe(chapter5);
+    expect(allHoles(CHAPTERS)).toHaveLength(71);
   });
 
   it('gives every stage its text in both languages', () => {

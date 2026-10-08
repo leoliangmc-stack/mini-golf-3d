@@ -234,6 +234,18 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
         else if (event.name === 'bell') audio.bell();
         else if (event.name === 'dragonStir') audio.dragonStir();
         else if (event.name === 'fireOn') audio.fire();
+        else if (event.name === 'currentEnter') audio.current();
+        else if (event.name === 'bubbleCatch') audio.bubbleCatch();
+        else if (event.name === 'bubbleRelease') audio.bubbleRelease();
+        else if (event.name === 'gust') audio.gust();
+        else if (event.name === 'valveOpen') audio.valve(true);
+        else if (event.name === 'valveShut') audio.valve(false);
+        else if (event.name === 'waterRise') audio.waterMove(true);
+        else if (event.name === 'waterFall') audio.waterMove(false);
+        else if (event.name === 'waterSettle') audio.waterSettle();
+        else if (event.name === 'splash') audio.splash();
+        else if (event.name === 'slabCrack') audio.slabCrack();
+        else if (event.name === 'slabFall') audio.slabFall();
         else if (event.name === 'dragonWake') {
           audio.dragonWake();
           if (stages.includes(game.world)) track('dragon_woke', { hole: hole.id });

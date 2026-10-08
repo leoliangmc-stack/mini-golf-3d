@@ -15,7 +15,7 @@ export interface HoleRecord {
 }
 
 /** Version of the save format this build writes. Bump it together with a new entry in MIGRATIONS. */
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export interface SaveData {
   version: typeof SAVE_VERSION;
@@ -60,6 +60,9 @@ const MIGRATIONS: Record<number, (save: Loose) => Loose> = {
   // it opens with the Chapter 2 finale rather than the Chapter 3 one, so a player who
   // had finished Chapter 2 finds it open whether or not Chapter 3 is done.
   3: (save) => ({ ...save, version: 4 }),
+  // 4 -> 5, Chapter 5. The same again. Chapter 5 opens with the Chapter 4 finale, so a
+  // player who had finished that one finds its first hole open.
+  4: (save) => ({ ...save, version: 5 }),
 };
 
 export interface LoadedSave {

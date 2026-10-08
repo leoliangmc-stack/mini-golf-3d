@@ -40,6 +40,12 @@ export const MUSIC: Record<string, MusicDef> = {
   jungle: { bpm: 110, root: 60, scale: [0, 2, 3, 5, 7, 10], wave: 'triangle', brightness: 1700 },
   hoard: { bpm: 96, root: 52, scale: [0, 2, 3, 6, 7, 8, 11], wave: 'sawtooth', brightness: 900 },
   temple: { bpm: 118, root: 57, scale: [0, 2, 3, 5, 7, 8, 10], wave: 'square', brightness: 1400 },
+  // Chapter 5
+  reef: { bpm: 78, root: 62, scale: [0, 2, 4, 6, 7, 9, 11], wave: 'sine', brightness: 2000 },
+  polar: { bpm: 90, root: 67, scale: [0, 2, 4, 7, 9], wave: 'triangle', brightness: 3400 },
+  dam: { bpm: 102, root: 55, scale: [0, 2, 3, 5, 7, 9, 10], wave: 'square', brightness: 1200 },
+  canyon: { bpm: 112, root: 57, scale: [0, 3, 5, 7, 10], wave: 'sawtooth', brightness: 1300 },
+  spring: { bpm: 126, root: 60, scale: [0, 2, 4, 5, 7, 9, 11], wave: 'triangle', brightness: 2300 },
 };
 
 /** Chord roots, as scale steps, one per bar. */

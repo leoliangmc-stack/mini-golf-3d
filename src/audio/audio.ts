@@ -370,6 +370,61 @@ export class AudioEngine {
     this.tone({ wave: 'triangle', from: 390, to: 196, length: 0.2, level: 0.14, delay: 0.1 });
   }
 
+  // --- Chapter 5: water, wind and ground that gives way ---
+
+  /** A ball taken up by moving water. */
+  current(): void {
+    this.noise({ filter: 'lowpass', from: 500, to: 1100, length: 0.45, level: 0.16 });
+  }
+
+  /** A ball taken up by a column of bubbles. */
+  bubbleCatch(): void {
+    [420, 560, 740, 990].forEach((hz, i) => this.tone({ from: hz, to: hz * 1.5, length: 0.12, level: 0.12, delay: i * 0.09 }));
+  }
+
+  bubbleRelease(): void {
+    this.tone({ from: 300, to: 1200, length: 0.16, level: 0.2 });
+    this.noise({ filter: 'highpass', from: 2400, length: 0.1, level: 0.12 });
+  }
+
+  /** The wind changing. */
+  gust(): void {
+    this.noise({ filter: 'bandpass', from: 320, to: 900, length: 0.9, level: 0.2 });
+    this.noise({ filter: 'bandpass', from: 900, to: 420, length: 0.7, level: 0.12, delay: 0.5 });
+  }
+
+  /** A valve wheel turned. */
+  valve(open: boolean): void {
+    this.tone({ wave: 'square', from: open ? 180 : 260, to: open ? 260 : 180, length: 0.18, level: 0.12 });
+    this.noise({ filter: 'bandpass', from: 1400, to: 700, length: 0.2, level: 0.14 });
+  }
+
+  /** Water on its way up, or down. */
+  waterMove(rising: boolean): void {
+    this.noise({ filter: 'lowpass', from: rising ? 300 : 900, to: rising ? 900 : 300, length: 0.8, level: 0.24 });
+  }
+
+  waterSettle(): void {
+    this.tone({ from: 150, to: 110, length: 0.2, level: 0.16 });
+  }
+
+  /** A ball into the water. */
+  splash(): void {
+    this.noise({ filter: 'bandpass', from: 1800, to: 500, length: 0.3, level: 0.3 });
+    this.tone({ from: 420, to: 140, length: 0.22, level: 0.16 });
+  }
+
+  /** A slab cracking under the ball. */
+  slabCrack(): void {
+    this.noise({ filter: 'highpass', from: 2200, length: 0.05, level: 0.22 });
+    this.tone({ wave: 'triangle', from: 210, to: 150, length: 0.07, level: 0.2, delay: 0.03 });
+  }
+
+  slabFall(): void {
+    this.noise({ filter: 'lowpass', from: 700, to: 120, length: 0.7, level: 0.3 });
+    this.tone({ from: 110, to: 45, length: 0.6, level: 0.24 });
+  }
+
   /** Entering (`on`) or leaving a gravity zone. */
   gravityShift(on: boolean): void {
     this.tone({ from: on ? 280 : 900, to: on ? 900 : 280, length: 0.28, level: 0.13 });

@@ -292,6 +292,52 @@ function goldHeap(def: DecorDef): THREE.Object3D {
   return group(heap, ...pieces);
 }
 
+/** A branching coral. `size` is [height]. */
+function coral(def: DecorDef): THREE.Object3D {
+  const height = def.size?.[0] ?? 1.6;
+  const flesh = flat(def.color ?? 0xf0766a);
+  const bush = new THREE.Group();
+  for (let i = 0; i < 6; i++) {
+    const tall = height * (0.55 + 0.45 * noise(def.at[0], def.at[2], i));
+    const arm = part(new THREE.CylinderGeometry(tall * 0.05, tall * 0.11, tall, 5), flesh, 0, tall / 2);
+    const tip = part(new THREE.IcosahedronGeometry(tall * 0.12, 0), flesh, 0, tall);
+    const lean = new THREE.Group().add(arm, tip);
+    lean.rotation.set(i === 0 ? 0 : 0.45, i * 1.25, 0);
+    bush.add(lean);
+  }
+  return bush;
+}
+
+/** A stand of kelp. `size` is [height]. */
+function kelp(def: DecorDef): THREE.Object3D {
+  const height = def.size?.[0] ?? 3;
+  const leaf = new THREE.MeshLambertMaterial({ color: def.color ?? 0x2f8f6a, flatShading: true, side: THREE.DoubleSide });
+  const stand = new THREE.Group();
+  for (let i = 0; i < 5; i++) {
+    const tall = height * (0.6 + 0.4 * noise(def.at[0], def.at[2], i + 9));
+    const blade = part(new THREE.PlaneGeometry(0.22, tall, 1, 4), leaf, Math.cos(i * 1.9) * 0.3, tall / 2, Math.sin(i * 1.9) * 0.3);
+    blade.rotation.y = i * 1.1;
+    blade.rotation.z = (noise(i, def.at[0], 3) - 0.5) * 0.3;
+    stand.add(blade);
+  }
+  return stand;
+}
+
+/** A length of pipe on two feet. `size` is [length, radius]. */
+function pipe(def: DecorDef): THREE.Object3D {
+  const [length, radius] = def.size ?? [4, 0.35, 0];
+  const steel = flat(def.color ?? 0x6f7b86);
+  const run = part(new THREE.CylinderGeometry(radius, radius, length, 12), steel, 0, radius + 0.5);
+  run.rotation.z = Math.PI / 2;
+  const feet = [-1, 1].map((side) => part(new THREE.BoxGeometry(0.3, 0.5, radius * 2.2), steel, side * length * 0.35, 0.25));
+  const flange = [-1, 1].map((side) => {
+    const ring = part(new THREE.CylinderGeometry(radius * 1.25, radius * 1.25, 0.12, 12), flat(0x4f5963), side * length * 0.5, radius + 0.5);
+    ring.rotation.z = Math.PI / 2;
+    return ring;
+  });
+  return group(run, ...feet, ...flange);
+}
+
 export function registerBuiltinDecor(): void {
   registerDecor('canopy', canopy);
   registerDecor('pine', pine);
@@ -312,4 +358,7 @@ export function registerBuiltinDecor(): void {
   registerDecor('crystals', crystals);
   registerDecor('palm', palm);
   registerDecor('goldHeap', goldHeap);
+  registerDecor('coral', coral);
+  registerDecor('kelp', kelp);
+  registerDecor('pipe', pipe);
 }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { XYZ } from '../core/types';
+import { SLAB_THICKNESS, VALVE_HEIGHT, VALVE_POST, type Crumble, type Float, type Valve, type Water } from '../game/field/elements';
 import type { Drive, Field, Part } from '../game/field/field';
 import { BELL_POST, type Bell, type Coin, type Dragon, type Fire } from '../game/field/hoard';
 import { BEAM_HEIGHT, CRYSTAL_RADIUS, Light, POST_RADIUS, type Crystal, type Receiver } from '../game/field/light';
@@ -8,17 +9,21 @@ import type { Gate, Plate, Stone } from '../game/field/tomb';
 import type {
   BellDef,
   CoinDef,
+  CrumbleDef,
   CrystalDef,
   DragonDef,
   EmitterDef,
   FieldDef,
   FireDef,
+  FloatDef,
   GateDef,
   PartDef,
   PlateDef,
   ReceiverDef,
   SliderDef,
   StoneDef,
+  ValveDef,
+  WaterDef,
 } from '../level/field';
 import { getSurface } from '../physics/surfaces';
 
@@ -732,6 +737,157 @@ function fireView(def: FireDef): PartView {
   };
 }
 
+// --- Chapter 5: valves, water, rafts and cracked slabs ---------------------------
+
+const VALVE_OPEN = 0x2fbf71;
+const VALVE_SHUT = 0xe5484d;
+
+function valveView(def: ValveDef): PartView {
+  const group = new THREE.Group();
+  group.position.set(def.at[0], def.at[1], def.at[2]);
+  const depth = def.depth ?? 0;
+  const pipe = solid(
+    new THREE.CylinderGeometry(VALVE_POST * 0.75, VALVE_POST, VALVE_HEIGHT + depth, 12),
+    lambert(0x59626d),
+    0,
+    (VALVE_HEIGHT - depth) / 2,
+  );
+  // The wheel lies flat on top of the pipe, where it can be seen from above.
+  const paint = new THREE.MeshLambertMaterial({ color: def.open ? VALVE_OPEN : VALVE_SHUT });
+  const wheel = new THREE.Group();
+  wheel.position.y = VALVE_HEIGHT + 0.06;
+  const rim = solid(new THREE.TorusGeometry(0.3, 0.05, 8, 20), paint);
+  rim.rotation.x = Math.PI / 2;
+  wheel.add(rim);
+  for (let spoke = 0; spoke < 2; spoke++) {
+    const bar = solid(new THREE.BoxGeometry(0.6, 0.05, 0.06), paint);
+    bar.rotation.y = (spoke * Math.PI) / 2;
+    wheel.add(bar);
+  }
+  group.add(pipe, wheel);
+  let turned = def.open ? 1 : 0;
+  return {
+    object: group,
+    update(part, { dt }) {
+      const valve = part as Valve;
+      turned = ease(turned, valve.open ? 1 : 0, 6, dt);
+      wheel.rotation.y = turned * Math.PI * 1.5;
+      paint.color.setHex(valve.open ? VALVE_OPEN : VALVE_SHUT);
+    },
+  };
+}
+
+function waterView(def: WaterDef): PartView {
+  const width = def.max[0] - def.min[0];
+  const depth = def.max[1] - def.min[1];
+  const group = new THREE.Group();
+  group.position.set((def.min[0] + def.max[0]) / 2, def.level, (def.min[1] + def.max[1]) / 2);
+  const material = new THREE.MeshLambertMaterial({ color: 0x3aa0d8, transparent: true, opacity: 0.72 });
+  const surface = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), material);
+  surface.rotation.x = -Math.PI / 2;
+  surface.receiveShadow = true;
+  // The water under the surface, so a low pool is not a sheet hanging in a pit.
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(width, 3, depth),
+    new THREE.MeshBasicMaterial({ color: 0x1f6f9e, transparent: true, opacity: 0.35, depthWrite: false }),
+  );
+  body.position.y = -1.52;
+  group.add(body, surface);
+  return {
+    object: group,
+    update(part, { alpha, time }) {
+      const water = part as Water;
+      group.position.y = water.prev + (water.level - water.prev) * alpha;
+      // Brighter while it is on the move.
+      material.opacity = water.busy ? 0.8 + 0.08 * Math.sin(time * 9) : 0.72;
+    },
+  };
+}
+
+function floatView(def: FloatDef, field: FieldDef): PartView {
+  const [width, height, depth] = def.size;
+  const color = getSurface(def.surface).color;
+  const group = new THREE.Group();
+  group.add(solid(new THREE.BoxGeometry(width, height, depth), lambert(color)));
+  // Planks across the way the ball rolls, and a drum under each corner.
+  const dark = lambert(new THREE.Color(color).multiplyScalar(0.7).getHex());
+  const along = depth >= width;
+  const planks = Math.max(2, Math.round((along ? depth : width) / 0.5));
+  for (let i = 1; i < planks; i++) {
+    const at = (i / planks - 0.5) * (along ? depth : width);
+    const gap = new THREE.Mesh(new THREE.BoxGeometry(along ? width * 0.98 : 0.04, 0.012, along ? 0.04 : depth * 0.98), dark);
+    gap.position.set(along ? 0 : at, height / 2 + 0.002, along ? at : 0);
+    group.add(gap);
+  }
+  const drum = lambert(0x3f7fb5);
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const barrel = solid(new THREE.CylinderGeometry(0.2, 0.2, 0.5, 10), drum, sx * (width / 2 - 0.3), -height / 2 - 0.05, sz * (depth / 2 - 0.4));
+      barrel.rotation.x = Math.PI / 2;
+      group.add(barrel);
+    }
+  }
+  const water = field.parts.find((part): part is WaterDef => part.kind === 'water' && part.id === def.water);
+  const top = (water?.level ?? 0) + (def.freeboard ?? 0.1);
+  group.position.set(def.at[0], top - height / 2, def.at[1]);
+  return {
+    object: group,
+    update(part, { alpha }) {
+      const { prevPose: was, pose: now } = (part as Float).mover;
+      group.position.y = was.position.y + (now.position.y - was.position.y) * alpha;
+    },
+  };
+}
+
+function crumbleView(def: CrumbleDef): PartView {
+  const [width, depth] = def.size;
+  const color = getSurface(def.surface ?? 'slab').color;
+  const group = new THREE.Group();
+  // A hair smaller than it is, so that slabs which overlap show the joins between them.
+  const slab = solid(new THREE.BoxGeometry(width - 0.06, SLAB_THICKNESS, depth - 0.06), lambert(color));
+  group.add(slab);
+  // Cracks across the top: the same every time, but different from slab to slab.
+  const noise = (k: number): number => {
+    const s = Math.sin((def.at[0] * 12.9898 + def.at[2] * 78.233 + k * 37.719) * 43758.5453);
+    return s - Math.floor(s);
+  };
+  const points: number[] = [];
+  const y = SLAB_THICKNESS / 2 + 0.004;
+  for (let crack = 0; crack < 3; crack++) {
+    let x = (noise(crack) - 0.5) * width * 0.6;
+    let z = -depth / 2 + 0.05;
+    while (z < depth / 2 - 0.1) {
+      const nx = x + (noise(crack * 10 + z) - 0.5) * 0.5;
+      const nz = z + 0.18 + noise(crack * 20 + z) * 0.25;
+      points.push(x, y, z, Math.max(-width / 2 + 0.05, Math.min(width / 2 - 0.05, nx)), y, Math.min(depth / 2 - 0.05, nz));
+      x = Math.max(-width / 2 + 0.05, Math.min(width / 2 - 0.05, nx));
+      z = nz;
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+  const cracks = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: new THREE.Color(color).multiplyScalar(0.35) }));
+  group.add(cracks);
+  group.position.set(def.at[0], def.at[1] - SLAB_THICKNESS / 2, def.at[2]);
+  return {
+    object: group,
+    update(part, { alpha, time }) {
+      const crumble = part as Crumble;
+      const { prevPose: was, pose: now } = crumble.mover;
+      group.visible = !crumble.gone;
+      // It shakes harder the nearer it is to going.
+      const shake = crumble.falling >= 0 ? 0 : crumble.strain * 0.025;
+      group.position.set(
+        was.position.x + (now.position.x - was.position.x) * alpha + Math.sin(time * 61 + def.at[2]) * shake,
+        was.position.y + (now.position.y - was.position.y) * alpha,
+        was.position.z + (now.position.z - was.position.z) * alpha + Math.sin(time * 53 + def.at[0]) * shake,
+      );
+      // And tips as it falls.
+      group.rotation.x = crumble.falling > 0 ? crumble.falling * 0.012 : 0;
+    },
+  };
+}
+
 // --- The lines between parts ----------------------------------------------------
 
 const LINK_WIDTH = 0.07;
@@ -862,4 +1018,8 @@ export function registerBuiltinPartViews(): void {
   registerPartView('bell', bellView);
   registerPartView('dragon', dragonView);
   registerPartView('fire', fireView);
+  registerPartView('valve', valveView);
+  registerPartView('water', waterView);
+  registerPartView('float', floatView);
+  registerPartView('crumble', crumbleView);
 }

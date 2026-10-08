@@ -65,6 +65,15 @@ export class FollowCamera {
     return (this.params.yaw + this.turn) * RAD;
   }
 
+  /**
+   * Turns a direction on the ground into one on screen: how far to the right and how far
+   * up it points. The other way round from `screenToGround`.
+   */
+  groundToScreen(x: number, z: number): { right: number; up: number } {
+    const yaw = this.yaw;
+    return { right: x * Math.cos(yaw) - z * Math.sin(yaw), up: -x * Math.sin(yaw) - z * Math.cos(yaw) };
+  }
+
   setViewport(width: number, height: number): void {
     // A viewport of no size (a tab opened in the background) must not put NaN into the
     // framing, where it would stay until the next hole.

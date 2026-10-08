@@ -687,3 +687,68 @@ body[data-frozen] #view {
 #alert[hidden] {
   display: none;
 }
+
+/* Chapter 5: which way the wind blows on screen, and how long until it changes. No numbers. */
+#wind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+#wind[hidden] {
+  display: none;
+}
+
+#wind-arrow {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.25s;
+}
+
+#wind.calm #wind-arrow {
+  opacity: 0.25;
+}
+
+#wind-next {
+  width: 46px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+}
+
+#wind-left {
+  display: block;
+  height: 100%;
+  background: #fff;
+  transform-origin: left;
+}
+
+#wind.turning #wind-left {
+  background: #ffb703;
+}
+
+#wind.turning #wind-arrow {
+  animation: wind-swing 0.18s ease-in-out infinite alternate;
+}
+
+@keyframes wind-swing {
+  from {
+    rotate: -14deg;
+  }
+  to {
+    rotate: 14deg;
+  }
+}

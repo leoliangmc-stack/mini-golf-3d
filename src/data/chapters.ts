@@ -1,10 +1,12 @@
 import type { ChapterDef } from '../level/schema';
-import { COUNTDOWN_RUN, GAUNTLET, GRAND_FINALE, TEMPLE_GATE } from './finales';
+import { COUNTDOWN_RUN, GAUNTLET, GRAND_FINALE, SPRING_TO_CANYON, TEMPLE_GATE } from './finales';
 import { BOMB_WORLD } from './worlds/bomb';
 import { BOWL_WORLD } from './worlds/bowl';
+import { CANYON_WORLD } from './worlds/canyon';
 import { CAVERN_WORLD } from './worlds/cavern';
 import { CITY_WORLD } from './worlds/city';
 import { CLONE_WORLD } from './worlds/clone';
+import { DAM_WORLD } from './worlds/dam';
 import { DESERT_WORLD } from './worlds/desert';
 import { FOREST_WORLD } from './worlds/forest';
 import { FREEZE_WORLD } from './worlds/freeze';
@@ -16,6 +18,8 @@ import { JUNGLE_WORLD } from './worlds/jungle';
 import { MAGNET_WORLD } from './worlds/magnet';
 import { MOVING_WORLD } from './worlds/moving';
 import { PIRATE_WORLD } from './worlds/pirate';
+import { POLAR_WORLD } from './worlds/polar';
+import { REEF_WORLD } from './worlds/reef';
 import { SKY_WORLD } from './worlds/sky';
 import { TOMB_WORLD } from './worlds/tomb';
 
@@ -50,5 +54,14 @@ export const CHAPTERS: readonly ChapterDef[] = [
     worlds: [TOMB_WORLD, CAVERN_WORLD, JUNGLE_WORLD, HOARD_WORLD],
     finale: TEMPLE_GATE,
     after: 'ch2',
+  },
+  // Wild Elements (SPEC v5). It follows Chapter 4, which with Chapter 2 before it is
+  // the main line; Chapter 3 is a branch off it.
+  {
+    id: 'ch5',
+    name: { en: 'Chapter 5', zh: '第五章' },
+    worlds: [REEF_WORLD, POLAR_WORLD, DAM_WORLD, CANYON_WORLD],
+    finale: SPRING_TO_CANYON,
+    after: 'ch4',
   },
 ];

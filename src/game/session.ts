@@ -129,6 +129,8 @@ interface Track {
   /** A zone moved the ball by hand this step. */
   snap: boolean;
   probe: GroundProbe | null;
+  /** On the ground at the last step it was looked for: what zones are told. */
+  grounded: boolean;
   lastSurface: string | null;
   before: XYZ;
 }
@@ -182,8 +184,6 @@ export class Session implements SkillHost {
   private fieldWait = 0;
   /** The course before each stroke still standing, oldest first (SPEC v4 3.8). Only on a hole with works. */
   private snapshots: Snapshot[] = [];
-  /** A stroke has been played and has not ended yet. */
-  private strokeOpen = false;
   private replayQueue: InputRecord[] = [];
   /** What each ball ran into during the last step. Emptied and refilled every step. */
   private readonly hits = new Map<Ball, { kind: ColliderKind; handle: number }[]>();
@@ -298,7 +298,6 @@ export class Session implements SkillHost {
       this.lastShotSize = ball.state.size;
       this.keep(from, ball.state.size);
     }
-    this.strokeOpen = true;
     this.balls.selected = ball;
     if (this.strokes === 0) {
       this.firstShotTick = this.world.tick;
@@ -434,6 +433,9 @@ export class Session implements SkillHost {
         if (track.busy) continue;
         free = true;
         const probe = (track.probe = probeGround(world, ball, this.surfaces, others));
+        // Before the world has stepped once its colliders cannot be found by a ray, so
+        // the very first look finds nothing under a ball that is sitting on the tee.
+        if (probe || world.tick > 0) track.grounded = probe?.grounded ?? false;
         applySurface(ball, probe);
         if (probe?.grounded && this.phase === 'rolling') {
           this.stats.surfaces.add(probe.surfaceId);
@@ -613,7 +615,6 @@ export class Session implements SkillHost {
     this.field?.restore(snapshot.field);
     this.lastShotPosition = snapshot.position;
     this.lastShotSize = snapshot.size;
-    this.strokeOpen = false;
     this.waiting = false;
     this.phase = 'aiming';
     this.track(ball).stop.reset();
@@ -622,7 +623,6 @@ export class Session implements SkillHost {
 
   /** Every ball has stopped: the stroke is over and the player aims again. */
   private endStroke(): void {
-    this.strokeOpen = false;
     this.waiting = false;
     for (const ball of this.balls.live) this.settle(ball);
     this.stats.rests.push({ ...this.ball.position() });
@@ -691,7 +691,6 @@ export class Session implements SkillHost {
         })
       : null;
     this.snapshots = [];
-    this.strokeOpen = false;
     this.waiting = false;
     this.fieldWait = 0;
     this.skills = new Map(Object.entries(hole.skills ?? {}).map(([id, uses]) => [id, { max: uses, charges: uses }]));
@@ -700,6 +699,7 @@ export class Session implements SkillHost {
       world: this.world,
       ball: this.ball,
       emit: (event) => this.zoneEvents.push({ event, ball: this.zoneContext.ball }),
+      grounded: () => this.track(this.zoneContext.ball).grounded,
       busy: () => {
         this.track(this.zoneContext.ball).busy = true;
       },
@@ -733,7 +733,15 @@ export class Session implements SkillHost {
   private track(ball: Ball): Track {
     let track = this.tracks.get(ball);
     if (!track) {
-      track = { stop: new StopDetector(), busy: false, snap: false, probe: null, lastSurface: null, before: STILL };
+      track = {
+        stop: new StopDetector(),
+        busy: false,
+        snap: false,
+        probe: null,
+        grounded: true,
+        lastSurface: null,
+        before: STILL,
+      };
       this.tracks.set(ball, track);
     }
     return track;
@@ -795,7 +803,6 @@ export class Session implements SkillHost {
     };
     this.phase = 'done';
     this.frozen = false;
-    this.strokeOpen = false;
     this.waiting = false;
     for (const ball of this.balls.live) ball.halt();
     for (const ball of this.balls.sunk) ball.halt();
@@ -823,7 +830,10 @@ export class Session implements SkillHost {
       // The last one comes back, at the size it was struck at, and it costs a stroke (SPEC 2.6).
       // On a hole with works the course comes back with it, to how it was when the stroke
       // was played (SPEC v4 3.8): the stroke did not happen, but it is still counted.
-      const snapshot = this.strokeOpen ? this.snapshots.pop() : undefined;
+      // With no stroke under way it is the last one played that is taken back: the ball
+      // returns to where that was struck from, and that spot has to be there again. A
+      // bridge that fell when the ball left it would otherwise drop the ball for ever.
+      const snapshot = this.snapshots.pop();
       const toTee = this.hole.outOfBounds === 'tee' && !snapshot;
       const size = toTee ? 'medium' : this.lastShotSize;
       if (ball.setSize(size, this.world.up)) this.emit({ type: 'resized', ball: ball.id, size });

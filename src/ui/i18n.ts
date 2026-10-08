@@ -98,6 +98,8 @@ export const TEXT = {
   previousBall: pick('Previous ball', '上一个球'),
   nextBall: pick('Next ball', '下一个球'),
   cupAppeared: pick('THE HOLE APPEARS!', '洞口出现了！'),
+  wind: pick('WIND', '风'),
+  windCalm: pick('CALM', '无风'),
   undo: pick('Take back the last stroke', '撤销上一杆'),
   undone: pick('STROKE TAKEN BACK  +1', '已撤销一杆  +1'),
   dragonStirs: pick('THE DRAGON STIRS…', '巨龙动了一下…'),

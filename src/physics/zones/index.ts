@@ -10,7 +10,7 @@ import type { ZoneShape } from './shape';
 export interface ZoneDef {
   type: string;
   shape: ZoneShape;
-  params?: Readonly<Record<string, number | string | boolean | Vec3>>;
+  params?: Readonly<Record<string, number | string | boolean | Vec3 | readonly Vec3[] | readonly ZoneShape[]>>;
 }
 
 /**
@@ -28,6 +28,12 @@ export interface ZoneContext {
   world: PhysicsWorld;
   ball: Ball;
   emit(event: ZoneEvent): void;
+  /**
+   * True if the ball was resting or rolling on something at the last step, false while
+   * it is in the air. It is the round's own judgement, the one that decides rolling
+   * resistance, so a zone that cares about the air agrees with everything else (SPEC v5 4.1).
+   */
+  grounded(): boolean;
   /** Call every step while the zone is holding the ball, so it is not judged as stopped. */
   busy(): void;
   /** Call on a step where the zone put the ball somewhere else by hand, so the jump is not drawn as motion. */
@@ -72,6 +78,25 @@ export interface Zone {
   preStep(ctx: ZoneContext): void;
   /** True once a single-use zone has been used up, for its view to show. */
   readonly spent?: boolean;
+}
+
+/** Reads a list of vectors from a zone's params. */
+export function vectorsParam(def: ZoneDef, name: string): readonly Vec3[] {
+  const value = def.params?.[name];
+  if (Array.isArray(value) && value.every((item) => Array.isArray(item) && item.length === 3)) {
+    return value as unknown as readonly Vec3[];
+  }
+  throw new Error(`Zone "${def.type}" needs a list of vectors "${name}"`);
+}
+
+/** Reads a list of shapes from a zone's params. An absent one is an empty list. */
+export function shapesParam(def: ZoneDef, name: string): readonly ZoneShape[] {
+  const value = def.params?.[name];
+  if (value === undefined) return [];
+  if (Array.isArray(value) && value.every((item) => typeof item === 'object' && item !== null && 'kind' in item)) {
+    return value as unknown as readonly ZoneShape[];
+  }
+  throw new Error(`Zone "${def.type}" needs a list of shapes "${name}"`);
 }
 
 export type ZoneFactory = (def: ZoneDef) => Zone;

@@ -314,7 +314,212 @@ function padView(def: ZoneDef, color: number, kind: 'grow' | 'shrink' | 'split')
   };
 }
 
+// --- Chapter 5: water and wind ---
+
+const WATER_BLUE = 0x4fc3e8;
+
+/** Seconds since the page opened. Pictures of water and wind keep their own time; the game does not see it. */
+const now = (): number => performance.now() / 1000;
+
+/**
+ * Moving water: a tint over the ground it covers, and chevrons drifting along it at
+ * the water's own pace, so which way it runs and how fast can be read at a glance.
+ */
+function currentView(def: ZoneDef): ZoneView {
+  const group = new THREE.Group();
+  if (def.shape.kind !== 'box') return { object: group };
+  const [cx, cy, cz] = def.shape.center;
+  const [hx, hy, hz] = def.shape.halfExtents;
+  const [vx, , vz] = vectorParam(def, 'velocity');
+  const speed = Math.hypot(vx, vz);
+  const ground = cy - hy + 0.1;
+  group.position.set(cx, ground, cz);
+
+  const tint = new THREE.Mesh(
+    new THREE.PlaneGeometry(hx * 2, hz * 2),
+    new THREE.MeshBasicMaterial({ color: WATER_BLUE, transparent: true, opacity: 0.3, depthWrite: false }),
+  );
+  tint.rotation.x = -Math.PI / 2;
+  tint.position.y = 0.011;
+  group.add(tint);
+  if (speed < 1e-6) return { object: group };
+
+  // A frame turned so that the water runs along its own -Z.
+  const flow = new THREE.Group();
+  flow.rotation.y = Math.atan2(-vx, -vz);
+  group.add(flow);
+  const alongX = Math.abs(vx) > Math.abs(vz);
+  const halfAcross = alongX ? hz : hx;
+  const halfAlong = alongX ? hx : hz;
+  const spacing = 1.3;
+  const lanes = Math.max(1, Math.round((halfAcross * 2) / 1.2));
+  const rows = Math.max(1, Math.ceil((halfAlong * 2) / spacing));
+  const geometry = chevronGeometry();
+  const material = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75, depthWrite: false });
+  const marks: { mesh: THREE.Mesh; offset: number }[] = [];
+  for (let lane = 0; lane < lanes; lane++) {
+    for (let row = 0; row < rows; row++) {
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.scale.setScalar(0.8);
+      mesh.position.set(((lane + 0.5) / lanes - 0.5) * halfAcross * 2, 0.014, 0);
+      flow.add(mesh);
+      // Every other lane half a step on, so the marks do not march in ranks.
+      marks.push({ mesh, offset: row * spacing + (lane % 2) * spacing * 0.5 });
+    }
+  }
+  const length = rows * spacing;
+  return {
+    object: group,
+    update() {
+      const travelled = now() * speed;
+      for (const { mesh, offset } of marks) {
+        const along = (offset + travelled) % length;
+        mesh.position.z = halfAlong - along;
+        // Fades in at the head of the water and out at its foot, instead of popping.
+        mesh.visible = along > 0.2 && along < halfAlong * 2 - 0.2;
+      }
+    },
+  };
+}
+
+/** A column of bubbles: a ring on the ground where it takes a ball, and bubbles rising to where it lets go. */
+function bubbleView(def: ZoneDef): ZoneView {
+  const group = new THREE.Group();
+  const [fx, fy, fz] = def.shape.center;
+  const [, ty] = vectorParam(def, 'top');
+  const radius = def.shape.kind === 'sphere' ? def.shape.radius : 0.5;
+  const height = ty - fy;
+  group.position.set(fx, fy - 0.1, fz);
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(radius - 0.07, radius, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.014;
+  const shaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius * 0.8, radius, height, 16, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xc9f3ff, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  shaft.position.y = height / 2;
+  group.add(ring, shaft);
+
+  const glass = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false });
+  const bubbles = Array.from({ length: 14 }, (_, i) => {
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.05 + (i % 3) * 0.025, 8, 6), glass);
+    group.add(mesh);
+    return { mesh, phase: i / 14, angle: i * 2.4, reach: radius * (0.25 + 0.5 * ((i * 7) % 5) / 5) };
+  });
+  return {
+    object: group,
+    update() {
+      const t = now();
+      for (const bubble of bubbles) {
+        const u = (t * 0.45 + bubble.phase) % 1;
+        const swirl = bubble.angle + t * 1.5;
+        bubble.mesh.position.set(Math.cos(swirl) * bubble.reach, u * height, Math.sin(swirl) * bubble.reach);
+        bubble.mesh.scale.setScalar(0.6 + u * 0.8);
+      }
+    },
+  };
+}
+
+const FLAKES = 70;
+
+/**
+ * Wind: a weathervane that points the way it blows and starts to swing just before it
+ * changes, and snow in the air that goes with it. A calm lets both hang.
+ */
+function windView(def: ZoneDef): ZoneView {
+  const group = new THREE.Group();
+  const [vx, vy, vz] = vectorParam(def, 'vane');
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 1.7, 8), new THREE.MeshLambertMaterial({ color: 0x3d4652 }));
+  post.position.set(vx, vy + 0.85, vz);
+  post.castShadow = true;
+  // The arrow is built pointing along -Z, which is a wind toward the north.
+  const arrow = new THREE.Group();
+  arrow.position.set(vx, vy + 1.75, vz);
+  const red = new THREE.MeshLambertMaterial({ color: 0xe5484d });
+  const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.9), red);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.34, 4), red);
+  head.rotation.x = -Math.PI / 2;
+  head.position.z = -0.55;
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.26, 0.3), red);
+  tail.position.z = 0.42;
+  arrow.add(shaft, head, tail);
+  group.add(post, arrow);
+
+  // Snow in the air over the hole: it has no weight in the game, it only shows the wind.
+  const box = def.shape.kind === 'box' ? def.shape : null;
+  const positions = new Float32Array(FLAKES * 3);
+  const seed = (i: number, k: number): number => {
+    const s = Math.sin(i * 127.1 + k * 311.7) * 43758.5453;
+    return s - Math.floor(s);
+  };
+  const [cx, , cz] = def.shape.center;
+  const [hx, , hz] = box ? box.halfExtents : [6, 4, 6];
+  const span = { x: Math.min(hx, 8), y: 4, z: Math.min(hz, 16) };
+  for (let i = 0; i < FLAKES; i++) {
+    positions[i * 3] = cx + (seed(i, 1) * 2 - 1) * span.x;
+    positions[i * 3 + 1] = seed(i, 2) * span.y;
+    positions[i * 3 + 2] = cz + (seed(i, 3) * 2 - 1) * span.z;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const flakes = new THREE.Points(
+    geometry,
+    new THREE.PointsMaterial({ color: 0xffffff, size: 0.09, transparent: true, opacity: 0.85, depthWrite: false }),
+  );
+  flakes.frustumCulled = false;
+  group.add(flakes);
+
+  let yaw = 0;
+  let last = now();
+  const drift = { x: 0, z: 0 };
+  return {
+    object: group,
+    update(zone) {
+      const t = now();
+      const dt = Math.min(0.1, t - last);
+      last = t;
+      const gust = (zone as Zone & { gust?: { x: number; z: number; turning: boolean } }).gust;
+      if (!gust) return;
+      const strength = Math.hypot(gust.x, gust.z);
+      // Turn the short way round to the wind; in a calm, stay as it was.
+      if (strength > 1e-6) {
+        const target = Math.atan2(-gust.x, -gust.z);
+        yaw += Math.atan2(Math.sin(target - yaw), Math.cos(target - yaw)) * (1 - Math.exp(-6 * dt));
+      }
+      arrow.rotation.y = yaw + (gust.turning ? Math.sin(t * 22) * 0.35 : 0);
+      arrow.rotation.x = strength > 1e-6 ? 0 : 0.5;
+
+      // The snow takes up the wind over half a second, so a change is seen coming.
+      const ease = 1 - Math.exp(-4 * dt);
+      drift.x += (gust.x * 0.45 - drift.x) * ease;
+      drift.z += (gust.z * 0.45 - drift.z) * ease;
+      for (let i = 0; i < FLAKES; i++) {
+        let x = positions[i * 3] + drift.x * dt;
+        let y = positions[i * 3 + 1] - (0.5 + (i % 4) * 0.12) * dt;
+        let z = positions[i * 3 + 2] + drift.z * dt;
+        if (y < 0) y += span.y;
+        if (x > cx + span.x) x -= span.x * 2;
+        else if (x < cx - span.x) x += span.x * 2;
+        if (z > cz + span.z) z -= span.z * 2;
+        else if (z < cz - span.z) z += span.z * 2;
+        positions[i * 3] = x;
+        positions[i * 3 + 1] = y;
+        positions[i * 3 + 2] = z;
+      }
+      geometry.attributes.position.needsUpdate = true;
+    },
+  };
+}
+
 export function registerBuiltinZoneViews(): void {
+  registerZoneView('current', currentView);
+  registerZoneView('bubbleLift', bubbleView);
+  registerZoneView('wind', windView);
   registerZoneView('grow', (def) => padView(def, GROW_GREEN, 'grow'));
   registerZoneView('shrink', (def) => padView(def, SHRINK_PURPLE, 'shrink'));
   registerZoneView('split', (def) => padView(def, SPLIT_CYAN, 'split'));

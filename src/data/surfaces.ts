@@ -91,4 +91,23 @@ export function registerSurfaces(): void {
   // Dragon's hoard
   registerSurface('hoardFloor', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x6b4a4f });
   registerSurface('hoardWall', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0x3c2a33 });
+
+  // --- Chapter 5 ---
+  // The works: rafts and the cracked slabs of a bridge
+  registerSurface('raft', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xb98a5e });
+  registerSurface('slab', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xc98a5a });
+  // Reef
+  registerSurface('seabed', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xd9c9a0 });
+  registerSurface('coral', { restitution: 0.6, rollingResistance: 0.5, drag: 0.7, color: 0xe8846e });
+  // Polar station: packed snow to roll on, and painted steel
+  registerSurface('packedSnow', { restitution: 0.15, rollingResistance: 0.5, drag: 0.7, color: 0xeaf2f8 });
+  // A drift of loose snow: a ball that lands in it stops where it lands.
+  registerSurface('drift', { restitution: 0.02, rollingResistance: 5, drag: 3, color: 0xcfe0ee });
+  registerSurface('stationWall', { restitution: 0.6, rollingResistance: 0.5, drag: 0.7, color: 0xd9534f });
+  // Waterworks
+  registerSurface('concrete', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xb9bdc2 });
+  registerSurface('damWall', { restitution: 0.6, rollingResistance: 0.5, drag: 0.7, color: 0x7d8791 });
+  // Canyon
+  registerSurface('mesa', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xd98a54 });
+  registerSurface('canyonWall', { restitution: 0.6, rollingResistance: 0.5, drag: 0.7, color: 0xa85a36 });
 }

@@ -209,6 +209,58 @@ export function registerThemes(): void {
     sunIntensity: 2.2,
     sea: { color: 0xb98a55, y: -0.9 },
   });
+  // --- Chapter 5: wild elements ---
+  // Reef: under water, the light coming down through it.
+  registerTheme('reef', {
+    sky: 0x1f7f9c,
+    ambientSky: 0xbff3ff,
+    ambientGround: 0x2a7f8f,
+    ambientIntensity: 1.7,
+    sun: 0xeaffff,
+    sunIntensity: 1.7,
+    sea: { color: 0x15607a, y: -0.9 },
+  });
+  // Polar station: a white day over open water and floes.
+  registerTheme('polar', {
+    sky: 0xcfe6f5,
+    ambientSky: 0xffffff,
+    ambientGround: 0xa9c8de,
+    ambientIntensity: 1.7,
+    sun: 0xfff6e8,
+    sunIntensity: 1.9,
+    // Dark water under the floes: white ground on a white sea would have no edges.
+    sea: { color: 0x3f7fa6, y: -1.4, opacity: 0.95 },
+  });
+  // Waterworks: concrete under an overcast sky, the river far below.
+  registerTheme('dam', {
+    sky: 0xaec3cf,
+    ambientSky: 0xffffff,
+    ambientGround: 0x7f97a6,
+    ambientIntensity: 1.6,
+    sun: 0xfdf6ea,
+    sunIntensity: 2,
+    sea: { color: 0x2f5f7a, y: -3.4 },
+  });
+  // Canyon: red rock, and a long way down.
+  registerTheme('canyon', {
+    sky: 0xf2c9a0,
+    ambientSky: 0xfff0dc,
+    ambientGround: 0xb8703f,
+    ambientIntensity: 1.6,
+    sun: 0xffe2bd,
+    sunIntensity: 2.2,
+    sea: { color: 0x8a4a2b, y: -3.6 },
+  });
+  // The Chapter 5 finale: a mountain morning, from the spring down.
+  registerTheme('spring', {
+    sky: 0xa6d8ef,
+    ambientSky: 0xffffff,
+    ambientGround: 0x7fae9b,
+    ambientIntensity: 1.6,
+    sun: 0xfff3da,
+    sunIntensity: 2.1,
+    sea: { color: 0x4f7f7a, y: -3.6 },
+  });
   registerTheme('pirate', {
     sky: 0x9fd8f0,
     ambientSky: 0xffffff,

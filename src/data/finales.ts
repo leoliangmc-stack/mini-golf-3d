@@ -3,6 +3,8 @@ import type { DecorDef, FinaleDef, PieceDef } from '../level/schema';
 import type { ZoneDef } from '../physics/zones';
 import { growPad, shrinkPad, splitPad } from '../physics/zones/pads';
 import { headingVector, tunnelPair, type TunnelEnd } from '../physics/zones/tunnel';
+import { bubbles, stream } from '../physics/zones/water';
+import { gusts } from '../physics/zones/wind';
 import { CUP, FALL, rack, STREET } from './worlds/common';
 import { wallWithDoors } from './worlds/ruins';
 
@@ -393,6 +395,104 @@ export const TEMPLE_GATE: FinaleDef = {
       zones: [FALL],
       outOfBounds: 'lastPosition',
       camera: { pitch: 58, maxDistance: 34 },
+    },
+  ],
+};
+
+/**
+ * Chapter 5, hole 13: water on its way down, from the spring to the canyon (SPEC v5
+ * 3.6). A current carries the ball to a column of bubbles, which sets it on a high
+ * deck; from the deck it jumps, in a lull between two cross winds, down into a drift
+ * of snow; a valve fills a pool and the raft in it makes a bridge; and the last of the
+ * way is cracked slabs. The ground and the works keep the order by themselves.
+ */
+export const SPRING_TO_CANYON: FinaleDef = {
+  id: 'ch5-finale',
+  name: { en: 'From Spring to Canyon', zh: '源头到峡谷' },
+  theme: 'spring',
+  ruleCard: {
+    en: 'Water, wind, a valve and a bridge that will not wait.',
+    zh: '水流、风、阀门，还有一座不等人的桥。',
+  },
+  ruleTag: { en: 'FINALE', zh: '终局' },
+  holes: [
+    {
+      id: 'ch5-finale',
+      par: 6,
+      tee: [0, 0, 14.5],
+      goal: { type: 'cup', position: [0, 0, -24.5], ...CUP },
+      challenge: { type: 'noUndo', text: { en: 'Take no stroke back', zh: '不使用撤销' } },
+      pieces: [
+        // The spring: a pool that narrows to the foot of the column
+        { type: 'floor', min: [-2.5, 8], max: [2.5, 16], surface: 'seabed' },
+        { type: 'wall', from: [-2.5, 16], to: [2.5, 16], surface: 'coral' },
+        { type: 'wall', from: [-2.5, 10.5], to: [-2.5, 16], surface: 'coral' },
+        { type: 'wall', from: [2.5, 16], to: [2.5, 10.5], surface: 'coral' },
+        { type: 'wall', from: [-2.5, 10.5], to: [-0.75, 8.2], surface: 'coral' },
+        { type: 'wall', from: [0.75, 8.2], to: [2.5, 10.5], surface: 'coral' },
+        // The deck above it, with the jump at its far end
+        { type: 'floor', min: [-2, 2], max: [2, 8], y: 3, depth: 3.45, surface: 'packedSnow' },
+        { type: 'ramp', min: [-1, 0], max: [1, 2], along: 'z', yFrom: 3.7, yTo: 3, depth: 3.45, surface: 'packedSnow' },
+        { type: 'wall', from: [-2, 2], to: [-2, 8], y: 3, surface: 'stationWall' },
+        { type: 'wall', from: [2, 8], to: [2, 2], y: 3, surface: 'stationWall' },
+        { type: 'wall', from: [-2, 2], to: [-1, 2], y: 3, surface: 'stationWall' },
+        { type: 'wall', from: [1, 2], to: [2, 2], y: 3, surface: 'stationWall' },
+        // Where the jump comes down: a drift of snow, then the bank of the pool
+        { type: 'floor', min: [-3, -5], max: [3, -4], depth: 2.8, surface: 'concrete' },
+        { type: 'floor', min: [-3, -8], max: [3, -5], depth: 2.8, surface: 'drift' },
+        { type: 'floor', min: [-3, -10], max: [3, -8], depth: 2.8, surface: 'concrete' },
+        { type: 'wall', from: [-3, -10], to: [-3, -4], height: 0.8, surface: 'damWall' },
+        { type: 'wall', from: [3, -4], to: [3, -10], height: 0.8, surface: 'damWall' },
+        { type: 'wall', from: [-3, -10], to: [-1, -10], surface: 'damWall' },
+        { type: 'wall', from: [1.55, -10], to: [3, -10], surface: 'damWall' },
+        // The sides of the pool
+        { type: 'wall', from: [-2.5, -14], to: [-2.5, -10], y: -2.5, height: 2.85, surface: 'damWall' },
+        { type: 'wall', from: [2.5, -10], to: [2.5, -14], y: -2.5, height: 2.85, surface: 'damWall' },
+        // The mesa beyond it, the bridge, and the last of the ground
+        { type: 'floor', min: [-2.5, -18], max: [2.5, -14], depth: 3, surface: 'mesa' },
+        { type: 'wall', from: [-2.5, -18], to: [-2.5, -14], surface: 'canyonWall' },
+        { type: 'wall', from: [2.5, -14], to: [2.5, -18], surface: 'canyonWall' },
+        ...wallWithDoors([-2.5, -18], [2.5, -18], [[1.6, 3.4]], 'canyonWall'),
+        { type: 'floor', min: [-2.5, -27], max: [2.5, -22], depth: 3, surface: 'mesa' },
+        ...wallWithDoors([-2.5, -22], [2.5, -22], [[1.6, 3.4]], 'canyonWall'),
+        { type: 'wall', from: [-2.5, -27], to: [2.5, -27], height: 0.8, surface: 'canyonWall' },
+        { type: 'wall', from: [-2.5, -27], to: [-2.5, -22], surface: 'canyonWall' },
+        { type: 'wall', from: [2.5, -22], to: [2.5, -27], surface: 'canyonWall' },
+      ],
+      field: {
+        parts: [
+          { kind: 'water', id: 'pool', min: [-2.5, -14], max: [2.5, -10], level: -1, levels: [{ level: -0.1, when: 'valve' }] },
+          { kind: 'float', id: 'raft', water: 'pool', at: [0, -12], size: [2, 0.4, 4.2], freeboard: 0.104, surface: 'raft' },
+          { kind: 'valve', id: 'valve', at: [1.3, 0, -10.05], depth: 1.2 },
+          { kind: 'crumble', id: 'first', at: [0, 0, -18.667], size: [1.8, 1.533] },
+          { kind: 'crumble', id: 'second', at: [0, 0, -20], size: [1.8, 1.533] },
+          { kind: 'crumble', id: 'third', at: [0, 0, -21.333], size: [1.8, 1.533] },
+        ],
+      },
+      decor: [
+        { type: 'coral', at: [-4.2, 0.0, 13], size: [1.8, 0, 0] },
+        { type: 'kelp', at: [4.2, 0.0, 12], size: [3, 0, 0] },
+        { type: 'crystals', at: [-4.4, -3.6, 3], size: [3.4, 0, 0], color: 0xbfe6ff },
+        { type: 'crystals', at: [4.4, -3.6, 5], size: [3, 0, 0], color: 0xbfe6ff },
+        { type: 'pipe', at: [-5, 0, -7], size: [4, 0.35, 0], yaw: 90 },
+        { type: 'column', at: [5, -3.6, -8], size: [0.5, 3.8, 0], color: 0x9aa3ab },
+        { type: 'rock', at: [-6.6, -3.6, -19.5], size: [2.6, 0, 0], color: 0xb8623a },
+        { type: 'obelisk', at: [5.2, -3.6, -20], size: [1.5, 6.5, 0], color: 0xb8623a },
+        { type: 'rock', at: [5.6, -3.6, -25], size: [2.4, 0, 0], color: 0xb8623a },
+      ],
+      zones: [
+        { type: 'outOfBounds', shape: { kind: 'box', center: [0, -9, 0], halfExtents: [80, 5, 80] } },
+        stream([-2.5, 9.2], [2.5, 12.5], [0, -3]),
+        bubbles([0, 0, 8.45], 3.5, [0, 0.6, -3.2], 0.6),
+        gusts(
+          { kind: 'box', center: [0, 4, -3], halfExtents: [9, 6, 6] },
+          [[-7, 0], [0, 0], [7, 0], [0, 0]],
+          2,
+          [-1.6, 3, 2.5],
+        ),
+      ],
+      outOfBounds: 'lastPosition',
+      camera: { pitch: 58, maxDistance: 40 },
     },
   ],
 };
