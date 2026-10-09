@@ -60,6 +60,12 @@ export const MUSIC: Record<string, MusicDef> = {
   funfair: { bpm: 138, root: 65, scale: [0, 2, 4, 5, 7, 9, 11], wave: 'square', brightness: 1900 },
   garden: { bpm: 86, root: 64, scale: [0, 2, 4, 7, 9], wave: 'sine', brightness: 3000 },
   cityday: { bpm: 126, root: 60, scale: [0, 2, 4, 7, 9], wave: 'triangle', brightness: 2000 },
+  // Chapter 8
+  phantom: { bpm: 82, root: 61, scale: [0, 2, 3, 7, 8], wave: 'sine', brightness: 2800 },
+  endless: { bpm: 100, root: 65, scale: [0, 2, 4, 6, 7, 9, 11], wave: 'triangle', brightness: 2400 },
+  looking: { bpm: 94, root: 58, scale: [0, 2, 3, 5, 7, 8, 11], wave: 'triangle', brightness: 1600 },
+  echo: { bpm: 74, root: 64, scale: [0, 2, 5, 7, 9], wave: 'sine', brightness: 3200 },
+  strange: { bpm: 116, root: 56, scale: [0, 1, 4, 6, 7, 10], wave: 'sawtooth', brightness: 1200 },
 };
 
 /** Chord roots, as scale steps, one per bar. */

@@ -6,6 +6,7 @@ import { Crystal, Emitter, Receiver } from './light';
 import { Belt, Dial, Pulse, TimeZone } from './machines';
 import { Rotor } from './maze';
 import { Slider } from './slider';
+import { Echo, EchoPlate } from './strange';
 import { Gate, Plate, Stone } from './tomb';
 
 /** Registers every kind of part a hole's data may name. A new kind is one more line here. */
@@ -32,4 +33,6 @@ export function registerBuiltinParts(): void {
   registerPart('rotor', (def, field, id) => new Rotor(def, field, id));
   registerPart('tunnel', (def, field, id) => new Tunnel(def, field, id));
   registerPart('train', (def, field, id) => new Train(def, field, id));
+  registerPart('echo', (def, field, id) => new Echo(def, field, id));
+  registerPart('echoPlate', (def, field, id) => new EchoPlate(def, field, id));
 }

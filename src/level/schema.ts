@@ -71,6 +71,12 @@ export interface HoleDef {
    * and the player may take a stroke back.
    */
   field?: FieldDef;
+  /**
+   * A mirror (SPEC v8 3.4): the hole has a shadow ball beyond it, which is struck with
+   * every stroke of the player's, the other way round. It goes with neither splitting
+   * nor skills.
+   */
+  mirror?: MirrorDef;
   /** How many balls a split may leave on the course at once, 1 to 4. Defaults to 1: no splitting. */
   maxBalls?: number;
   /** Skills the player may use on this hole, and how many times each: `{ freeze: 2 }`. */
@@ -92,6 +98,36 @@ export interface HoleDef {
 }
 
 export type HintId = 'slingshot';
+
+/**
+ * A mirror standing across the course (SPEC v8 3.4), and the shadow ball beyond it. A
+ * stroke sets both balls off at once, each from where it lies, as hard as each other
+ * and in directions that are each other's reflection. Where they lie is not mirrored:
+ * the two sides may have different walls, and the balls drift apart.
+ *
+ * The shadow presses plates and knocks levers like any ball. It cannot be holed, picked
+ * or struck by itself, and if it leaves the course it is put back where the stroke
+ * found it, at no cost.
+ *
+ * The mirror itself is only a picture: put a wall where it stands, or the two balls
+ * can change sides.
+ */
+export interface MirrorDef {
+  /** The way the mirror faces: `x` for one standing on the line x = `at`, which turns left into right. */
+  axis: 'x' | 'z';
+  at: number;
+  /** Where the pane is drawn: from and to along the other axis. */
+  span: readonly [number, number];
+  /** Height of the ground it stands on. Defaults to 0. */
+  y?: number;
+  /** Point on the ground where the shadow starts. Defaults to the reflection of the tee. */
+  shadow?: Vec3;
+  /**
+   * The part of the course the mirror shows. Only a stroke played from inside it sets
+   * the shadow off; anywhere else the shadow stays where it is. Defaults to everywhere.
+   */
+  reach?: ZoneShape;
+}
 
 /**
  * Third-star condition, checked against what happened during the round. `type` names
@@ -125,6 +161,11 @@ export interface CameraOverride {
   yaw?: number;
   minDistance?: number;
   maxDistance?: number;
+  /**
+   * Points on the ground to keep in view besides the ball and the goal: something the
+   * player has to see that lies the other way from the cup.
+   */
+  keep?: readonly Vec3[];
 }
 
 /** The three sizes a ball can be (SPEC v3 2.2). */
@@ -331,8 +372,32 @@ export interface MoverDef {
   clock?: string;
   /** What it looks like, where a plain box will not do: a run of piano keys, the hand of a clock, a train that crosses the course. */
   look?: 'keys' | 'hand' | 'train';
+  /** Makes it come and go on the hole's clock (SPEC v8 3.2). */
+  phantom?: PhantomDef;
   /** A step of the world's scale it sounds as it arrives at the far end of its travel. Sound only. */
   note?: number;
+}
+
+/**
+ * A moving part that comes and goes (SPEC v8 3.2): there for a share of every cycle and
+ * gone for the rest. Gone, it is not a thing at all, and a ball that was on it falls.
+ * It keeps the hole's clock and nothing else, so it is in no snapshot. It never comes
+ * back into a ball that is in its place: it waits for the ball to have gone.
+ */
+export interface PhantomDef {
+  /** Seconds for one cycle of being there and being gone. */
+  period: number;
+  /** Share of the cycle it is there, from the start of the cycle. */
+  shown: number;
+  /** Where in the cycle it starts, 0..1. */
+  phase?: number;
+  /** Seconds of warning it gives before it goes. Drawing and sound only. Defaults to 0.8. */
+  warn?: number;
+  /**
+   * A ball may stop on it: the stroke then stays open until it goes, and the ball with
+   * it. Without this a ball that stops on it is moved to `rest`, as on any moving part.
+   */
+  holds?: boolean;
 }
 
 /** One back-and-forth cycle: out and back, optionally pausing at either end. */

@@ -11,6 +11,7 @@ import { timeBonus } from './timeBonus';
 import { tunnel } from './tunnel';
 import { bubbleLift, current } from './water';
 import { wind } from './wind';
+import { wrap } from './wrap';
 
 export function registerBuiltinZones(): void {
   registerZone('outOfBounds', outOfBounds);
@@ -28,4 +29,5 @@ export function registerBuiltinZones(): void {
   registerZone('arm', arm);
   registerZone('drum', drum);
   registerZone('coaster', coasterZone);
+  registerZone('wrap', wrap);
 }

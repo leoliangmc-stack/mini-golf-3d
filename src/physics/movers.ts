@@ -1,7 +1,7 @@
 import { FIXED_DT } from '../core/loop';
 import { cos, hypot, sin } from '../core/math';
 import type { Vec3, XYZ } from '../core/types';
-import type { CycleDef, MotionDef, MoverDef } from '../level/schema';
+import type { CycleDef, MotionDef, MoverDef, PhantomDef } from '../level/schema';
 import type { Ball } from './ball';
 import { RAPIER } from './rapier';
 import { getSurface, type GroundCarrier, type SurfaceMap } from './surfaces';
@@ -20,6 +20,11 @@ const SOLID = 0xffffffff;
 const GHOST = 0x00020000;
 /** A lift standing this much higher than the underside of a ball beside it is a wall to that ball. */
 const LIFT_STEP = 0.03;
+/**
+ * A ball sunk this far into the place of a part that comes and goes keeps it from coming
+ * back. Less than that is a ball on the ground the part joins, which it stands a hair above.
+ */
+const PHANTOM_SINK = 0.02;
 
 /**
  * Position within a cycle, 0..1, at a given tick. Periods are whole ticks so cycles
@@ -30,6 +35,11 @@ export function cyclePhase(tick: number, period: number, phase = 0): number {
   const ticks = Math.max(2, Math.round(period / FIXED_DT));
   const u = (tick % ticks) / ticks + phase;
   return u - Math.floor(u);
+}
+
+/** Whether a part that comes and goes is due to be there during the step that starts on a given tick (SPEC v8 3.2). */
+export function phantomDue(def: PhantomDef, tick: number): boolean {
+  return cyclePhase(tick, def.period, def.phase) < def.shown;
 }
 
 /** How far along its travel a back-and-forth mover is at a given tick: 0 at the start, 1 at the far end. */
@@ -99,6 +109,13 @@ export class Mover implements GroundCarrier {
   /** Pose before and after the last physics step, for render interpolation. */
   prevPose: MoverPose;
   pose: MoverPose;
+  /**
+   * False while a part that comes and goes is gone (SPEC v8 3.2): it has no collider
+   * then, not even one a ray could find. Always true for any other part.
+   */
+  present = true;
+  /** Where such a part is in its cycle, 0..1, at the step it last got ready for. */
+  cycle = 0;
   private nextPose: MoverPose;
   private readonly poseAt: (tick: number) => MoverPose;
 
@@ -130,6 +147,11 @@ export class Mover implements GroundCarrier {
     );
     surfaces.setCollider(this.collider.handle, 'mover', def.surface);
     surfaces.setCarrier(this.collider.handle, this);
+    if (def.phantom) {
+      this.cycle = cyclePhase(world.tick, def.phantom.period, def.phantom.phase);
+      this.present = this.cycle < def.phantom.shown;
+      this.collider.setEnabled(this.present);
+    }
   }
 
   /** Schedules the move for the coming step. Call before stepping the world. */
@@ -137,6 +159,18 @@ export class Mover implements GroundCarrier {
     this.nextPose = this.poseAt(world.tick + 1);
     this.body.setNextKinematicTranslation(this.nextPose.position);
     this.body.setNextKinematicRotation(yawRotation(this.nextPose.yaw));
+    const phantom = this.def.phantom;
+    if (phantom) {
+      // What it is during the coming step is settled by the tick that step starts on.
+      // Coming back, it waits for any ball that is in its place to have gone: it would
+      // otherwise close round the ball and throw it out.
+      this.cycle = cyclePhase(world.tick, phantom.period, phantom.phase);
+      const present = this.cycle < phantom.shown && (this.present || !balls.some((ball) => this.engulfs(ball)));
+      if (present !== this.present) {
+        this.present = present;
+        this.collider.setEnabled(present);
+      }
+    }
     if (this.def.role === 'platform') {
       // A platform only exists for a ball that is above its top. A ball rolling up to it
       // from level ground would otherwise trip on its edge (see tests/seams.test.ts).
@@ -159,6 +193,15 @@ export class Mover implements GroundCarrier {
     if (this.isUnder(p)) return true;
     const top = this.pose.position.y + this.def.size[1] / 2;
     return !this.covers(p) && top - (p.y - ball.props.radius) > LIFT_STEP;
+  }
+
+  /** True if a ball is inside the box: over or under its top face, and reaching into it. */
+  private engulfs(ball: Ball): boolean {
+    if (!ball.body.isEnabled()) return false;
+    const p = ball.position();
+    const r = ball.props.radius;
+    const top = this.pose.position.y + this.def.size[1] / 2;
+    return this.covers(p) && p.y - r < top - PHANTOM_SINK && p.y + r > top - this.def.size[1];
   }
 
   /** Call after stepping the world. */

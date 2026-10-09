@@ -15,6 +15,7 @@ import { BallView } from '../render/ballView';
 import { FollowCamera } from '../render/camera';
 import { Explosion } from '../render/explosion';
 import { buildFieldView, groundBounds, type FieldView } from '../render/fieldViews';
+import { framingPoints } from '../render/framing';
 import { buildHoleView, disposeHoleView, type HoleView } from '../render/holeView';
 import { buildMoverView, updateMoverView } from '../render/moverView';
 import { OcclusionFader } from '../render/occlusion';
@@ -40,7 +41,9 @@ export type GameEvent =
   /** The player tapped a wall group that cannot be turned: the hole's turns are used up, or the ball is in its way. */
   | { type: 'turnRefused'; reason: 'spent' | 'blocked' }
   /** A train that crosses the course has set off (SPEC v7 3.9). */
-  | { type: 'trainPass' };
+  | { type: 'trainPass' }
+  /** A bridge that comes and goes has come, or gone (SPEC v8 3.9). */
+  | { type: 'phantom'; shown: boolean };
 
 /** Ticks between the countdown running out and the hole starting over: long enough to see the blast. */
 const RESTART_TICKS = 50;
@@ -63,6 +66,9 @@ const TURN_MIN_PX = 48;
 const SHOWCASE_SECONDS = 1.4;
 /** A part this near the middle of the screen, as a share of it, needs no showing: it is in view already. */
 const IN_VIEW = 0.62;
+
+/** The colour of everything that marks the shadow ball: its rim, its ring, its arrow. */
+const SHADOW_TINT = 0xb690ff;
 
 /** What a zone cue does to the picture of a ball that a zone has hold of. */
 const BALL_CUES: Record<string, 'vanish' | 'appear'> = { tunnelEnter: 'vanish', tunnelExit: 'appear' };
@@ -88,6 +94,8 @@ export class Game {
   /** Which cup each sinking ball is dropping into. */
   private readonly sinking = new Map<number, number>();
   private readonly aim = new AimIndicator();
+  /** The same for the shadow ball of a hole with a mirror: where it lies, and which way the stroke will send it. */
+  private readonly shadowAim = new AimIndicator(SHADOW_TINT);
   private readonly explosion = new Explosion();
   private readonly fader = new OcclusionFader();
   private holeView: HoleView | null = null;
@@ -120,6 +128,10 @@ export class Game {
   private arrived: boolean[] = [];
   /** Which trains that cross the course were on the move at the last step. */
   private crossing: boolean[] = [];
+  /** Which bridges that come and go were there at the last step. */
+  private phantoms: boolean[] = [];
+  /** A ball has crossed a joined edge: the camera goes with it at once, not in a sweep (SPEC v8 3.3). */
+  private cut = false;
   private readonly listeners = new Set<(event: GameEvent) => void>();
   private readonly frameListeners = new Set<() => void>();
   private readonly projected = new THREE.Vector3();
@@ -132,7 +144,7 @@ export class Game {
     /** Everything that can be loaded, in play order: the chapters' worlds and finales, plus any extras. */
     readonly worlds: readonly WorldDef[],
   ) {
-    stage.scene.add(this.aim.object, this.explosion.object);
+    stage.scene.add(this.aim.object, this.shadowAim.object, this.explosion.object);
     stage.onResize((w, h) => this.camera.setViewport(w, h));
     attachCameraGestures(canvas, this.camera);
     attachSlingshot(canvas, {
@@ -182,7 +194,7 @@ export class Game {
   /** True when the player has more than one ball to choose from for the next stroke. */
   get choosing(): boolean {
     const { session } = this;
-    return session.balls.live.length > 1 && (session.phase === 'aiming' || session.frozen);
+    return session.balls.playable.length > 1 && (session.phase === 'aiming' || session.frozen);
   }
 
   on(listener: (event: GameEvent) => void): void {
@@ -211,7 +223,7 @@ export class Game {
     this.crateViews = (hole.crates ?? []).map(buildCrateView);
     this.pinViews = this.session.goal.pins.map((pin) => buildPinView(pin.def.at));
     for (const view of [...this.moverViews, ...this.crateViews, ...this.pinViews]) group.add(view);
-    this.zoneViews = hole.zones.map(buildZoneView);
+    this.zoneViews = hole.zones.map((zone) => buildZoneView(zone, hole));
     for (const view of this.zoneViews) if (view) group.add(view.object);
     this.fieldView = hole.field ? buildFieldView(hole.field, groundBounds(this.session.compiled.bodies)) : null;
     if (this.fieldView) group.add(this.fieldView.group);
@@ -263,7 +275,7 @@ export class Game {
   /** Picks the next ball (`step` 1) or the one before (-1) for the coming stroke. */
   pickNext(step: 1 | -1): void {
     if (!this.choosing) return;
-    const { live, selected } = this.session.balls;
+    const { playable: live, selected } = this.session.balls;
     this.session.select(live[(live.indexOf(selected) + step + live.length) % live.length]);
   }
 
@@ -272,7 +284,7 @@ export class Game {
     if (!this.choosing || this.inputBlocked || this.paused) return;
     let best: Ball | null = null;
     let bestDistance = PICK_RADIUS_PX;
-    for (const ball of this.session.balls.live) {
+    for (const ball of this.session.balls.playable) {
       const view = this.ballViews.get(ball.id);
       if (!view) continue;
       const at = this.screenPosition(view.object.position);
@@ -346,6 +358,10 @@ export class Game {
     const { session } = this;
     if (!session.playing) return;
     session.movers.forEach((mover, i) => {
+      if (mover.def.phantom) {
+        if (this.phantoms[i] !== undefined && this.phantoms[i] !== mover.present) this.emit({ type: 'phantom', shown: mover.present });
+        this.phantoms[i] = mover.present;
+      }
       if (mover.def.look === 'train') {
         // It waits out of sight at either end of its line: the sound is of it setting off.
         const moving = mover.prevPose.position.x !== mover.pose.position.x || mover.prevPose.position.z !== mover.pose.position.z;
@@ -395,8 +411,9 @@ export class Game {
     this.moverViews.forEach((view, i) => updateMoverView(view, session.movers[i], alpha));
     this.crateViews.forEach((view, i) => updatePropView(view, session.crates[i], alpha));
     this.pinViews.forEach((view, i) => updatePropView(view, session.goal.pins[i], alpha));
-    this.zoneViews.forEach((view, i) => view?.update?.(session.zones[i], alpha));
     this.time += frameDt;
+    const scene = { balls: session.balls.live, time: this.time };
+    this.zoneViews.forEach((view, i) => view?.update?.(session.zones[i], alpha, scene));
     if (session.field) this.fieldView?.update(session.field, { alpha, dt: frameDt, time: this.time });
     session.goal.cups.forEach((cup, i) => {
       const { prevPosition: was, position: now } = cup.pose;
@@ -416,8 +433,12 @@ export class Game {
       const at = view.update(ball.pose, alpha, frameDt, cup);
       view.setPassedOver(choosing && ball !== selected);
       if (ball === selected) this.focus.copy(at);
-      else if (session.balls.live.includes(ball)) this.others.push({ x: at.x, y: at.y, z: at.z });
+      // The shadow is kept in view only while the mirror is showing it a stroke to copy.
+      else if (ball === session.shadow ? session.mirroring : session.balls.live.includes(ball)) {
+        this.others.push({ x: at.x, y: at.y, z: at.z });
+      }
     }
+    framingPoints(this.hole, this.focus, this.others);
     // Balls taken off the course fade out where they were, then their pictures go.
     for (const [id, view] of this.ballViews) {
       if (drawn.has(id)) continue;
@@ -427,6 +448,10 @@ export class Game {
 
     // A part being shown has the view to itself; otherwise it is the ball and the goal.
     const watched = this.watched(frameDt);
+    if (this.cut) {
+      this.cut = false;
+      this.camera.snapTo(this.focus, session.goal.focus(), this.others);
+    }
     if (watched) this.camera.update(watched, watched, frameDt);
     else this.camera.update(this.focus, session.goal.focus(), frameDt, this.others);
     this.fader.update(this.camera.camera.position, this.focus, frameDt);
@@ -437,8 +462,33 @@ export class Game {
     if (!aiming || session.replaying) this.aim.hide();
     else if (pull && pull.power >= RULES.minPower) this.aim.showAim(this.focus, this.shotDirection(pull), pull.power, radius);
     else this.aim.showReady(this.focus, radius, frameDt);
+    this.drawShadowAim(pull, aiming, frameDt);
     for (const listener of this.frameListeners) listener();
     this.stage.renderer.render(this.stage.scene, this.camera.camera);
+  }
+
+  /**
+   * Marks the shadow ball of a hole with a mirror while the player aims (SPEC v8 3.4):
+   * a ring round it, and an arrow the way the stroke being aimed would send it, which
+   * is the player's own turned round in the glass. Nothing while the mirror is not
+   * showing: a stroke played out of its sight leaves the shadow where it is.
+   */
+  private drawShadowAim(pull: Pull | null, aiming: boolean, frameDt: number): void {
+    const { session } = this;
+    const shadow = session.shadow;
+    const at = shadow ? this.ballViews.get(shadow.id)?.object.position : undefined;
+    if (!shadow || !at || !aiming || session.replaying || !session.mirroring) {
+      this.shadowAim.hide();
+      return;
+    }
+    const radius = shadow.props.radius;
+    if (pull && pull.power >= RULES.minPower) {
+      const dir = this.shotDirection(pull);
+      const flip = this.hole.mirror!.axis === 'x';
+      this.shadowAim.showAim(at, { x: flip ? -dir.x : dir.x, y: 0, z: flip ? dir.z : -dir.z }, pull.power, radius);
+    } else {
+      this.shadowAim.showReady(at, radius, frameDt);
+    }
   }
 
   /**
@@ -516,6 +566,7 @@ export class Game {
     if (!view) {
       view = new BallView(DEFAULT_BALL.radius);
       view.setSize(ball.props.radius / DEFAULT_BALL.radius, true);
+      if (ball === this.session.shadow) view.setShadow();
       this.ballViews.set(ball.id, view);
       this.stage.scene.add(view.object);
     }
@@ -537,13 +588,15 @@ export class Game {
     this.lamps = [];
     this.arrived = [];
     this.crossing = [];
+    this.phantoms = [];
+    this.cut = false;
     this.restartIn = 0;
     this.explosion.stop();
     for (const id of [...this.ballViews.keys()]) this.dropView(id);
     this.sinking.clear();
     const start = this.session.pose.position;
     this.focus.set(start.x, start.y, start.z);
-    this.camera.snapTo(start, this.session.goal.focus());
+    this.camera.snapTo(start, this.session.goal.focus(), framingPoints(this.hole, start));
   }
 
   private onSessionEvent(event: SessionEvent): void {
@@ -592,6 +645,7 @@ export class Game {
       }
       case 'cue': {
         const effect = BALL_CUES[event.name];
+        if (event.name === 'wrap') this.cut = true;
         if (effect) {
           // The cue does not say which ball: it is the one a zone has taken out of the simulation.
           for (const ball of this.session.balls.live) {

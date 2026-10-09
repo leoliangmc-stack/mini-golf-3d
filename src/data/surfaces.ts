@@ -149,4 +149,28 @@ export function registerSurfaces(): void {
   // Maze course: a lawn between hedges
   registerSurface('lawn', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x7cc46a });
   registerSurface('hedge', { restitution: 0.55, rollingResistance: 0.5, drag: 0.7, color: 0x2f6b3c });
+
+  // --- Chapter 8 ---
+  // A bridge that comes and goes: pale and bright, so that its going shows.
+  registerSurface('phantom', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x9ff3e6 });
+  // Phantom Bridges: dark stone over nothing, and dust that stops a ball where it lands
+  registerSurface('voidstone', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x67659c });
+  registerSurface('voidWall', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0x2f2a55 });
+  registerSurface('ash', { restitution: 0.04, rollingResistance: 2.5, drag: 1.5, color: 0x3d3a5c });
+  // Endless Hall: a pale floor, and paler ground still beyond an edge that is joined to another
+  registerSurface('hallFloor', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xe2cfa6 });
+  registerSurface('hallWall', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0x7b2f45 });
+  registerSurface('beyond', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xf3ecdc });
+  // Mirror Maze: a parlour, the same room in a colder light behind the glass, and the glass
+  registerSurface('parlour', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xc79a6b });
+  registerSurface('parlourShade', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x5b6b8a });
+  registerSurface('wainscot', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0x4a2f2a });
+  registerSurface('glass', { restitution: 0.7, rollingResistance: 0.5, drag: 0.7, color: 0xbfe7ef });
+  // A nook a ball stays in: carpet that stops it, and walls that give nothing back.
+  registerSurface('carpet', { restitution: 0.04, rollingResistance: 2.5, drag: 1.5, color: 0x8a3f5c });
+  registerSurface('velvet', { restitution: 0.05, rollingResistance: 0.5, drag: 0.7, color: 0x6b2c47 });
+  // Echo: slate, and moss that stops a ball on it
+  registerSurface('echoFloor', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x7a8ca3 });
+  registerSurface('echoWall', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0x34405a });
+  registerSurface('hush', { restitution: 0.04, rollingResistance: 2.5, drag: 1.5, color: 0x7fa58c });
 }

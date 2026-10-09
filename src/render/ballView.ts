@@ -12,6 +12,9 @@ const ALERT = 0xff3b30;
 const WHITE = 0xffffff;
 /** A ball that is on the course but not the one picked for the next stroke. */
 const PASSED_OVER = 0xaab4bf;
+/** The shadow ball of a hole with a mirror (SPEC v8 3.4): dark, with a violet rim. */
+const SHADOW_SKIN = 0x2b2140;
+const SHADOW_RIM = 0xb690ff;
 
 /** The ball: white, faceted so its roll is visible, with a dark outline for contrast. */
 export class BallView {
@@ -30,6 +33,8 @@ export class BallView {
   private sizeGoal = 1;
   private readonly outline: THREE.MeshBasicMaterial;
   private readonly skin: THREE.MeshLambertMaterial;
+  private readonly silhouette: THREE.MeshBasicMaterial;
+  private shadow = false;
 
   /** `radius` is that of the medium ball; other sizes are drawn as a scale of it. */
   constructor(private readonly radius: number) {
@@ -40,16 +45,14 @@ export class BallView {
     const outline = new THREE.Mesh(new THREE.IcosahedronGeometry(radius * 1.14, 2), this.outline);
     // Drawn only where something is in front of the ball, so it can always be found
     // behind a wall, a pillar or a bridge (SPEC 2.10).
-    const silhouette = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(radius * 1.14, 2),
-      new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.6,
-        depthFunc: THREE.GreaterDepth,
-        depthWrite: false,
-      }),
-    );
+    this.silhouette = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.6,
+      depthFunc: THREE.GreaterDepth,
+      depthWrite: false,
+    });
+    const silhouette = new THREE.Mesh(new THREE.IcosahedronGeometry(radius * 1.14, 2), this.silhouette);
     silhouette.renderOrder = 5;
     this.object.add(body, outline, silhouette);
   }
@@ -86,13 +89,23 @@ export class BallView {
 
   /** Greys the ball out: it is on the course, but another one is picked for the next stroke. */
   setPassedOver(on: boolean): void {
+    if (this.shadow) return;
     this.skin.color.setHex(on ? PASSED_OVER : WHITE);
+  }
+
+  /** Draws the ball as the shadow of a hole with a mirror: dark where the player's is white. */
+  setShadow(): void {
+    this.shadow = true;
+    this.skin.color.setHex(SHADOW_SKIN);
+    this.skin.emissive.setHex(0x3a1f66);
+    this.outline.color.setHex(SHADOW_RIM);
+    this.silhouette.color.setHex(SHADOW_RIM);
   }
 
   /** Makes the outline blink red: time is nearly up. */
   setAlert(on: boolean): void {
     this.alert = on;
-    if (!on) this.outline.color.setHex(OUTLINE);
+    if (!on) this.outline.color.setHex(this.shadow ? SHADOW_RIM : OUTLINE);
   }
 
   /** Call when the ball is put somewhere new: a fresh hole, a retry. */

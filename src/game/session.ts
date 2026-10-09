@@ -12,6 +12,7 @@ import { Crate } from '../physics/props';
 import { applySurface, probeGround, SurfaceMap, type ColliderKind, type GroundProbe } from '../physics/surfaces';
 import { PhysicsWorld } from '../physics/world';
 import { createZone, type Zone, type ZoneContext, type ZoneEvent } from '../physics/zones';
+import { shapeContains } from '../physics/zones/shape';
 import { BallSet } from './ballSet';
 import { challengeMet, emptyStats, type RoundStats } from './challenges';
 import { cupOpenAt, cupPositionAt, type CupPose } from './cup';
@@ -123,6 +124,8 @@ interface Snapshot {
   position: XYZ;
   size: BallSize;
   field: FieldState;
+  /** Where the shadow ball lay, on a hole with a mirror (SPEC v8 3.7). */
+  shadow?: XYZ;
 }
 
 /** What the session keeps about one ball from step to step. */
@@ -178,6 +181,8 @@ export class Session implements SkillHost {
   private lastShotPosition!: XYZ;
   /** Size of the ball when the last stroke was played from the ground. */
   private lastShotSize: BallSize = 'medium';
+  /** Where the shadow ball lay when the last stroke was played: where it returns to if it leaves the course. */
+  private shadowFrom: XYZ = STILL;
   private tilted = false;
   private firstShotTick = 0;
   /** The goal is met; the round ends once any ball still under way has settled. */
@@ -218,6 +223,20 @@ export class Session implements SkillHost {
   /** The ball the next stroke is played with: the only one, unless there was a split. */
   get ball(): Ball {
     return this.balls.selected;
+  }
+
+  /** The shadow ball, on a hole with a mirror (SPEC v8 3.4). */
+  get shadow(): Ball | null {
+    return this.balls.shadow;
+  }
+
+  /**
+   * True while a stroke would set the shadow off too: the hole has a mirror, and the
+   * ball lies in the part of the course the mirror shows.
+   */
+  get mirroring(): boolean {
+    const mirror = this.hole.mirror;
+    return mirror !== undefined && (mirror.reach === undefined || shapeContains(mirror.reach, this.ball.position()));
   }
 
   /** Where the selected ball was at the last two physics steps. */
@@ -272,6 +291,9 @@ export class Session implements SkillHost {
    */
   shoot(dir: XYZ, power: number, ball: Ball = this.balls.selected): boolean {
     const frozen = this.frozen;
+    const shadow = this.balls.shadow;
+    // The shadow is struck with the player's ball, never by itself.
+    if (ball === shadow) return false;
     if (frozen ? this.strokes >= this.strokeLimit : this.phase !== 'aiming') return false;
     // A wall group that is still swinging round has to come to rest first (SPEC v7 5).
     if (this.field?.turning) return false;
@@ -280,6 +302,7 @@ export class Session implements SkillHost {
     const p = Math.min(1, power);
     if (p < RULES.minPower) return false;
     const from = { ...ball.position() };
+    const mirrored = shadow !== null && this.mirroring;
     if (!ball.launch(dir, p * RULES.maxShotSpeed)) return false;
     const index = this.balls.live.indexOf(ball);
     if (frozen) {
@@ -295,7 +318,7 @@ export class Session implements SkillHost {
       }
     } else {
       for (const other of [...this.balls.live]) {
-        if (other === ball) continue;
+        if (other === ball || other === shadow) continue;
         this.balls.remove(other);
         this.emit({ type: 'ballRemoved', ball: other.id, reason: 'unpicked' });
       }
@@ -305,6 +328,18 @@ export class Session implements SkillHost {
       this.keep(from, ball.state.size);
     }
     this.balls.selected = ball;
+    if (shadow) {
+      // The same stroke, the other way round, from wherever the shadow lies (SPEC v8 3.4).
+      this.shadowFrom = { ...shadow.position() };
+      if (mirrored) {
+        const flip = this.hole.mirror!.axis === 'x';
+        shadow.launch({ x: flip ? -dir.x : dir.x, y: 0, z: flip ? dir.z : -dir.z }, p * RULES.maxShotSpeed);
+        this.track(shadow).stop.reset();
+        this.cue('mirrorShot');
+      }
+    }
+    // After the snapshot: what a part does about a stroke is part of that stroke.
+    this.field?.struck(ball);
     if (this.strokes === 0) {
       this.firstShotTick = this.world.tick;
       // The countdown starts with the first stroke and never waits for the player again.
@@ -326,7 +361,7 @@ export class Session implements SkillHost {
 
   /** Picks the ball the next stroke is played with. Returns false if it cannot be picked now. */
   select(ball: Ball): boolean {
-    if (!(this.phase === 'aiming' || this.frozen) || !this.balls.live.includes(ball)) return false;
+    if (!(this.phase === 'aiming' || this.frozen) || !this.balls.playable.includes(ball)) return false;
     if (this.balls.selected === ball) return true;
     this.balls.selected = ball;
     this.emit({ type: 'selected', ball: ball.id });
@@ -474,7 +509,8 @@ export class Session implements SkillHost {
         // the very first look finds nothing under a ball that is sitting on the tee.
         if (probe || world.tick > 0) track.grounded = probe?.grounded ?? false;
         applySurface(ball, probe);
-        if (probe?.grounded && this.phase === 'rolling') {
+        // What a round is judged on is what the player's ball did, not its shadow.
+        if (probe?.grounded && this.phase === 'rolling' && ball !== this.balls.shadow) {
           this.stats.surfaces.add(probe.surfaceId);
           if (probe.surfaceId !== track.lastSurface) this.emit({ type: 'surface', id: probe.surfaceId });
         }
@@ -532,29 +568,37 @@ export class Session implements SkillHost {
     const rolling = this.phase === 'rolling';
     // A cup that travels or opens can also take a ball that is lying still.
     if (rolling || (this.phase === 'aiming' && this.goal.live)) {
+      const shadow = this.balls.shadow;
       let atRest = true;
+      // The same, leaving the shadow out: a hole that is won does not wait for it.
+      let playersAtRest = true;
       for (const ball of [...this.balls.live]) {
         const track = this.track(ball);
         if (track.busy) {
           track.stop.reset();
           atRest = false;
+          if (ball !== shadow) playersAtRest = false;
           continue;
         }
         const v = ball.velocity();
         // Speed is judged against the ground, so a ball riding a platform counts as still.
         const ground = track.probe?.grounded ? track.probe.velocity : STILL;
         const speed = hypot(v.x - ground.x, v.y - ground.y, v.z - ground.z);
-        const cup = this.cupTaking(ball, v, speed);
+        // No cup takes the shadow (SPEC v8 3.4).
+        const cup = ball === shadow ? null : this.cupTaking(ball, v, speed);
         if (cup) this.sink(ball, cup, rolling);
-        else if (rolling && !track.stop.update(speed)) atRest = false;
+        else if (rolling && !track.stop.update(speed)) {
+          atRest = false;
+          if (ball !== shadow) playersAtRest = false;
+        }
       }
       if (this.goal.met) this.won = true;
       // With the hole won, the round still waits for balls on their way to the cup:
       // a second one dropping in is worth something (SPEC v3 2.4).
       const waiting =
-        rolling && !atRest && this.balls.live.length > 0 && this.goal.cups.some((cup) => cup.sunk > 0);
+        rolling && !playersAtRest && this.balls.playable.length > 0 && this.goal.cups.some((cup) => cup.sunk > 0);
       const still = rolling && atRest && !this.won;
-      const settled = still && this.propsSettled() && this.fieldSettled();
+      const settled = still && !this.detained() && this.propsSettled() && this.fieldSettled();
       this.waiting = still && !settled;
       if (this.won && !waiting) this.finish(true);
       else if (settled) this.endStroke();
@@ -640,9 +684,30 @@ export class Session implements SkillHost {
     return false;
   }
 
+  /**
+   * True while a ball lies on a bridge that comes and goes and keeps what stops on it
+   * (SPEC v8 3.2): the stroke stays open until the bridge has gone, and the ball with
+   * it. So no stroke is ever played from one, as none is from a slab about to fall.
+   */
+  private detained(): boolean {
+    for (const ball of this.balls.live) {
+      const probe = this.track(ball).probe;
+      const carrier = probe?.grounded ? probe.carrier : null;
+      if (carrier && this.movers.some((mover) => mover === carrier && mover.def.phantom?.holds)) return true;
+    }
+    return false;
+  }
+
   /** Keeps the course as it is now, for the stroke about to be played to go back to. */
   private keep(position: XYZ, size: BallSize): void {
-    if (this.field?.rewindable) this.snapshots.push({ position: { ...position }, size, field: this.field.save() });
+    if (!this.field?.rewindable) return;
+    const shadow = this.balls.shadow;
+    this.snapshots.push({
+      position: { ...position },
+      size,
+      field: this.field.save(),
+      ...(shadow ? { shadow: { ...shadow.position() } } : {}),
+    });
   }
 
   /** Puts a ball and the course back to how a snapshot has them. */
@@ -650,6 +715,7 @@ export class Session implements SkillHost {
     if (ball.setSize(snapshot.size, this.world.up)) this.emit({ type: 'resized', ball: ball.id, size: snapshot.size });
     // The ball first: parts work out what is standing on them from where it is.
     ball.teleport(snapshot.position);
+    if (snapshot.shadow) this.returnShadow(snapshot.shadow);
     this.field?.restore(snapshot.field);
     this.lastShotPosition = snapshot.position;
     this.lastShotSize = snapshot.size;
@@ -659,10 +725,21 @@ export class Session implements SkillHost {
     ball.recordPose(true);
   }
 
+  /** Puts the shadow ball back where a stroke found it, at rest. */
+  private returnShadow(to: XYZ = this.shadowFrom): void {
+    const shadow = this.balls.shadow;
+    if (!shadow) return;
+    shadow.teleport(to);
+    this.shadowFrom = to;
+    this.track(shadow).stop.reset();
+    shadow.recordPose(true);
+  }
+
   /** Every ball has stopped: the stroke is over and the player aims again. */
   private endStroke(): void {
     this.waiting = false;
     for (const ball of this.balls.live) this.settle(ball);
+    this.field?.rested();
     this.stats.rests.push({ ...this.ball.position() });
     // Fallen pins are cleared away; the ones left standing stay where they were knocked to.
     for (const pin of this.goal.pins) if (pin.down) pin.remove();
@@ -728,6 +805,17 @@ export class Session implements SkillHost {
     );
     this.tracks = new WeakMap();
     this.balls = new BallSet(this.world, ballProps, this.teePoint());
+    if (hole.mirror) {
+      if ((hole.maxBalls ?? 1) > 1 || hole.skills) {
+        throw new Error(`Hole "${hole.id}": a mirror goes with neither splitting nor skills`);
+      }
+      const { axis, at, shadow } = hole.mirror;
+      const [tx, ty, tz] = hole.tee;
+      // Where the hole says, or where the tee is in the glass.
+      const [x, y, z] = shadow ?? (axis === 'x' ? [2 * at - tx, ty, tz] : [tx, ty, 2 * at - tz]);
+      this.balls.shadow = this.balls.add([x, y + ballProps.radius, z]);
+    }
+    this.shadowFrom = this.balls.shadow ? { ...this.balls.shadow.position() } : STILL;
     this.goal = new Goal(hole.goal, this.world, this.surfaces);
     this.crates = (hole.crates ?? []).map((def) => new Crate(def, this.world, this.surfaces));
     this.field = hole.field
@@ -893,8 +981,15 @@ export class Session implements SkillHost {
       this.emit(event);
     }
     for (const ball of out) {
+      // The shadow goes back where the stroke found it, and that is all: it costs
+      // nothing, and whatever it did on the way stays done (SPEC v8 3.4).
+      if (ball === this.balls.shadow) {
+        this.returnShadow();
+        this.cue('shadowBack');
+        continue;
+      }
       // While another ball plays on, or the hole is already won, a ball that leaves is just gone.
-      if (this.balls.live.length > 1 || this.won) {
+      if (this.balls.playable.length > 1 || this.won) {
         this.balls.remove(ball);
         this.emit({ type: 'ballRemoved', ball: ball.id, reason: 'outOfBounds' });
         continue;
@@ -911,7 +1006,11 @@ export class Session implements SkillHost {
       if (ball.setSize(size, this.world.up)) this.emit({ type: 'resized', ball: ball.id, size });
       const target = toTee ? xyz(this.teePoint(ball.props.radius)) : this.lastShotPosition;
       if (snapshot) this.rewind(ball, snapshot);
-      else ball.teleport(target);
+      else {
+        ball.teleport(target);
+        // The stroke did not happen for the shadow either.
+        this.returnShadow();
+      }
       this.strokes++;
       this.stats.outOfBounds++;
       this.stats.rests.push({ ...target });
@@ -946,8 +1045,9 @@ export class Session implements SkillHost {
       for (const { kind, handle } of kinds) {
         // A stone is shoved, a crystal turned.
         this.field?.hit(ball, handle, speed);
-        if (kind === 'wall' && this.phase === 'rolling') this.stats.wallHits++;
-        if (kind === 'mover' && this.phase === 'rolling') this.stats.moverHits++;
+        const counted = this.phase === 'rolling' && ball !== this.balls.shadow;
+        if (kind === 'wall' && counted) this.stats.wallHits++;
+        if (kind === 'mover' && counted) this.stats.moverHits++;
         if (speed >= MIN_BOUNCE_SPEED) this.emit({ type: 'bounce', kind, speed });
       }
     }

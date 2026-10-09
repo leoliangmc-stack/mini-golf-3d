@@ -1,20 +1,34 @@
 import * as THREE from 'three';
+import type { HoleDef } from '../level/schema';
+import type { Ball } from '../physics/ball';
 import type { Zone, ZoneDef } from '../physics/zones';
 import { numberParam, vectorParam, vectorsParam } from '../physics/zones';
 import { armAt, isArm, padPoint } from '../physics/zones/arm';
 import { drumCentre, isDrum } from '../physics/zones/drum';
 import { headingVector, tunnelColor, tunnelEnds, tunnelRadius } from '../physics/zones/tunnel';
 import { coasterView } from './cityViews';
+import { wrapView } from './strangeViews';
+
+/** What a zone's picture may be told each frame besides the zone itself. */
+export interface ZoneScene {
+  /** The balls in play: a hall with joined edges draws them where they will come in. */
+  balls: readonly Ball[];
+  /** Seconds the hole has been on screen, for things that pulse. */
+  time: number;
+}
 
 /** What the player sees of a zone. */
 export interface ZoneView {
   object: THREE.Object3D;
   /** Called every frame with the live zone, by views that show its state. `alpha` is how far the frame is between two steps. */
-  update?(zone: Zone, alpha: number): void;
+  update?(zone: Zone, alpha: number, scene?: ZoneScene): void;
 }
 
-/** Builds the view of a zone. Zones without a registered view are invisible. */
-export type ZoneViewBuilder = (def: ZoneDef) => ZoneView;
+/**
+ * Builds the view of a zone. Zones without a registered view are invisible. `hole` is
+ * the hole the zone is in, for a view that draws more of it than the zone alone.
+ */
+export type ZoneViewBuilder = (def: ZoneDef, hole?: HoleDef) => ZoneView;
 
 const registry = new Map<string, ZoneViewBuilder>();
 
@@ -22,8 +36,8 @@ export function registerZoneView(type: string, build: ZoneViewBuilder): void {
   registry.set(type, build);
 }
 
-export function buildZoneView(def: ZoneDef): ZoneView | null {
-  return registry.get(def.type)?.(def) ?? null;
+export function buildZoneView(def: ZoneDef, hole?: HoleDef): ZoneView | null {
+  return registry.get(def.type)?.(def, hole) ?? null;
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -752,4 +766,5 @@ export function registerBuiltinZoneViews(): void {
   registerZoneView('gravity', gravityView);
   registerZoneView('tunnelPair', tunnelView);
   registerZoneView('timeBonus', timeBonusView);
+  registerZoneView('wrap', wrapView);
 }

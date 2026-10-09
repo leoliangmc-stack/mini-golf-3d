@@ -8,6 +8,7 @@ import { DEFAULT_BALL, sizedProps } from '../physics/ball';
 import { getSurface } from '../physics/surfaces';
 import { buildDecor } from './decor';
 import type { Occluder } from './occlusion';
+import { mirrorView } from './strangeViews';
 
 /** How much darker the sides of the ground are than its top. */
 const SIDE_SHADE = 0.68;
@@ -53,6 +54,8 @@ export function buildHoleView(compiled: CompiledHole, hole: HoleDef): HoleView {
     add(mesh);
   }
   for (const decor of hole.decor ?? []) add(buildDecor(decor));
+  // The mirror is see-through already: it is never faded out of the way.
+  if (hole.mirror) group.add(mirrorView(hole.mirror));
 
   const cups = goalCups(hole.goal).map((cup) => {
     const track = buildTrack(cup);

@@ -6,6 +6,7 @@ import {
   GRAND_FINALE,
   PRODUCTION_LINE,
   SPRING_TO_CANYON,
+  STRANGE_GATE,
   TEMPLE_GATE,
 } from './finales';
 import { ASSEMBLY_WORLD } from './worlds/assembly';
@@ -18,18 +19,22 @@ import { CLOCK_WORLD } from './worlds/clock';
 import { CLONE_WORLD } from './worlds/clone';
 import { DAM_WORLD } from './worlds/dam';
 import { DESERT_WORLD } from './worlds/desert';
+import { ECHO_WORLD } from './worlds/echo';
 import { FAIR_WORLD } from './worlds/fair';
 import { FOREST_WORLD } from './worlds/forest';
 import { FREEZE_WORLD } from './worlds/freeze';
 import { GRAVITY_WORLD } from './worlds/gravity';
 import { GROW_WORLD } from './worlds/grow';
+import { HALL_WORLD } from './worlds/hall';
 import { HOARD_WORLD } from './worlds/hoard';
 import { ICE_WORLD } from './worlds/ice';
 import { JUNGLE_WORLD } from './worlds/jungle';
 import { MAGNET_WORLD } from './worlds/magnet';
 import { MAZE_WORLD } from './worlds/maze';
+import { MIRROR_WORLD } from './worlds/mirror';
 import { MOVING_WORLD } from './worlds/moving';
 import { MUSIC_WORLD } from './worlds/music';
+import { PHANTOM_WORLD } from './worlds/phantom';
 import { PIRATE_WORLD } from './worlds/pirate';
 import { POLAR_WORLD } from './worlds/polar';
 import { RAIL_WORLD } from './worlds/rail';
@@ -95,5 +100,13 @@ export const CHAPTERS: readonly ChapterDef[] = [
     worlds: [SUBWAY_WORLD, RAIL_WORLD, FAIR_WORLD, MAZE_WORLD],
     finale: CITY_DAY_OUT,
     after: 'ch6',
+  },
+  // Strange Dimensions (SPEC v8). It follows Chapter 7 on the main line.
+  {
+    id: 'ch8',
+    name: { en: 'Chapter 8', zh: '第八章' },
+    worlds: [PHANTOM_WORLD, HALL_WORLD, MIRROR_WORLD, ECHO_WORLD],
+    finale: STRANGE_GATE,
+    after: 'ch7',
   },
 ];

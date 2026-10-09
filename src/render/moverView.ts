@@ -3,6 +3,7 @@ import type { MoverDef } from '../level/schema';
 import type { Mover } from '../physics/movers';
 import { getSurface } from '../physics/surfaces';
 import { trainLook } from './cityViews';
+import { phantomLook } from './strangeViews';
 
 const EBONY = 0x2b2633;
 
@@ -61,6 +62,7 @@ export function buildMoverView(def: MoverDef): THREE.Object3D {
   if (def.look === 'keys') return keysLook(def, mesh);
   if (def.look === 'hand') return handLook(def, mesh);
   if (def.look === 'train') return trainLook(def, mesh);
+  if (def.phantom) return phantomLook(def, mesh);
   return mesh;
 }
 
@@ -73,4 +75,6 @@ export function updateMoverView(mesh: THREE.Object3D, mover: Mover, alpha: numbe
     a.position.z + (b.position.z - a.position.z) * alpha,
   );
   mesh.rotation.y = a.yaw + (b.yaw - a.yaw) * alpha;
+  // A part that comes and goes draws how much of it is there (SPEC v8 3.2).
+  (mesh.userData.phantom as ((mover: Mover) => void) | undefined)?.(mover);
 }

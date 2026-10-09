@@ -325,6 +325,7 @@ export function createHud(game: Game, actions: HudActions): void {
       case 'cue':
         if (event.name === 'dragonWake') showToast(TEXT.dragonWakes());
         else if (event.name === 'dragonStir') showToast(TEXT.dragonStirs());
+        else if (event.name === 'shadowBack') showToast(TEXT.shadowBack());
         break;
       case 'pinDown':
         // On a hole that is all pins the result panel says it; here there is more to do.

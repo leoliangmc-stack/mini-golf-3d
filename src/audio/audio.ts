@@ -620,6 +620,53 @@ export class AudioEngine {
     this.tone({ wave: 'square', from: 165, length: 0.14, level: 0.12, delay: 0.1 });
   }
 
+  // --- Chapter 8: strange dimensions ---
+
+  /** A bridge that comes and goes: a shimmer rising as it comes, falling as it goes. */
+  phantom(shown: boolean): void {
+    this.tone({ wave: 'triangle', from: shown ? 520 : 1240, to: shown ? 1240 : 390, length: 0.32, level: 0.1 });
+    this.tone({ from: shown ? 1040 : 2480, to: shown ? 2480 : 780, length: 0.32, level: 0.04 });
+    this.noise({ filter: 'highpass', from: shown ? 2600 : 5200, to: shown ? 5200 : 2200, length: 0.22, level: 0.05 });
+  }
+
+  /** A ball crossing a joined edge: air through a door, and the same note from the other side. */
+  wrap(): void {
+    this.noise({ filter: 'bandpass', from: 900, to: 3200, length: 0.14, level: 0.12 });
+    this.tone({ wave: 'triangle', from: 660, length: 0.07, level: 0.11 });
+    this.tone({ wave: 'triangle', from: 660, length: 0.09, level: 0.07, delay: 0.09 });
+  }
+
+  /** A stroke answered in the mirror: the knock again, thinner and a moment late. */
+  mirrorShot(): void {
+    this.tone({ wave: 'triangle', from: 1180, to: 760, length: 0.07, level: 0.09, delay: 0.05 });
+    this.noise({ filter: 'highpass', from: 4200, length: 0.03, level: 0.07, delay: 0.05 });
+  }
+
+  /** The shadow on a plate: the plate's own sound an octave down, and hollow. */
+  shadowPlate(): void {
+    this.tone({ wave: 'sine', from: 220, to: 165, length: 0.16, level: 0.2 });
+    this.tone({ wave: 'triangle', from: 440, to: 392, length: 0.22, level: 0.08, delay: 0.03 });
+  }
+
+  /** The shadow put back where the stroke found it. */
+  shadowBack(): void {
+    this.tone({ wave: 'sine', from: 392, to: 262, length: 0.2, level: 0.12 });
+    this.noise({ filter: 'lowpass', from: 1200, to: 300, length: 0.18, level: 0.06 });
+  }
+
+  /** An echo setting off: the stroke before, heard again from far away. */
+  echoStart(): void {
+    [0, 0.11, 0.22].forEach((delay, i) => this.tone({ wave: 'sine', from: 880, to: 700, length: 0.09, level: 0.09 / (i + 1), delay }));
+  }
+
+  /** An echo on a silver plate, or off it: a struck glass. */
+  echoPlate(down: boolean): void {
+    const hz = down ? 1568 : 1175;
+    this.tone({ wave: 'sine', from: hz, length: 0.45, level: 0.13 });
+    this.tone({ wave: 'sine', from: hz * 2.01, length: 0.25, level: 0.05 });
+    if (down) this.tone({ wave: 'triangle', from: 196, to: 147, length: 0.1, level: 0.14 });
+  }
+
   /** Entering (`on`) or leaving a gravity zone. */
   gravityShift(on: boolean): void {
     this.tone({ from: on ? 280 : 900, to: on ? 900 : 280, length: 0.28, level: 0.13 });

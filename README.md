@@ -2,13 +2,14 @@
 
 > It's Mini Golf, but every world has a different rule.
 
-A browser mini golf game: 7 chapters, 30 worlds, 97 holes, each world built around one
+A browser mini golf game: 8 chapters, 34 worlds, 110 holes, each world built around one
 mechanic. TypeScript, Three.js and Rapier; a static site with no backend. Requirements
 live in [SPEC.md](SPEC.md) (v1, Chapter 1), [SPEC-v2.md](SPEC-v2.md) (Chapter 2),
 SPEC v3.0 (Chapter 3), SPEC v4 (Ancient Ruins, built as Chapter 4),
 [SPEC-ch5.md](SPEC-ch5.md) (Wild Elements, Chapter 5), [SPEC-ch6.md](SPEC-ch6.md)
-(Machine Works, Chapter 6, called SPEC v6 below) and [SPEC-ch7.md](SPEC-ch7.md) (City &
-Carnival, Chapter 7, called SPEC v7 below), which are the source of truth for scope and
+(Machine Works, Chapter 6, called SPEC v6 below), [SPEC-ch7.md](SPEC-ch7.md) (City &
+Carnival, Chapter 7, called SPEC v7 below) and [SPEC-ch8.md](SPEC-ch8.md) (Strange
+Dimensions, Chapter 8, called SPEC v8 below), which are the source of truth for scope and
 milestones. The SPECs for Chapters 3 and 4 are not in this repository.
 
 **Play it: https://mini-golf-3d-self.vercel.app**
@@ -97,6 +98,17 @@ and pinch the camera; on a desktop, right-drag and the wheel do the same.
 | Y9 Chapter 7 finale: City Day Out, and the `maxRotations` challenge | done |
 | Y10 sound, music, text, save migration to version 7, the Chapter 7 tab | done; see "Not yet verified" below |
 | Y11 tune against the first playtest | not started |
+| Z1 bridges that come and go: the cycle, the warning, the rest rule, the stroke held open, waiting for a ball to leave | done |
+| Z2 Phantom Bridges: 3 holes | done |
+| Z3 halls with joined edges: the crossing, the ground beyond the line, the picture of the other side | done |
+| Z4 Endless Hall: 3 holes | done |
+| Z5 the mirror: a shadow ball struck with every stroke, its own rule for leaving the course, what the mirror shows | done |
+| Z6 Mirror Maze: 3 holes | done |
+| Z7 echoes: zones that hear a stroke and play the one before, echo plates, recordings in the snapshot | done |
+| Z8 Echo: 3 holes | done |
+| Z9 Chapter 8 finale: Strange Gate | done |
+| Z10 sound, music, text, save migration to version 8, the Chapter 8 tab | done; see "Not yet verified" below |
+| Z11 tune against the first playtest | not started |
 | S0 an analytics script on the page | not started: it needs a provider account |
 
 SPEC v4 lists R0 (replay check) and R1 (`cup` -> `goal`) first. Both were already done
@@ -132,7 +144,14 @@ browser; whether 10 px and 350 ms are right under a thumb has not been tried at 
 #12 only as far as the texts being present in both languages. Its sounds were written,
 not listened to. Everything in SPEC v7 7.5 is still to be tuned: what a loop asks for
 and what the track takes off a ball, the speed at the fork, the turns each maze hole
-allows, the tap, and every par.
+allows, the tap, and every par. And for Chapter 8, from SPEC v8 7.4: #11 (whether the
+picture of a hall's far side, the mirror and an echo can be read on a phone, and
+whether any of them hides the ball: they were looked at in a desktop browser, where they
+can and do not), #6 as far as the camera goes (it was seen to hold both balls, on a
+desktop), and #12 only as far as the texts being present in both languages. Its sounds
+were written, not listened to. Everything in SPEC v8 7.5 is still to be tuned: how long
+a bridge stays and how long it warns, how big a hall is, how unlike the two sides of a
+mirror are, whether anyone understands that the last stroke comes back, and every par.
 
 ### Open decisions
 
@@ -165,6 +184,11 @@ allows, the tap, and every par.
   Chapter 6 finale, which on the shortest way there is hole 71. SPEC v7 7.1 says as much
   and sets no targets. Chapter 7 is also the first to ask for something no test here can
   judge at all, a tap on a phone, so it is the chapter that most needs a person to reach it.
+- **How anyone gets to Chapter 8.** Once more: it opens with the Chapter 7 finale, which
+  on the shortest way there is hole 84. SPEC v8 7.1 sets no targets for that reason and
+  suggests a way in for testers (`?chapter=8`). None was built: what a tester's way in
+  may open, and whether it writes to the save, is a decision about the game and not
+  about this chapter. `?unlock` and `?hole=` still exist in a development build only.
 - **Tuning by feel.** Shot power, camera, surface values and every par were set by
   calculation and by a search script, not by playing on a phone. The dev panel exists
   to tune them.
@@ -183,6 +207,106 @@ deploys on push whatever a workflow says, so `npm run build` runs the replay che
 itself: if one hole's reference solution no longer plays back, the build fails and
 nothing is deployed. `.github/workflows/replay.yml` runs the same checks on every push
 and pull request, where the result can be seen before merging.
+
+### Where this differs from SPEC v8 (Strange Dimensions)
+
+SPEC v8 was written against this repository and its premises hold: 97 holes, 896 tests,
+save version 7, the unlock order. What follows is what building it settled, or changed.
+
+- **A bridge that comes and goes is a moving part, not one of the works** (`phantom` on
+  a mover). SPEC v8 3.2 leaves the choice open, because waiting for a ball to leave
+  makes the bridge depend on the ball. It needs one thing remembered, whether it is
+  there, and that follows again from the clock and the ball within a tick of anything
+  being put back. So it is in no snapshot and brings no undo, as the SPEC asks.
+- **Gone, a bridge is switched off, not made a ghost.** A platform that is only not
+  there for the ball can still be found by the ray that looks for the ground, and a
+  ball over the gap would be rolling on nothing.
+- **"In its place" means sunk into it by more than two centimetres.** A ball lying on
+  the bank at a bridge's end is four millimetres into where the bridge will be, as with
+  any platform. If that kept the bridge away, the stroke onto it would fall.
+- **phantom-3's island is dust.** SPEC v8 3.2 lets a ball stop "on safe fixed ground".
+  A ball that has just ridden three bridges does not stop on three metres of stone.
+- **There is no pause after a crossing.** SPEC v8 5 asks for one, against a ball going
+  back and forth over a line. A ball is taken across only while it is going out over
+  the line, and it arrives going in, so nothing sends it straight back; a pause could
+  only let a fast ball in a small hall run off the far edge with nobody to catch it. The
+  test asks for what the pause was for: no two crossings of one pair of edges ever come
+  nearer together than the hall is wide.
+- **A ball crosses just after the line, on real ground.** It is taken across on the
+  first step after its middle has passed the line, so the ground goes on beyond every
+  joined edge: a skirt of pale ground, 2.5 m of it, of which a ball uses a third of a
+  metre. The picture of the other side is drawn on the skirt.
+- **"Built alike at both edges" is a test, and says something exact:** wherever a ball
+  can be just past a joined line, it can be in the place it is taken to, and there is
+  ground under both. So a wall that meets a joined edge runs on across the skirt, and
+  the pen of hall-3, whose side ends at the right-hand edge, comes in again 0.6 m at
+  the left.
+- **The camera does not jump at a crossing, because it does not move.** SPEC v8 3.3
+  sends the camera after the ball at once. While the ball is in a hall its four corners
+  are kept in view, so the picture is the same before and after. The cut is still made,
+  for a hall too big for that.
+- **The picture of the other side is its walls, the cup and the balls,** cut off at the
+  edge of the skirt. Not its floor, and not its works. A ball rolling up to a line can
+  be seen coming toward the far one.
+- **The mirror is a picture, and a wall of glass stands under it.** SPEC v8 3.4 says the
+  balls pass through each other, which balls here always have. What keeps each on its
+  own side is a wall, and a test goes round every mirror hole to see that it does.
+- **The shadow is a ball in play that is not the player's** (`BallSet.shadow`). Zones,
+  plates, levers and walls all meet it. It is left out of picking a ball, of the cup, of
+  what a challenge counts, of "a ball that leaves while another plays on is gone", and
+  of the wait for balls still rolling once the hole is won.
+- **The player's ball out of bounds takes the shadow back too,** to where the stroke
+  found it: that is the snapshot. The shadow out of bounds goes back alone, and whatever
+  it pressed on the way stays pressed.
+- **A mirror can be told what it shows** (`reach`). Only a stroke played from inside it
+  sets the shadow off. That is how the finale keeps the shadow still until the ball is
+  in front of the mirror, and still again among the echoes (SPEC v8 3.6). The mirrors
+  of the world's own three holes show everything.
+- **The shadow has an arrow of its own while the player aims,** the player's turned
+  round in the glass, and a ring round it between strokes. Not in the SPEC; without it
+  the first stroke of the world is a guess.
+- **mirror-3 pins the shadow.** SPEC v8 3.4 wants the shadow standing on a plate while
+  the ball goes through the gate; but the stroke that takes the ball through moves the
+  shadow too. The plate lies in a nook at the far end of the shadow's room, carpeted
+  and soft-walled: a stroke up the room presses the shadow into it and keeps it there.
+  So the stroke through the gate has to be one that goes up the room.
+- **Only an echo presses an echo plate.** SPEC v8 3.5 says a plain plate is for the
+  ball alone, and of the silver one only that an echo can press it. If a ball could as
+  well, a ball stopped on it would open its own gate.
+- **An echo is one stroke late, and that decides how the holes are laid out.** It sets
+  off when the next stroke is played and gets to a plate when the ball did. A ball that
+  starts where its echo will end is therefore always ahead of it: with the gate beyond
+  the plate, the ball is there first every time. So echo-1 has its plate by the tee and
+  its gate far off; echo-2 and echo-3 send the echo one way and the ball back the other.
+- **echo-3's plates stay down.** SPEC v8 3.5 has one stroke lay two stretches of echo.
+  An echo is in one place at a time and cannot hold two plates, so both latch, and the
+  gate wants both.
+- **A stroke that barely leaves the plate has an echo that never does.** That is the
+  patient way through echo-2, a stroke dearer than the timed one; a test plays it.
+- **A stroke taken back, or ended out of bounds, is not heard.** The snapshot holds
+  which stroke is being played back, since which tick, and which was heard last. A
+  recording is never changed once its stroke is over, so the snapshot keeps the thing
+  itself and not a copy. How far the playing has got is the hole's clock.
+- **An echo still running does not hold the stroke open.** It runs on while the player
+  aims, like a moving part, and the next stroke puts another in its place.
+- **The path of the last stroke is drawn across the zone in dots:** what the next
+  stroke will set going. Not in the SPEC.
+- **A gate on an echo plate answers in eight ticks,** not in the time the glow takes to
+  run down the line. An echo is late enough already.
+- **The echo holes name a point to keep in view** (`camera.keep`): the plate lies the
+  other way from the cup, and the camera frames the ball and the cup.
+- **The finale has two bridges, and moss beyond its silver plate.** A second bridge
+  between the first gate and the echoes keeps "never out of bounds" from being settled
+  on the first stroke. The last gate costs a stroke of waiting when the stroke before
+  was a long one, for the reason above: its reference round takes 7.
+- **The sound of a bridge coming and going is the game watching a moving part,** and
+  the sound of the shadow on a plate is the plate's own cue with the shadow standing
+  there. No event was added, as the SPEC says.
+- **Pars are from search again.** The thirteen reference rounds take 1, 2, 2, 1, 1, 2,
+  2, 3, 4, 2, 2, 2 and 7 strokes against pars of 2, 3, 3, 2, 3, 3, 3, 4, 6, 3, 3, 3 and
+  8. hall-3 can be holed in one by a stroke that crosses twice; mirror-1 in one off a
+  wall. SPEC v8 7.5 leaves the tuning to the playtest.
+- **Scenery is built in code.**
 
 ### Where this differs from SPEC v7 (City & Carnival)
 
@@ -546,23 +670,26 @@ src/
   core/      fixed-step loop, shared types
   core/math.ts  the only trigonometry the simulation may use (see Engine notes)
   physics/   Rapier wrapper and the mechanic layers: ball (and its sizes), surfaces,
-             zones (among them currents, bubble columns, wind, robot arms, drums and
-             roller coasters), movers, loose props (crates, pins)
+             zones (among them currents, bubble columns, wind, robot arms, drums, roller
+             coasters and halls with joined edges), movers (among them bridges that come
+             and go), loose props (crates, pins)
   level/     chapter, world and hole data schema, compiler (data -> geometry), physics builder
-  game/      session state machine, rules, goals (cup, pins, steps), the set of balls,
-             skills, challenges, replay
+  game/      session state machine, rules, goals (cup, pins, steps), the set of balls
+             (and the shadow ball of a mirror), skills, challenges, replay
   game/field/  the works of a hole: plates, gates, stones, light, sliders, gold, the
              dragon, fire, valves, water, rafts, cracked slabs, belts, clock switches,
              time zones, the beat, tunnel mouths that turn, trains, wall groups the
-             player turns; how they pass signals; the snapshot a stroke goes back to
+             player turns, echo zones and echo plates; how they pass signals; the
+             snapshot a stroke goes back to
   input/     slingshot aiming, a tap told from a drag, and camera gestures on Pointer Events
   render/    Three.js scene, camera, course, ball, zone and mover views, the views of
-             the works and the lines between them, scenery, occlusion fading, quality tiers
+             the works and the lines between them, the picture of a hall's far side,
+             the mirror, scenery, occlusion fading, quality tiers
   audio/     synthesised sound effects and generated music, and music that keeps a hole's beat
   ui/        HTML/CSS HUD and menus, all interface text (en / zh)
   debug/     development panel, and the stroke search the reference solutions are found
              with (not included in production builds)
-  data/      surfaces, themes, the thirty worlds, the seven finales and the chapter
+  data/      surfaces, themes, the thirty-four worlds, the eight finales and the chapter
              list (content only, no logic)
 tests/       determinism, tunneling, seams, terrain, rules, scoring, movers, fields, saves,
              save migration, tunnels, the moving cup, countdown, rooftops, ball sizes,
@@ -571,7 +698,8 @@ tests/       determinism, tunneling, seams, terrain, rules, scoring, movers, fie
              holes (wild), belts, arms, the beat, drums and time zones (machines) and the
              Chapter 6 holes (works), music on the beat, turning tunnels, trains and
              coasters (city), taps and wall groups (maze) and the Chapter 7 holes (town),
-             reference solutions
+             bridges that come and go, joined edges, the shadow ball and echoes (strange)
+             and the Chapter 8 holes (dimensions), reference solutions
 replays/     one reference solution per hole: its inputs and how the round ended
 scripts/     the replay command and the dev server's SAVE REPLAY endpoint
 ```
@@ -581,7 +709,8 @@ scripts/     the replay command and the dev server's SAVE REPLAY endpoint
 A **hole** is one object in a world file under `src/data/worlds/`: tee, goal (a cup,
 pins, or steps of them), par, pieces (floors, ramps, walls, pillars, low bars), zones,
 movers, crates, skills, works (`field`: parts wired by `when`, and how many `turns` of a
-wall group it allows), a `beat` if its machines keep one, an optional third-star challenge. Nothing outside that file
+wall group it allows), a `beat` if its machines keep one, a `mirror` if it has a shadow
+ball, an optional third-star challenge. Nothing outside that file
 changes, except that it needs a reference solution in `replays/` (see below).
 `tests/worlds.test.ts` then checks it automatically.
 
@@ -597,15 +726,16 @@ A **new mechanic** is a module, registered by name so data can refer to it:
 | Kind | Where | Example |
 |---|---|---|
 | Surface (what the ground does) | `src/data/surfaces.ts` | ice, sand |
-| Zone (a region acting on the ball) | `src/physics/zones/` | magnet, gravity, launcher, pads, current, wind, arm, drum, coaster |
+| Zone (a region acting on the ball) | `src/physics/zones/` | magnet, gravity, launcher, pads, current, wind, arm, drum, coaster, wrap |
 | Skill (something the player does on purpose) | `src/game/skills.ts` | freeze |
 | Zone visual | `src/render/zoneViews.ts` | magnet rings, cannon |
 | Mover motion | `src/physics/movers.ts` | slide, swing, spin |
 | Mover role (what a moving part is to the ball) | `src/physics/movers.ts` | platform, pusher, lift |
+| A mover that comes and goes | `src/physics/movers.ts` | `phantom` on any mover |
 | Challenge check | `src/game/challenges.ts` | noWallHits, firstStrokeInto, maxRotations |
 | Scenery model | `src/render/decor.ts` | canopy, tower, gear |
-| Part (one of the works of a hole) | `src/game/field/` | plate, gate, stone, crystal, fire, valve, water, belt, dial, timeZone, pulse, tunnel, train, rotor |
-| Part visual | `src/render/fieldViews.ts`, `src/render/cityViews.ts` | the gate slab, the dragon, a train and its track |
+| Part (one of the works of a hole) | `src/game/field/` | plate, gate, stone, crystal, fire, valve, water, belt, dial, timeZone, pulse, tunnel, train, rotor, echo, echoPlate |
+| Part visual | `src/render/fieldViews.ts`, `src/render/cityViews.ts`, `src/render/strangeViews.ts` | the gate slab, the dragon, a train and its track, an echo |
 
 A zone talks to the game through `ZoneContext` only: it can move the ball, hold it
 (`busy`), say that it jumped (`snap`), add time to the countdown (`addTime`) and name
@@ -614,6 +744,8 @@ a moment for sound and effects (`emit` a cue), make the ball a size bigger or sm
 run once per ball, so one that remembers something about a ball keeps it per ball
 (`perBall`). Challenges can count cues. A zone that acts by itself on whatever lies in
 it, like a drum, says where a ball may not be left (`forbidsRest`), as a moving part does.
+A zone's picture is told the hole it is in and, each frame, the balls in play: a hall
+with joined edges draws both.
 
 A part talks to the round through `FieldHost` only, and to other parts through signals:
 it has `on` (what others listen to), `busy` (still moving, so the stroke is not over)
@@ -623,7 +755,9 @@ keeps the hole's clock and nothing else says so (`timed`); a part that keeps a c
 its own for moving parts to run on has `at` (a `LocalClock`), and a moving part names
 it with `clock`. A part can take hold of a ball as a zone can (`hold`, `snap`): a train
 does. A part the player works by hand has `turn` (a `Turnable`): the round gives it its
-turns, counts them and records each as an input.
+turns, counts them and records each as an input. A part that has to know of strokes is
+told when one is played (`struck`, after the snapshot is taken) and when it is over
+(`rested`): an echo zone is.
 
 `physics/`, `level/` and `game/` never mention a specific world.
 
@@ -635,14 +769,14 @@ strokes of the current round, check that a replay is identical 10 times over, an
 feel values with sliders. **COPY CHANGES** exports whatever was changed as JSON.
 
 URL switches, development only: `?hole=ice-2` starts on that hole (`ch1-finale` to
-`ch7-finale` are the finales), `?unlock` opens every hole in every chapter. `?lang=zh`
+`ch8-finale` are the finales), `?unlock` opens every hole in every chapter. `?lang=zh`
 or `?lang=en` forces a language in any build.
 
 ### Reference solutions
 
 Every hole has one in `replays/<holeId>.json`: the inputs of a round that finishes it
 (each stroke's tick, direction, power and ball, each use of a skill, each turn of a wall
-group) and how that round ended. `npm run replay` plays all 97 back without rendering, in about a second,
+group) and how that round ended. `npm run replay` plays all 110 back without rendering, in about a second,
 and prints a report; `npm test` and `npm run build` run the same check. A round has to
 end on the same tick, with the same strokes and stars, within a millimetre of the same
 place. In practice it ends in exactly the same place, to the last bit, and the tests
@@ -748,6 +882,26 @@ must match Node's exactly; that is how a difference between engines would show.
   the one place that would have stopped it.
 - **A train's points follow the levers at once,** like water and its valves: there is
   no line on the ground for a signal to run down.
+
+- **A bridge that comes and goes is a function of the tick and of one thing more:**
+  whether it is there. It comes back only into empty air, so for a tick or two after
+  its time it may still be away. That is settled before the world steps, from where the
+  balls are, the same way every time.
+- **A hall has nothing to remember.** A crossing is decided from where a ball is and
+  which way it is going. It changes one number of the ball's position and nothing of
+  its speed: the test compares them bit for bit.
+- **A stroke is one input, with a shadow or without.** Which way the shadow goes is the
+  hole's `mirror`, not the replay's business. The shadow's direction is the player's
+  with one sign turned, not one worked out again.
+- **The shadow is the second ball of the set, always.** The player's is the first, and
+  the first is what a replay strikes and what a round is judged on.
+- **An echo is read, never simulated.** Its place on a tick is the place the ball had
+  that many ticks into the stroke before, the very numbers. An echo zone keeps only the
+  ticks the ball spent inside it.
+- **List a hole's echo zones before its echo plates.** A plate looks at where each echo
+  is on the step being taken; listed first, it would look a tick late.
+- **Local clipping is on in the renderer,** for the picture of a hall's far side, which
+  is cut off at the edge of its skirt. Nothing else uses it.
 
 Decisions that are easy to undo by accident:
 

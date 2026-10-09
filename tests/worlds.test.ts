@@ -26,7 +26,7 @@ describe('world data', () => {
     }
   });
 
-  it('is the game the SPECs describe: 18 + 1 holes, then 12 + 1 six times over, 97 in all', () => {
+  it('is the game the SPECs describe: 18 + 1 holes, then 12 + 1 seven times over, 110 in all', () => {
     expect(CHAPTERS.map((chapter) => chapter.worlds.map((world) => world.id))).toEqual([
       ['ice', 'desert', 'sky', 'pirate', 'magnet', 'gravity'],
       ['forest', 'city', 'moving', 'bomb'],
@@ -35,10 +35,11 @@ describe('world data', () => {
       ['reef', 'polar', 'dam', 'canyon'],
       ['toy', 'assembly', 'music', 'clock'],
       ['subway', 'rail', 'fair', 'maze'],
+      ['phantom', 'hall', 'mirror', 'echo'],
     ]);
     const counts = CHAPTERS.map((chapter) => stagesOf(chapter).flatMap((stage) => stage.holes).length);
-    expect(counts).toEqual([19, 13, 13, 13, 13, 13, 13]);
-    expect(holes.length - TEST_WORLD.holes.length).toBe(97);
+    expect(counts).toEqual([19, 13, 13, 13, 13, 13, 13, 13]);
+    expect(holes.length - TEST_WORLD.holes.length).toBe(110);
   });
 
   it.each(holes)('$hole.id is well formed', ({ hole }) => {

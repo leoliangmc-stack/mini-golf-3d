@@ -3,6 +3,7 @@ import { startLoop } from '../core/loop';
 import { registerContent } from '../data';
 import { CHAPTERS } from '../data/chapters';
 import { TEST_WORLD } from '../data/worlds/test';
+import type { Plate } from '../game/field/tomb';
 import { allHoles, chapterOf, stagesOf } from '../level/chapters';
 import type { WorldDef } from '../level/schema';
 import { initPhysics } from '../physics/rapier';
@@ -170,6 +171,16 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
     },
   });
 
+  /** True if the shadow ball of a hole with a mirror is on one of the hole's plates. */
+  const shadowOnPlate = (): boolean => {
+    const shadow = game.session.shadow;
+    if (!shadow) return false;
+    const p = shadow.position();
+    return (game.session.field?.all<Plate>('plate') ?? []).some(
+      (plate) => Math.hypot(p.x - plate.anchor.x, p.z - plate.anchor.z) <= plate.radius + 0.35,
+    );
+  };
+
   game.on((event) => {
     const hole = game.hole;
     switch (event.type) {
@@ -220,7 +231,11 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
         else if (event.name === 'resume') audio.resume();
         else if (event.name === 'strike') audio.strike();
         else if (event.name === 'cupAppear') audio.cupAppear();
-        else if (event.name === 'plateDown') audio.plate(true);
+        else if (event.name === 'plateDown') {
+          // A plate the shadow is standing on sounds different (SPEC v8 3.9).
+          if (shadowOnPlate()) audio.shadowPlate();
+          else audio.plate(true);
+        }
         else if (event.name === 'plateUp') audio.plate(false);
         else if (event.name === 'gateOpen') audio.gate(true);
         else if (event.name === 'gateShut') audio.gate(false);
@@ -276,6 +291,12 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
         else if (event.name === 'coasterLow') audio.coasterFork(false);
         else if (event.name === 'rotorTurn') audio.rotorTurn();
         else if (event.name === 'rotorStop') audio.rotorStop();
+        else if (event.name === 'wrap') audio.wrap();
+        else if (event.name === 'mirrorShot') audio.mirrorShot();
+        else if (event.name === 'shadowBack') audio.shadowBack();
+        else if (event.name === 'echoStart') audio.echoStart();
+        else if (event.name === 'echoPlateDown') audio.echoPlate(true);
+        else if (event.name === 'echoPlateUp') audio.echoPlate(false);
         else if (event.name === 'dragonWake') {
           audio.dragonWake();
           if (stages.includes(game.world)) track('dragon_woke', { hole: hole.id });
@@ -295,6 +316,9 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
         break;
       case 'trainPass':
         audio.trainPass();
+        break;
+      case 'phantom':
+        audio.phantom(event.shown);
         break;
       case 'showcase':
         if (stages.includes(game.world)) track('showcase', { hole: hole.id, skipped: event.skipped });

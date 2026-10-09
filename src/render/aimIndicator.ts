@@ -25,7 +25,13 @@ export class AimIndicator {
   });
   private pulse = 0;
 
-  constructor() {
+  /** `tint`: one colour for the ring and the arrow both, for the indicator of a shadow ball (SPEC v8 3.4). */
+  constructor(private readonly tint?: number) {
+    if (tint !== undefined) {
+      this.arrowMaterial.color.setHex(tint);
+      this.arrowMaterial.opacity = 0.75;
+      this.ringMaterial.color.setHex(tint);
+    }
     this.shaft = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.02, 1), this.arrowMaterial);
     this.head = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.26, 3), this.arrowMaterial);
     this.head.rotation.x = Math.PI / 2;
@@ -64,7 +70,7 @@ export class AimIndicator {
     this.shaft.scale.z = length;
     this.shaft.position.z = start + length / 2;
     this.head.position.z = start + length + 0.1;
-    this.arrowMaterial.color.setHSL(0.33 * (1 - power), 0.9, 0.62);
+    if (this.tint === undefined) this.arrowMaterial.color.setHSL(0.33 * (1 - power), 0.9, 0.62);
   }
 
   private place(ball: XYZ, ballRadius: number): void {

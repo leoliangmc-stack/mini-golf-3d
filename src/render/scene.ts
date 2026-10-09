@@ -20,6 +20,8 @@ const SUN_DIRECTION = new THREE.Vector3(8, 16, 10).normalize();
 export function createStage(canvas: HTMLCanvasElement): Stage {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.shadowMap.enabled = true;
+  // The picture of the far side of a hall is cut off at the edge of its skirt (render/strangeViews.ts).
+  renderer.localClippingEnabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();

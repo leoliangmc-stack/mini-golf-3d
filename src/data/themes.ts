@@ -361,6 +361,56 @@ export function registerThemes(): void {
     sunIntensity: 2.1,
     sea: { color: 0x5f6f7f, y: -3.6 },
   });
+  // Phantom Bridges: dusk over nothing at all.
+  registerTheme('phantom', {
+    sky: 0x2a2454,
+    ambientSky: 0xd6ccff,
+    ambientGround: 0x3b3470,
+    ambientIntensity: 1.7,
+    sun: 0xcfe9ff,
+    sunIntensity: 1.7,
+    sea: { color: 0x17143a, y: -3.6 },
+  });
+  // Endless Hall: warm haze, with no far wall to see.
+  registerTheme('endless', {
+    sky: 0xefe0c4,
+    ambientSky: 0xfffaf0,
+    ambientGround: 0xc9b28a,
+    ambientIntensity: 1.6,
+    sun: 0xfff1d6,
+    sunIntensity: 2,
+    sea: { color: 0xd9c7a2, y: -3.6 },
+  });
+  // Mirror Maze: lamplight in a parlour. ("mirrors" is the Clone Ball world's.)
+  registerTheme('looking', {
+    sky: 0x3a4f5c,
+    ambientSky: 0xfff3dc,
+    ambientGround: 0x5a6f7a,
+    ambientIntensity: 1.6,
+    sun: 0xffe8c4,
+    sunIntensity: 2,
+    sea: { color: 0x24343d, y: -3.6 },
+  });
+  // Echo: a quarry in thin cold light.
+  registerTheme('echo', {
+    sky: 0xa9bfd4,
+    ambientSky: 0xf4f9ff,
+    ambientGround: 0x6f8196,
+    ambientIntensity: 1.6,
+    sun: 0xf2f6ff,
+    sunIntensity: 2,
+    sea: { color: 0x4f6178, y: -3.6 },
+  });
+  // The Chapter 8 finale: all four at once, under a sky that is none of them.
+  registerTheme('strange', {
+    sky: 0x1f2f4a,
+    ambientSky: 0xdfe8ff,
+    ambientGround: 0x3f4f78,
+    ambientIntensity: 1.7,
+    sun: 0xe9f1ff,
+    sunIntensity: 1.9,
+    sea: { color: 0x121c33, y: -3.6 },
+  });
   registerTheme('pirate', {
     sky: 0x9fd8f0,
     ambientSky: 0xffffff,

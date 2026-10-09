@@ -47,7 +47,9 @@ export class FollowCamera {
 
   /** Applies the defaults plus a hole's overrides. */
   configure(override: CameraOverride = {}): void {
-    this.params = { ...CAMERA_DEFAULTS, ...override };
+    // What else to keep in view is the caller's to pass with every update (render/framing.ts).
+    const { keep: _keep, ...params } = override;
+    this.params = { ...CAMERA_DEFAULTS, ...params };
     this.zoom = 1;
     this.turnGoal = this.turn = 0;
   }

@@ -32,6 +32,7 @@ import type {
 } from '../level/field';
 import { getSurface } from '../physics/surfaces';
 import { pointsView, rotorView, trainView, tunnelView } from './cityViews';
+import { echoPlateView, echoView } from './strangeViews';
 
 /** What a part's picture needs to know each frame besides the part itself. */
 export interface ViewFrame {
@@ -1330,4 +1331,6 @@ export function registerBuiltinPartViews(): void {
   registerPartView('tunnel', tunnelView);
   registerPartView('train', trainView);
   registerPartView('rotor', rotorView);
+  registerPartView('echo', echoView);
+  registerPartView('echoPlate', echoPlateView);
 }

@@ -462,7 +462,38 @@ export interface RotorDef {
   surface?: string;
 }
 
+/**
+ * An echo zone (SPEC v8 3.5): a rectangle of ground that plays the last stroke back.
+ * Each stroke sets the one before it going again as an echo, tick for tick as it went,
+ * wherever its path lay inside the zone. An echo is not a ball: it meets nothing and
+ * moves nothing, and presses only echo plates.
+ */
+export interface EchoDef {
+  kind: 'echo';
+  id: string;
+  min: Vec2;
+  max: Vec2;
+  /** Height of the ground it lies on. Defaults to 0. */
+  y?: number;
+}
+
+/**
+ * An echo plate (SPEC v8 3.5): a plate only an echo presses. `latch`: pressed once, on
+ * for good. `hold`: on only while an echo stands on it. Put it inside an echo zone, and
+ * list that zone before it.
+ */
+export interface EchoPlateDef {
+  kind: 'echoPlate';
+  id: string;
+  at: Vec3;
+  mode: 'latch' | 'hold';
+  /** Defaults to 0.45. */
+  radius?: number;
+}
+
 export type PartDef =
+  | EchoDef
+  | EchoPlateDef
   | TunnelDef
   | TrainDef
   | RotorDef

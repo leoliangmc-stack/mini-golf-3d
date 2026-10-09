@@ -4,6 +4,7 @@ import { compileHole } from '../level/compile';
 import type { WorldDef } from '../level/schema';
 import { FollowCamera } from './camera';
 import { buildFieldView } from './fieldViews';
+import { framingPoints } from './framing';
 import { buildHoleView, disposeHoleView } from './holeView';
 import { buildMoverView } from './moverView';
 import { buildCrateView, buildPinView } from './propViews';
@@ -36,7 +37,7 @@ export function renderThumbnail(
     view.add(mesh);
   }
   for (const zone of hole.zones) {
-    const zoneView = buildZoneView(zone);
+    const zoneView = buildZoneView(zone, hole);
     if (zoneView) view.add(zoneView.object);
   }
   for (const crate of hole.crates ?? []) view.add(buildCrateView(crate));
@@ -62,7 +63,8 @@ export function renderThumbnail(
   camera.setViewport(width, height);
   camera.configure(hole.camera);
   const [tx, ty, tz] = hole.tee;
-  camera.snapTo({ x: tx, y: ty, z: tz }, goalAnchor(hole.goal));
+  const tee = { x: tx, y: ty, z: tz };
+  camera.snapTo(tee, goalAnchor(hole.goal), framingPoints(hole, tee));
 
   const target = new THREE.WebGLRenderTarget(width, height, { samples: 4 });
   const pixels = new Uint8Array(width * height * 4);

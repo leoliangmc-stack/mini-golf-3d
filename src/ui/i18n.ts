@@ -109,6 +109,7 @@ export const TEXT = {
   allDown: pick('ALL PINS DOWN!', '木桩全倒！'),
   noTurnsLeft: pick('NO TURNS LEFT', '转动次数用完了'),
   ballInTheWay: pick('THE BALL IS IN THE WAY', '球挡住了这组墙'),
+  shadowBack: pick('THE SHADOW IS BACK WHERE IT WAS', '影子球回到了原位'),
   /** How many turns of a wall group the hole still allows, out of how many. */
   turns: (left: number, total: number) => (zh() ? `转动 ${left} / ${total}` : `TURNS ${left} / ${total}`),
   allComplete: (holes: number) => (zh() ? `${holes} 洞全部完成！` : `ALL ${holes} HOLES COMPLETE!`),

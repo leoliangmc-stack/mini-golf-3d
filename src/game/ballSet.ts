@@ -14,6 +14,11 @@ export class BallSet {
   readonly sunk: Ball[] = [];
   /** The ball the next stroke is played with; after the last ball is sunk, that ball. */
   selected: Ball;
+  /**
+   * The shadow ball of a hole with a mirror (SPEC v8 3.4). It is in play like any ball,
+   * so plates, zones and walls all meet it; but it is never the player's to strike.
+   */
+  shadow: Ball | null = null;
   private nextId = 0;
 
   constructor(
@@ -29,6 +34,11 @@ export class BallSet {
     const ball = new Ball(this.world, this.base, position, this.nextId++, size);
     this.live.push(ball);
     return ball;
+  }
+
+  /** The balls the player may strike: every ball in play but the shadow. */
+  get playable(): Ball[] {
+    return this.shadow ? this.live.filter((ball) => ball !== this.shadow) : this.live;
   }
 
   /** The ball a collider belongs to, if it is one in play. */
@@ -52,6 +62,7 @@ export class BallSet {
   private leave(ball: Ball): void {
     const at = this.live.indexOf(ball);
     if (at >= 0) this.live.splice(at, 1);
-    if (this.selected === ball && this.live.length > 0) this.selected = this.live[0];
+    const next = this.playable[0];
+    if (this.selected === ball && next) this.selected = next;
   }
 }

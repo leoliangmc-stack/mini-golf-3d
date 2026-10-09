@@ -8,10 +8,13 @@ import { growPad, shrinkPad, splitPad } from '../physics/zones/pads';
 import { headingVector, tunnelPair, type TunnelEnd } from '../physics/zones/tunnel';
 import { bubbles, stream } from '../physics/zones/water';
 import { gusts } from '../physics/zones/wind';
+import { hall } from '../physics/zones/wrap';
 import { FAST } from './worlds/clock';
 import { CUP, FALL, rack, STREET, walledRoom } from './worlds/common';
+import { SKIRT } from './worlds/hall';
 import { rotor, stubs } from './worlds/maze';
 import { BEAT, shutter } from './worlds/music';
+import { phantomBridge } from './worlds/phantom';
 import { line, LINE_BLUE, LINE_ORANGE, points, train } from './worlds/rail';
 import { wallWithDoors } from './worlds/ruins';
 import { subway } from './worlds/subway';
@@ -693,6 +696,118 @@ export const CITY_DAY_OUT: FinaleDef = {
       zones: [FALL, coaster([0, 0, -4.7], 0, [{ run: 1.2 }, { loop: 0.8 }, { run: 2.5 }])],
       outOfBounds: 'lastPosition',
       camera: { pitch: 58, maxDistance: 44 },
+    },
+  ],
+};
+
+/**
+ * Chapter 8, hole 13: the strange gate (SPEC v8 3.6). Over a bridge that comes and
+ * goes; out of one side of a hall to reach the door on the other; a stroke for the
+ * shadow, to open the first gate; over a second bridge; and a stroke for its own echo,
+ * to open the last. Each stretch ends where the next begins and nowhere else, so the
+ * order needs no rule. The mirror shows only its own room: the shadow never stirs
+ * while the echoes are at work.
+ */
+export const STRANGE_GATE: FinaleDef = {
+  id: 'ch8-finale',
+  name: { en: 'Strange Gate', zh: '奇异之门' },
+  theme: 'strange',
+  ruleCard: {
+    en: 'A bridge, a hall, a shadow, an echo: four strange rules, one gate.',
+    zh: '幻影桥、回廊、影子、回声：四条怪规则，一道门。',
+  },
+  ruleTag: { en: 'FINALE', zh: '终局' },
+  holes: [
+    {
+      id: 'ch8-finale',
+      par: 8,
+      tee: [0, 0, 19.5],
+      goal: { type: 'cup', position: [3.6, 0, -20], ...CUP },
+      challenge: { type: 'noOutOfBounds', text: { en: 'Never go out of bounds', zh: '一次都不出界' } },
+      mirror: {
+        axis: 'x',
+        at: 5,
+        span: [-3, 5],
+        shadow: [8, 0, 3.5],
+        reach: { kind: 'box', center: [2, 0.5, 1], halfExtents: [3, 1.5, 4] },
+      },
+      pieces: [
+        // Where the ball starts
+        { type: 'floor', min: [-2, 17], max: [2, 21], surface: 'voidstone' },
+        { type: 'wall', from: [-2, 21], to: [2, 21], surface: 'voidWall' },
+        { type: 'wall', from: [-2, 17], to: [-2, 21], surface: 'voidWall' },
+        { type: 'wall', from: [2, 21], to: [2, 17], surface: 'voidWall' },
+        ...wallWithDoors([-2, 17], [2, 17], [[1.1, 2.9]], 'voidWall'),
+        // The hall: left and right are one. The way in is this side of the wall down
+        // its middle, the way out the other
+        { type: 'floor', min: [-4, 5], max: [4, 13], surface: 'hallFloor' },
+        { type: 'floor', min: [-4 - SKIRT, 5], max: [-4, 13], surface: 'beyond' },
+        { type: 'floor', min: [4, 5], max: [4 + SKIRT, 13], surface: 'beyond' },
+        ...wallWithDoors([-4 - SKIRT, 13], [4 + SKIRT, 13], [[5.6, 7.4]], 'hallWall'),
+        { type: 'wall', from: [1, 5], to: [1, 13], surface: 'hallWall' },
+        // The wall between the hall and the two rooms beyond it, with the hall's way out
+        ...wallWithDoors([-4 - SKIRT, 5], [11, 5], [[8.5, 9.7]], 'hallWall', { height: 0.8 }),
+        // The room in front of the mirror, with the first gate in its far wall
+        { type: 'floor', min: [-1, -3], max: [5, 5], surface: 'parlour' },
+        { type: 'wall', from: [-1, -3], to: [-1, 5], surface: 'wainscot' },
+        { type: 'wall', from: [5, -3], to: [5, 5], height: 0.6, surface: 'glass' },
+        ...wallWithDoors([-1, -3], [5, -3], [[4, 5.2]], 'wainscot', { height: 0.8 }),
+        // The room behind it
+        { type: 'floor', min: [5, -3], max: [11, 5], surface: 'parlourShade' },
+        { type: 'wall', from: [11, 5], to: [11, -3], surface: 'wainscot' },
+        { type: 'wall', from: [11, -3], to: [5, -3], surface: 'wainscot' },
+        // A landing beyond the gate, and the second bridge
+        { type: 'floor', min: [2.5, -4.5], max: [5, -3], surface: 'voidstone' },
+        { type: 'wall', from: [2.5, -4.5], to: [2.5, -3], surface: 'voidWall' },
+        { type: 'wall', from: [5, -3], to: [5, -4.5], surface: 'voidWall' },
+        ...wallWithDoors([2.5, -4.5], [5, -4.5], [[0.2, 2]], 'voidWall'),
+        // The echo's room: rippled ground, a silver plate with moss beyond it to stop
+        // in, and a long way on to the last gate and the cup
+        { type: 'floor', min: [0.5, -11.5], max: [6.5, -8.5], surface: 'echoFloor' },
+        { type: 'floor', min: [0.5, -13.5], max: [2.5, -11.5], surface: 'echoFloor' },
+        { type: 'floor', min: [2.5, -13.5], max: [5, -11.5], surface: 'hush' },
+        { type: 'floor', min: [5, -13.5], max: [6.5, -11.5], surface: 'echoFloor' },
+        { type: 'floor', min: [0.5, -22], max: [6.5, -13.5], surface: 'echoFloor' },
+        ...wallWithDoors([0.5, -8.5], [6.5, -8.5], [[2.2, 4]], 'echoWall'),
+        { type: 'wall', from: [6.5, -8.5], to: [6.5, -22], surface: 'echoWall' },
+        { type: 'wall', from: [6.5, -22], to: [0.5, -22], surface: 'echoWall' },
+        { type: 'wall', from: [0.5, -22], to: [0.5, -8.5], surface: 'echoWall' },
+        ...wallWithDoors([0.5, -18], [6.5, -18], [[2.4, 3.8]], 'echoWall', { height: 0.8 }),
+      ],
+      movers: [
+        phantomBridge([0, 17], [0, 13], 1.8, { period: 5, shown: 0.55 }, [
+          [0, 0, 17.8],
+          [0, 0, 12.2],
+        ]),
+        phantomBridge([3.6, -4.5], [3.6, -8.5], 1.8, { period: 5, shown: 0.55, phase: 0.5 }, [
+          [3.6, 0, -3.8],
+          [3.6, 0, -9.3],
+        ]),
+      ],
+      field: {
+        parts: [
+          { kind: 'echo', id: 'zone', min: [0.5, -14], max: [6.5, -8.5] },
+          { kind: 'echoPlate', id: 'silver', at: [3.6, 0, -10.6], mode: 'latch', radius: 0.6 },
+          { kind: 'plate', id: 'plate', at: [9.6, 0, -1.2], mode: 'latch', radius: 0.6 },
+          { kind: 'gate', id: 'first', from: [3, -3], to: [4.2, -3], when: 'plate', via: [[9.6, -2.2], [3.6, -2.2]] },
+          { kind: 'gate', id: 'last', from: [2.9, -18], to: [4.3, -18], when: 'silver', delay: 8, via: [[5.6, -10.6], [5.6, -17.2], [3.6, -17.2]] },
+        ],
+      },
+      decor: [
+        { type: 'obelisk', at: [-6, -3.6, 19], size: [1.3, 6, 0], color: 0x4a3f8f },
+        { type: 'crystals', at: [5.5, -3.6, 16], size: [2.2, 0, 0], color: 0x7ff0e0 },
+        { type: 'column', at: [-9, -3.6, 9], size: [0.5, 3.2, 0], color: 0xcdbf9f },
+        { type: 'column', at: [9.5, -3.6, 15], size: [0.5, 2.4, 0], color: 0xcdbf9f },
+        { type: 'column', at: [-4, -3.6, 0], size: [0.4, 2.6, 0], color: 0x9c8468 },
+        { type: 'column', at: [13.5, -3.6, 1], size: [0.4, 2.6, 0], color: 0x9c8468 },
+        { type: 'crystals', at: [8.5, -3.6, -7], size: [2.2, 0, 0], color: 0x7ff0e0 },
+        { type: 'obelisk', at: [-3, -3.6, -12], size: [1.4, 6, 0], color: 0x4a5670 },
+        { type: 'rock', at: [9.5, -3.6, -16], size: [2.4, 0, 0], color: 0x56637a },
+        { type: 'obelisk', at: [-2.5, -3.6, -21], size: [1.4, 5, 0], color: 0x4a5670 },
+      ],
+      zones: [FALL, hall([-4, 5], [4, 13], { x: true })],
+      outOfBounds: 'lastPosition',
+      camera: { pitch: 58, maxDistance: 48 },
     },
   ],
 };

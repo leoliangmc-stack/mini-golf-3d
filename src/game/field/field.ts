@@ -65,6 +65,10 @@ export interface Part {
    * changed, in m/s, and `collider` says which, for a part that has several.
    */
   hit?(ball: Ball, speed: number, collider: number): void;
+  /** A stroke has just been played with `ball`. Called after the snapshot it goes back to was taken. */
+  struck?(ball: Ball): void;
+  /** That stroke is over: everything has stopped. Not called for a stroke that was taken back or ended out of bounds. */
+  rested?(): void;
   save(): unknown;
   load(state: unknown): void;
   /** After every part has loaded: work out again whatever follows from the others, without a sound. */
@@ -407,6 +411,16 @@ export class Field {
     const part = this.owners.get(colliderHandle);
     part?.hit?.(ball, speed, colliderHandle);
     return part !== undefined;
+  }
+
+  /** A stroke has just been played with `ball`. */
+  struck(ball: Ball): void {
+    for (const part of this.parts) part.struck?.(ball);
+  }
+
+  /** The stroke is over: every ball has stopped where it will lie. */
+  rested(): void {
+    for (const part of this.parts) part.rested?.();
   }
 
   forbidsRest(point: XYZ): Part | null {
