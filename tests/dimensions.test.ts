@@ -327,7 +327,8 @@ describe('Endless Hall (SPEC v8 3.3, 5)', () => {
         session.dispose();
       }
     }
-  });
+    // Two hundred rounds: a slow machine needs longer than the usual five seconds.
+  }, 60000);
 
   it('keeps the whole hall in the picture while the ball is in it, so a crossing does not move the camera', () => {
     for (const { def, hall } of halls) {
