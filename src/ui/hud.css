@@ -654,6 +654,7 @@ body[data-frozen] #view {
   gap: 6px;
 }
 
+#turns,
 #gold,
 #alert {
   width: fit-content;
@@ -683,6 +684,17 @@ body[data-frozen] #view {
   background: #c0392b;
 }
 
+/* Chapter 7: how many turns of a wall group the hole still allows. */
+#turns {
+  color: #ffc04d;
+}
+
+#turns.spent {
+  background: #6b7480;
+  color: #fff;
+}
+
+#turns[hidden],
 #gold[hidden],
 #alert[hidden] {
   display: none;

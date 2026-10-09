@@ -311,6 +311,56 @@ export function registerThemes(): void {
     sunIntensity: 1.9,
     sea: { color: 0x1a2436, y: -3.6 },
   });
+  // Subway: under the street, in the light of the station lamps.
+  registerTheme('subway', {
+    sky: 0x27323d,
+    ambientSky: 0xe6f2ff,
+    ambientGround: 0x4f6475,
+    ambientIntensity: 1.8,
+    sun: 0xfff1d0,
+    sunIntensity: 1.8,
+    sea: { color: 0x161d24, y: -3.6 },
+  });
+  // Railway town: a clear morning over the roofs.
+  registerTheme('railway', {
+    sky: 0xaed6f0,
+    ambientSky: 0xffffff,
+    ambientGround: 0x9fb58a,
+    ambientIntensity: 1.6,
+    sun: 0xfff2d8,
+    sunIntensity: 2.1,
+    sea: { color: 0x6f9a62, y: -3.6 },
+  });
+  // Carnival: the fair at dusk. ("carnival" is the Chapter 3 finale's.)
+  registerTheme('funfair', {
+    sky: 0xf2a0b8,
+    ambientSky: 0xfff0f4,
+    ambientGround: 0xb86a8f,
+    ambientIntensity: 1.6,
+    sun: 0xffe3c2,
+    sunIntensity: 2,
+    sea: { color: 0x7a3f6b, y: -3.6 },
+  });
+  // Maze course: a garden on a bright afternoon.
+  registerTheme('garden', {
+    sky: 0xbfe6c9,
+    ambientSky: 0xffffff,
+    ambientGround: 0x7fb77a,
+    ambientIntensity: 1.6,
+    sun: 0xfff6dc,
+    sunIntensity: 2.2,
+    sea: { color: 0x4f8f5a, y: -3.6 },
+  });
+  // The Chapter 7 finale: the whole town in one afternoon, the light going gold.
+  registerTheme('cityday', {
+    sky: 0xf7c98a,
+    ambientSky: 0xfff4e2,
+    ambientGround: 0xa9916f,
+    ambientIntensity: 1.6,
+    sun: 0xffe6bd,
+    sunIntensity: 2.1,
+    sea: { color: 0x5f6f7f, y: -3.6 },
+  });
   registerTheme('pirate', {
     sky: 0x9fd8f0,
     ambientSky: 0xffffff,

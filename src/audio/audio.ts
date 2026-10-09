@@ -527,6 +527,99 @@ export class AudioEngine {
     this.tone({ from: slower ? 1240 : 420, to: slower ? 420 : 1240, length: 0.45, level: 0.05 });
   }
 
+  // --- Chapter 7: the town ---
+
+  /** A tunnel mouth swinging round its kiosk to face another way. */
+  tunnelTurn(): void {
+    this.tone({ wave: 'square', from: 360, to: 300, length: 0.06, level: 0.13 });
+    this.noise({ filter: 'bandpass', from: 700, to: 1500, length: 0.28, level: 0.12, delay: 0.04 });
+    this.tone({ wave: 'triangle', from: 440, to: 660, length: 0.16, level: 0.12, delay: 0.26 });
+  }
+
+  /** The lever of a set of points thrown: a clank, and the blades going over. */
+  points(): void {
+    this.tone({ wave: 'square', from: 240, to: 180, length: 0.08, level: 0.15 });
+    this.noise({ filter: 'highpass', from: 2400, length: 0.05, level: 0.16, delay: 0.07 });
+    this.tone({ from: 110, to: 70, length: 0.14, level: 0.2, delay: 0.1 });
+  }
+
+  /** A ball taken aboard at a platform. */
+  trainBoard(): void {
+    this.tone({ wave: 'triangle', from: 660, length: 0.09, level: 0.14 });
+    this.tone({ wave: 'triangle', from: 880, length: 0.12, level: 0.14, delay: 0.1 });
+  }
+
+  /** The train pulling out: a whistle, and the wheels picking up. */
+  trainDepart(): void {
+    this.tone({ wave: 'square', from: 740, to: 720, length: 0.3, level: 0.07 });
+    this.tone({ wave: 'square', from: 990, to: 960, length: 0.3, level: 0.05 });
+    [0.1, 0.3, 0.46, 0.58].forEach((delay) => this.noise({ filter: 'lowpass', from: 500, length: 0.07, level: 0.16, delay }));
+  }
+
+  /** And pulling up at its station: the brakes. */
+  trainArrive(): void {
+    this.noise({ filter: 'bandpass', from: 3200, to: 1800, length: 0.3, level: 0.09 });
+    this.tone({ from: 120, to: 70, length: 0.16, level: 0.16, delay: 0.24 });
+  }
+
+  /** The ball set down on the platform. */
+  trainSetDown(): void {
+    this.tone({ wave: 'triangle', from: 880, to: 587, length: 0.16, level: 0.15 });
+  }
+
+  /** A train on a line of its own going through the level crossing. */
+  trainPass(): void {
+    this.tone({ wave: 'square', from: 520, to: 470, length: 0.5, level: 0.06 });
+    this.tone({ wave: 'square', from: 650, to: 588, length: 0.5, level: 0.05 });
+    this.noise({ filter: 'lowpass', from: 300, to: 700, length: 0.9, level: 0.12, delay: 0.1 });
+  }
+
+  /** A ball rolling onto a coaster: the chain taking it up. */
+  coasterEnter(): void {
+    [0, 0.06, 0.12, 0.18, 0.24].forEach((delay, i) => this.tone({ wave: 'square', from: 180 + i * 30, length: 0.03, level: 0.1, delay }));
+  }
+
+  /** Over the top of a loop, and down the other side. */
+  coasterLoop(): void {
+    this.tone({ wave: 'triangle', from: 880, to: 300, length: 0.4, level: 0.14 });
+    this.noise({ filter: 'bandpass', from: 2400, to: 700, length: 0.4, level: 0.08 });
+  }
+
+  /** Not fast enough: it hangs, and starts to roll back. */
+  coasterStall(): void {
+    this.tone({ wave: 'triangle', from: 520, to: 180, length: 0.5, level: 0.14 });
+    this.tone({ wave: 'sawtooth', from: 130, to: 80, length: 0.3, level: 0.08, delay: 0.3 });
+  }
+
+  /** Let go at the end of the track, or back out of the entry. */
+  coasterOut(made: boolean): void {
+    if (made) this.tone({ wave: 'triangle', from: 523, to: 1046, length: 0.18, level: 0.15 });
+    else this.tone({ from: 196, to: 130, length: 0.2, level: 0.16 });
+  }
+
+  /** A track dividing: up, or turned away low. */
+  coasterFork(high: boolean): void {
+    this.tone({ wave: 'square', from: high ? 660 : 330, to: high ? 990 : 220, length: 0.14, level: 0.1 });
+  }
+
+  /** A group of walls swinging through its quarter turn. */
+  rotorTurn(): void {
+    this.noise({ filter: 'bandpass', from: 500, to: 1400, length: 0.22, level: 0.14 });
+    this.tone({ wave: 'triangle', from: 300, to: 450, length: 0.2, level: 0.1 });
+  }
+
+  /** And coming to rest. */
+  rotorStop(): void {
+    this.tone({ from: 150, to: 90, length: 0.1, level: 0.2 });
+    this.tone({ wave: 'square', from: 900, length: 0.03, level: 0.07 });
+  }
+
+  /** A tap on a wall group that cannot be turned: the hole's turns are used up, or the ball is in its way. */
+  turnRefused(): void {
+    this.tone({ wave: 'square', from: 220, length: 0.08, level: 0.12 });
+    this.tone({ wave: 'square', from: 165, length: 0.14, level: 0.12, delay: 0.1 });
+  }
+
   /** Entering (`on`) or leaving a gravity zone. */
   gravityShift(on: boolean): void {
     this.tone({ from: on ? 280 : 900, to: on ? 900 : 280, length: 0.28, level: 0.13 });

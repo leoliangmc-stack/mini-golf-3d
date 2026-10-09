@@ -26,6 +26,8 @@ export interface RoundStats {
   partsOn: Set<string>;
   /** Coins still lying on the course when the hole ended. */
   coinsLeft: number;
+  /** Turns of a wall group that stood when the hole ended: one taken back with a stroke is not among them. */
+  turns: number;
 }
 
 export const emptyStats = (): RoundStats => ({
@@ -40,6 +42,7 @@ export const emptyStats = (): RoundStats => ({
   undos: 0,
   partsOn: new Set(),
   coinsLeft: 0,
+  turns: 0,
 });
 
 export type ChallengeCheck = (stats: RoundStats, def: ChallengeDef) => boolean;
@@ -100,6 +103,8 @@ export function registerBuiltinChallenges(): void {
     'allCoinsPartOff',
     (stats, def) => stats.coinsLeft === 0 && !stats.partsOn.has(need(def.part, def, 'part')),
   );
+  /** The wall groups were turned at most `count` times in all (SPEC v7 3.6). */
+  registerChallenge('maxRotations', (stats, def) => stats.turns <= need(def.count, def, 'count'));
   /** At least `seconds` were left on the countdown at the end. */
   registerChallenge(
     'timeLeft',

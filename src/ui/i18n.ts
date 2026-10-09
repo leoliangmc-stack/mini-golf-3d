@@ -107,6 +107,10 @@ export const TEXT = {
   dragonAsleep: pick('ASLEEP', '沉睡'),
   dragonAwake: pick('AWAKE', '已醒'),
   allDown: pick('ALL PINS DOWN!', '木桩全倒！'),
+  noTurnsLeft: pick('NO TURNS LEFT', '转动次数用完了'),
+  ballInTheWay: pick('THE BALL IS IN THE WAY', '球挡住了这组墙'),
+  /** How many turns of a wall group the hole still allows, out of how many. */
+  turns: (left: number, total: number) => (zh() ? `转动 ${left} / ${total}` : `TURNS ${left} / ${total}`),
   allComplete: (holes: number) => (zh() ? `${holes} 洞全部完成！` : `ALL ${holes} HOLES COMPLETE!`),
   chapterComplete: (chapter: string) => (zh() ? `${chapter}完成！` : `${chapter.toUpperCase()} COMPLETE!`),
   chapterLocked: (previous: string) =>

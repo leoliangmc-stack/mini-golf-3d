@@ -15,7 +15,7 @@ import { createZone, type Zone, type ZoneContext, type ZoneEvent } from '../phys
 import { BallSet } from './ballSet';
 import { challengeMet, emptyStats, type RoundStats } from './challenges';
 import { cupOpenAt, cupPositionAt, type CupPose } from './cup';
-import { Field, type FieldState } from './field/field';
+import { Field, type FieldState, type TurnCheck } from './field/field';
 import { Goal, type CupState } from './goal';
 import { cupCaptures, RULES, starsFor, StopDetector } from './rules';
 import { getSkill, type SkillHost, type SkillState } from './skills';
@@ -45,7 +45,9 @@ export type InputRecord =
   /** Time was let run again after a freeze, without a stroke. */
   | { type: 'resume'; tick: number }
   /** The last stroke was taken back, at the cost of one more. */
-  | { type: 'undo'; tick: number };
+  | { type: 'undo'; tick: number }
+  /** The player turned a wall group by hand: `part` is its id (SPEC v7 3.5). It costs no stroke. */
+  | { type: 'rotate'; tick: number; part: string };
 
 /** How a hole ended. */
 export interface Outcome {
@@ -95,7 +97,9 @@ export type SessionEvent =
   /** The last stroke was taken back: the ball and the course are as they were before it. */
   | { type: 'undo'; strokes: number }
   /** One of the works of the hole changed what it is doing: a gate opened, a block set off. */
-  | { type: 'partChanged'; part: string };
+  | { type: 'partChanged'; part: string }
+  /** The player turned a wall group. `left` is how many turns the hole still allows. */
+  | { type: 'rotated'; part: string; left: number };
 
 /** Impacts gentler than this are contact noise, not bounces. */
 const MIN_BOUNCE_SPEED = 0.3;
@@ -269,6 +273,8 @@ export class Session implements SkillHost {
   shoot(dir: XYZ, power: number, ball: Ball = this.balls.selected): boolean {
     const frozen = this.frozen;
     if (frozen ? this.strokes >= this.strokeLimit : this.phase !== 'aiming') return false;
+    // A wall group that is still swinging round has to come to rest first (SPEC v7 5).
+    if (this.field?.turning) return false;
     // A zone holding the ball (a tunnel, a cannon) has to let go of it first.
     if (!this.balls.live.includes(ball) || this.track(ball).busy) return false;
     const p = Math.min(1, power);
@@ -361,7 +367,29 @@ export class Session implements SkillHost {
 
   /** Whether the last stroke can be taken back right now. */
   get canUndo(): boolean {
-    return this.rewindable && this.phase === 'aiming' && !this.frozen && this.snapshots.length > 0;
+    return (
+      this.rewindable && this.phase === 'aiming' && !this.frozen && !this.field?.turning && this.snapshots.length > 0
+    );
+  }
+
+  /**
+   * Whether the player can turn the wall group called `id` right now (SPEC v7 3.5), and
+   * if not, why not. Only between strokes: a group is never turned under a rolling ball.
+   */
+  turnCheck(id: string): TurnCheck {
+    if (!this.field || this.phase !== 'aiming' || this.frozen) return 'none';
+    return this.field.turnCheck(id);
+  }
+
+  /**
+   * Turns a wall group a quarter turn clockwise. It costs one of the hole's turns and
+   * no stroke. Like a stroke it is an input of the round, played back on its own tick.
+   */
+  rotate(id: string): boolean {
+    if (this.turnCheck(id) !== 'ok' || !this.field!.turn(id)) return false;
+    this.inputs.push({ type: 'rotate', tick: this.world.tick, part: id });
+    this.emit({ type: 'rotated', part: id, left: this.field!.turnsLeft });
+    return true;
   }
 
   /**
@@ -476,6 +504,7 @@ export class Session implements SkillHost {
     if (input.type === 'shot') this.shoot(xyz(input.dir), input.power, this.balls.live[input.ball ?? 0]);
     else if (input.type === 'skill') this.useSkill(input.id);
     else if (input.type === 'undo') this.undo();
+    else if (input.type === 'rotate') this.rotate(input.part);
     else this.resume();
   }
 
@@ -709,6 +738,12 @@ export class Session implements SkillHost {
           cue: (name) => this.cue(name),
           outOfBounds: (ball) => this.zoneEvents.push({ event: { type: 'outOfBounds' }, ball }),
           changed: (part) => this.emit({ type: 'partChanged', part }),
+          hold: (ball) => {
+            this.track(ball).busy = true;
+          },
+          snap: (ball) => {
+            this.track(ball).snap = true;
+          },
           beat: hole.beat?.ticks ?? null,
         })
       : null;
@@ -828,6 +863,7 @@ export class Session implements SkillHost {
     if (this.field) {
       this.stats.partsOn = new Set(this.field.parts.filter((part) => part.on).map((part) => part.id));
       this.stats.coinsLeft = this.field.all('coin').filter((coin) => !coin.on).length;
+      this.stats.turns = this.field.turnsUsed;
     }
     const met = holed && challengeMet(this.hole.challenge, this.stats);
     this.outcome = {

@@ -1,5 +1,13 @@
 import type { ChapterDef } from '../level/schema';
-import { COUNTDOWN_RUN, GAUNTLET, GRAND_FINALE, PRODUCTION_LINE, SPRING_TO_CANYON, TEMPLE_GATE } from './finales';
+import {
+  CITY_DAY_OUT,
+  COUNTDOWN_RUN,
+  GAUNTLET,
+  GRAND_FINALE,
+  PRODUCTION_LINE,
+  SPRING_TO_CANYON,
+  TEMPLE_GATE,
+} from './finales';
 import { ASSEMBLY_WORLD } from './worlds/assembly';
 import { BOMB_WORLD } from './worlds/bomb';
 import { BOWL_WORLD } from './worlds/bowl';
@@ -10,6 +18,7 @@ import { CLOCK_WORLD } from './worlds/clock';
 import { CLONE_WORLD } from './worlds/clone';
 import { DAM_WORLD } from './worlds/dam';
 import { DESERT_WORLD } from './worlds/desert';
+import { FAIR_WORLD } from './worlds/fair';
 import { FOREST_WORLD } from './worlds/forest';
 import { FREEZE_WORLD } from './worlds/freeze';
 import { GRAVITY_WORLD } from './worlds/gravity';
@@ -18,12 +27,15 @@ import { HOARD_WORLD } from './worlds/hoard';
 import { ICE_WORLD } from './worlds/ice';
 import { JUNGLE_WORLD } from './worlds/jungle';
 import { MAGNET_WORLD } from './worlds/magnet';
+import { MAZE_WORLD } from './worlds/maze';
 import { MOVING_WORLD } from './worlds/moving';
 import { MUSIC_WORLD } from './worlds/music';
 import { PIRATE_WORLD } from './worlds/pirate';
 import { POLAR_WORLD } from './worlds/polar';
+import { RAIL_WORLD } from './worlds/rail';
 import { REEF_WORLD } from './worlds/reef';
 import { SKY_WORLD } from './worlds/sky';
+import { SUBWAY_WORLD } from './worlds/subway';
 import { TOMB_WORLD } from './worlds/tomb';
 import { TOY_WORLD } from './worlds/toy';
 
@@ -75,5 +87,13 @@ export const CHAPTERS: readonly ChapterDef[] = [
     worlds: [TOY_WORLD, ASSEMBLY_WORLD, MUSIC_WORLD, CLOCK_WORLD],
     finale: PRODUCTION_LINE,
     after: 'ch5',
+  },
+  // City & Carnival (SPEC v7). It follows Chapter 6 on the main line.
+  {
+    id: 'ch7',
+    name: { en: 'Chapter 7', zh: '第七章' },
+    worlds: [SUBWAY_WORLD, RAIL_WORLD, FAIR_WORLD, MAZE_WORLD],
+    finale: CITY_DAY_OUT,
+    after: 'ch6',
   },
 ];

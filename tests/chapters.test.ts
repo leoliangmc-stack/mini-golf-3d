@@ -3,7 +3,7 @@ import { CHAPTERS } from '../src/data/chapters';
 import { allHoles, chapterOf, holeNumber, isFinale, stagesOf } from '../src/level/chapters';
 import { TEST_WORLD } from '../src/data/worlds/test';
 
-const [chapter1, chapter2, chapter3, chapter4, chapter5, chapter6] = CHAPTERS;
+const [chapter1, chapter2, chapter3, chapter4, chapter5, chapter6, chapter7] = CHAPTERS;
 
 describe('chapters (SPEC v2 2.1)', () => {
   it('puts the finale after the worlds, as one more stage', () => {
@@ -14,6 +14,7 @@ describe('chapters (SPEC v2 2.1)', () => {
     expect(stagesOf(chapter4).map((stage) => stage.id)).toEqual(['tomb', 'cavern', 'jungle', 'hoard', 'ch4-finale']);
     expect(stagesOf(chapter5).map((stage) => stage.id)).toEqual(['reef', 'polar', 'dam', 'canyon', 'ch5-finale']);
     expect(stagesOf(chapter6).map((stage) => stage.id)).toEqual(['toy', 'assembly', 'music', 'clock', 'ch6-finale']);
+    expect(stagesOf(chapter7).map((stage) => stage.id)).toEqual(['subway', 'rail', 'fair', 'maze', 'ch7-finale']);
   });
 
   it('numbers a finale as the last hole of its chapter: 19, then 13 each', () => {
@@ -27,6 +28,8 @@ describe('chapters (SPEC v2 2.1)', () => {
     expect(holeNumber(chapter5, chapter5.finale, 0)).toBe(13);
     expect(holeNumber(chapter6, chapter6.worlds[3], 2)).toBe(12);
     expect(holeNumber(chapter6, chapter6.finale, 0)).toBe(13);
+    expect(holeNumber(chapter7, chapter7.worlds[0], 0)).toBe(1);
+    expect(holeNumber(chapter7, chapter7.finale, 0)).toBe(13);
   });
 
   it('finds the chapter a world or a finale belongs to', () => {
@@ -39,7 +42,8 @@ describe('chapters (SPEC v2 2.1)', () => {
     expect(chapterOf(CHAPTERS, chapter4.finale)).toBe(chapter4);
     expect(chapterOf(CHAPTERS, chapter5.worlds[2])).toBe(chapter5);
     expect(chapterOf(CHAPTERS, chapter6.finale)).toBe(chapter6);
-    expect(allHoles(CHAPTERS)).toHaveLength(84);
+    expect(chapterOf(CHAPTERS, chapter7.worlds[3])).toBe(chapter7);
+    expect(allHoles(CHAPTERS)).toHaveLength(97);
   });
 
   it('gives every stage its text in both languages', () => {

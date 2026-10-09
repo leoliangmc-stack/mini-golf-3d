@@ -128,4 +128,25 @@ export function registerSurfaces(): void {
   // Clockwork
   registerSurface('clockFloor', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xdccba3 });
   registerSurface('cog', { restitution: 0.5, rollingResistance: 0.5, drag: 0.7, color: 0x8f6b34 });
+
+  // --- Chapter 7 ---
+  // A group of walls the player can turn: bright, so it reads as something to touch.
+  registerSurface('rotor', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0xffb020 });
+  // The kiosk a tunnel mouth is set in. Dull, like a tree trunk: a ball that misses the mouth does not fly off it.
+  registerSurface('kiosk', { restitution: 0.45, rollingResistance: 0.5, drag: 0.7, color: 0x3d8f6a });
+  // Subway: a tiled concourse
+  registerSurface('concourse', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xd9d4c5 });
+  registerSurface('tiling', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0x2f7f8c });
+  // Railway town: a station yard of setts, and brick
+  registerSurface('setts', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xb9a98c });
+  registerSurface('brick', { restitution: 0.6, rollingResistance: 0.5, drag: 0.7, color: 0xb5553c });
+  // A carriage that crosses the course: something to keep clear of.
+  registerSurface('carriage', { restitution: 0.4, rollingResistance: 0.5, drag: 0.7, color: 0x2f6fbf });
+  // Carnival: boards underfoot, a striped fence, and sawdust that stops a ball where it lands
+  registerSurface('boards', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xe9c98f });
+  registerSurface('fence', { restitution: 0.6, rollingResistance: 0.5, drag: 0.7, color: 0xd9433f });
+  registerSurface('sawdust', { restitution: 0.04, rollingResistance: 2.5, drag: 1.5, color: 0xcfa86a });
+  // Maze course: a lawn between hedges
+  registerSurface('lawn', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x7cc46a });
+  registerSurface('hedge', { restitution: 0.55, rollingResistance: 0.5, drag: 0.7, color: 0x2f6b3c });
 }

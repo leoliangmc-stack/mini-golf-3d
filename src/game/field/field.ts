@@ -18,6 +18,13 @@ export interface FieldHost {
   outOfBounds(ball: Ball): void;
   /** A part has changed what it is doing: something for the camera to show once the ball has stopped. */
   changed(part: string): void;
+  /**
+   * Call every step while a part is holding a ball, so it is not judged as stopped: a
+   * train with a ball aboard (SPEC v7 3.3). What `busy` is to a zone.
+   */
+  hold(ball: Ball): void;
+  /** Call on a step where a part put a ball somewhere else by hand, so the jump is not drawn as motion. */
+  snap(ball: Ball): void;
   /** Physics ticks to a beat on this hole, or null if it keeps none (SPEC v6 3.4). */
   readonly beat: number | null;
 }
@@ -40,6 +47,11 @@ export interface Part {
    * what it does (SPEC v6 3.7). A part that listens only to such parts is one too.
    */
   readonly timed?: boolean;
+  /**
+   * True for a part that holds a stroke open with nothing worth watching: a train on its
+   * way back empty. The camera stays with the ball.
+   */
+  readonly discreet?: boolean;
   /** Where it is, for the lines drawn between parts and for the camera. */
   readonly anchor: XYZ;
   /** Called once, when every part exists, so one can look another up. */
@@ -48,8 +60,11 @@ export interface Part {
   step(): void;
   /** Runs once per tick, after the world has stepped. */
   postStep?(): void;
-  /** A ball ran into one of this part's colliders; `speed` is how much its velocity changed, in m/s. */
-  hit?(ball: Ball, speed: number): void;
+  /**
+   * A ball ran into one of this part's colliders; `speed` is how much its velocity
+   * changed, in m/s, and `collider` says which, for a part that has several.
+   */
+  hit?(ball: Ball, speed: number, collider: number): void;
   save(): unknown;
   load(state: unknown): void;
   /** After every part has loaded: work out again whatever follows from the others, without a sound. */
@@ -59,6 +74,28 @@ export interface Part {
   /** Where to put a ball that may not stay where it stopped. */
   nearestRest?(point: XYZ): Vec3 | null;
 }
+
+/**
+ * A part the player turns by hand between strokes (SPEC v7 3.5): a group of walls on a
+ * pivot. No ball can move it, and the hole allows only so many turns.
+ */
+export interface Turnable extends Part {
+  /** True while it is still swinging round from the last turn. No stroke can be played until it has stopped. */
+  readonly turning: boolean;
+  /** True if a ball lies where its arms would sweep. */
+  readonly blocked: boolean;
+  /** Gives it a quarter turn. */
+  turn(): void;
+}
+
+const isTurnable = (part: Part): part is Turnable => typeof (part as Partial<Turnable>).turn === 'function';
+
+/**
+ * Whether the player can turn a part right now, and if not, why not. `spent`: the
+ * hole's turns are used up. `blocked`: a ball is in the way. `turning`: it has not
+ * finished the turn before. `none`: it is not a thing that turns, or this is no time for it.
+ */
+export type TurnCheck = 'ok' | 'spent' | 'blocked' | 'turning' | 'none';
 
 /**
  * A clock of its own, kept by a part and read by the moving parts that name it (SPEC v6
@@ -71,6 +108,8 @@ export interface LocalClock {
 /** Everything a field snapshot holds. Plain data: it can be compared, copied and stored. */
 export interface FieldState {
   alert: number;
+  /** Turns of a wall group the player has left (SPEC v7 3.7). */
+  turns: number;
   parts: unknown[];
 }
 
@@ -220,6 +259,8 @@ export class Field {
   readonly grid: Grid | null;
   /** How many times the ball has made a noise the dragon can hear. */
   alert = 0;
+  /** Turns of a wall group the player has left on this hole (SPEC v7 3.5). */
+  turnsLeft: number;
   private readonly byId = new Map<string, Part>();
   private readonly owners = new Map<number, Part>();
   private readonly systems = new Map<string, FieldSystem>();
@@ -231,6 +272,7 @@ export class Field {
     readonly host: FieldHost,
   ) {
     this.grid = def.grid ? new Grid(def.grid) : null;
+    this.turnsLeft = def.turns ?? 0;
     def.parts.forEach((partDef, index) => {
       const factory = registry.get(partDef.kind);
       if (!factory) throw new Error(`Unknown part kind "${partDef.kind}"`);
@@ -315,7 +357,38 @@ export class Field {
 
   /** The part that is on the move, for the camera to watch while the ball waits. */
   get active(): Part | null {
-    return this.parts.find((part) => part.busy && !this.clockwork.has(part)) ?? null;
+    return this.parts.find((part) => part.busy && !part.discreet && !this.clockwork.has(part)) ?? null;
+  }
+
+  /** Turns of a wall group the hole allows in all, and how many of them stand: one taken back with a stroke is not counted. */
+  get turnsAllowed(): number {
+    return this.def.turns ?? 0;
+  }
+
+  get turnsUsed(): number {
+    return this.turnsAllowed - this.turnsLeft;
+  }
+
+  /** True while any wall group is swinging round. */
+  get turning(): boolean {
+    return this.parts.some((part) => isTurnable(part) && part.turning);
+  }
+
+  /** Whether the player can turn the part called `id` right now. */
+  turnCheck(id: string): TurnCheck {
+    const part = this.byId.get(id);
+    if (!part || !isTurnable(part)) return 'none';
+    if (this.turning) return 'turning';
+    if (this.turnsLeft <= 0) return 'spent';
+    return part.blocked ? 'blocked' : 'ok';
+  }
+
+  /** Turns a wall group, at the cost of one of the hole's turns. Returns false if it cannot be turned right now. */
+  turn(id: string): boolean {
+    if (this.turnCheck(id) !== 'ok') return false;
+    this.turnsLeft--;
+    (this.part(id) as Turnable).turn();
+    return true;
   }
 
   /** Call before stepping the world. */
@@ -332,7 +405,7 @@ export class Field {
   /** A ball ran into a collider. Returns true if it was one of the field's. */
   hit(ball: Ball, colliderHandle: number, speed: number): boolean {
     const part = this.owners.get(colliderHandle);
-    part?.hit?.(ball, speed);
+    part?.hit?.(ball, speed, colliderHandle);
     return part !== undefined;
   }
 
@@ -341,12 +414,13 @@ export class Field {
   }
 
   save(): FieldState {
-    return { alert: this.alert, parts: this.parts.map((part) => part.save()) };
+    return { alert: this.alert, turns: this.turnsLeft, parts: this.parts.map((part) => part.save()) };
   }
 
   /** Puts every part back the way a snapshot has it. Nothing makes a sound. A part that keeps time is left running. */
   restore(state: FieldState): void {
     this.alert = state.alert;
+    this.turnsLeft = state.turns;
     this.parts.forEach((part, i) => {
       if (!this.clockwork.has(part)) part.load(state.parts[i]);
     });

@@ -44,6 +44,7 @@ export function createHud(game: Game, actions: HudActions): void {
   const pins = byId('pins');
   const undo = byId<HTMLButtonElement>('undo');
   const gold = byId('gold');
+  const turns = byId('turns');
   const alert = byId('alert');
   const wind = byId('wind');
   const windArrow = byId('wind-arrow');
@@ -118,6 +119,7 @@ export function createHud(game: Game, actions: HudActions): void {
       session.rewindable ? session.canUndo : -1,
       coins.length > 0 ? coinsHeld : -1,
       dragon ? field!.alert : -1,
+      field && field.turnsAllowed > 0 ? field.turnsLeft : -1,
     ].join();
     if (state === extrasShown) return;
     extrasShown = state;
@@ -137,6 +139,13 @@ export function createHud(game: Game, actions: HudActions): void {
     undo.hidden = !session.rewindable;
     undo.classList.toggle('unready', !session.canUndo);
     undo.setAttribute('aria-label', TEXT.undo());
+    // Chapter 7: the turns of a wall group still to spend.
+    const turnsAllowed = field?.turnsAllowed ?? 0;
+    turns.hidden = turnsAllowed === 0;
+    if (field && turnsAllowed > 0) {
+      turns.textContent = TEXT.turns(field.turnsLeft, turnsAllowed);
+      turns.classList.toggle('spent', field.turnsLeft === 0);
+    }
     gold.hidden = coins.length === 0;
     if (coins.length > 0) {
       gold.textContent = TEXT.gold(coinsHeld, coins.length);
@@ -309,6 +318,9 @@ export function createHud(game: Game, actions: HudActions): void {
         break;
       case 'undo':
         showToast(TEXT.undone());
+        break;
+      case 'turnRefused':
+        showToast(event.reason === 'spent' ? TEXT.noTurnsLeft() : TEXT.ballInTheWay());
         break;
       case 'cue':
         if (event.name === 'dragonWake') showToast(TEXT.dragonWakes());

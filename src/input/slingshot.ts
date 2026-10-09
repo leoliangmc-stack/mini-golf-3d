@@ -54,15 +54,37 @@ export interface SlingshotHandlers {
   /** Called while dragging, and with null when the aim ends or is cancelled. */
   onAim(pull: Pull | null): void;
   onRelease(pull: Pull): void;
-  /** A press and release on the spot: not a stroke. Used to pick a ball (SPEC v3 2.4). */
-  onTap?(x: number, y: number): void;
+  /**
+   * A press and release on the spot: not a stroke. Used to pick a ball (SPEC v3 2.4)
+   * and to turn a wall group (SPEC v7 3.5). `quick` is false for a press that was held:
+   * that is still no stroke, but neither is it someone tapping a thing on purpose.
+   */
+  onTap?(x: number, y: number, quick: boolean): void;
 }
 
 /**
- * A press that never moves further than this is a tap, however long it is held: a
- * finger that only wavers in place must not play a stroke of nearly no power.
+ * Input feel for telling a tap from a drag, mutable for tuning (SPEC v7 7.5).
+ *
+ * A press that never moves further than `slopPx` is no stroke, however long it is
+ * held: a finger that only wavers in place must not play one of nearly no power. It is
+ * a tap, something done on purpose to a thing on the course, only if it also ends
+ * within `maxMs`: a finger that came down to aim and thought better of it is neither.
  */
-const TAP_SLOP_PX = 10;
+export const TAP = { slopPx: 10, maxMs: 350 };
+
+/**
+ * What a press that has ended was (SPEC v7 3.5). `farPx` is the furthest it ever got
+ * from where it came down, not where it ended: a drag that comes back to its start is
+ * still a drag. Mouse, touch and pen are all judged by this one rule.
+ *
+ * - `drag`: an aim. Releasing it plays a stroke, if it has the power.
+ * - `tap`: quick and on the spot. Never a stroke.
+ * - `hold`: on the spot but not quick. Neither a stroke nor a tap.
+ */
+export function classifyPress(farPx: number, heldMs: number): 'tap' | 'hold' | 'drag' {
+  if (farPx > TAP.slopPx) return 'drag';
+  return heldMs <= TAP.maxMs ? 'tap' : 'hold';
+}
 
 /**
  * Slingshot aiming: press anywhere, drag back, release to shoot. Mouse, touch and pen
@@ -70,7 +92,7 @@ const TAP_SLOP_PX = 10;
  */
 export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers): () => void {
   const active = new Set<number>();
-  let aiming: { id: number; x: number; y: number; moved: boolean } | null = null;
+  let aiming: { id: number; x: number; y: number; far: number; at: number } | null = null;
 
   const pullTo = (from: { x: number; y: number }, e: PointerEvent): Pull => {
     const dx = e.clientX - from.x;
@@ -91,7 +113,7 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
     if (active.size > 1) return cancel();
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (!handlers.canAim()) return;
-    aiming = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+    aiming = { id: e.pointerId, x: e.clientX, y: e.clientY, far: 0, at: e.timeStamp };
     try {
       target.setPointerCapture(e.pointerId);
     } catch {
@@ -102,7 +124,7 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
 
   const onMove = (e: PointerEvent) => {
     if (aiming?.id !== e.pointerId) return;
-    if (Math.hypot(e.clientX - aiming.x, e.clientY - aiming.y) > TAP_SLOP_PX) aiming.moved = true;
+    aiming.far = Math.max(aiming.far, Math.hypot(e.clientX - aiming.x, e.clientY - aiming.y));
     handlers.onAim(pullTo(aiming, e));
   };
 
@@ -110,12 +132,14 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
     active.delete(e.pointerId);
     if (aiming?.id !== e.pointerId) return;
     const pull = pullTo(aiming, e);
-    const tapped = !aiming.moved;
+    const far = Math.max(aiming.far, Math.hypot(e.clientX - aiming.x, e.clientY - aiming.y));
+    const press = classifyPress(far, e.timeStamp - aiming.at);
     aiming = null;
     handlers.onAim(null);
-    // A tap is never a stroke, however it is read: picking a ball must not play one.
-    if (tapped) handlers.onTap?.(e.clientX, e.clientY);
-    else handlers.onRelease(pull);
+    // A press on the spot is never a stroke, however it is read: picking a ball or
+    // turning a wall must not play one. And a drag is never a tap.
+    if (press === 'drag') handlers.onRelease(pull);
+    else handlers.onTap?.(e.clientX, e.clientY, press === 'tap');
   };
 
   const onCancel = (e: PointerEvent) => {

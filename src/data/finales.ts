@@ -2,15 +2,19 @@ import type { Vec2, Vec3 } from '../core/types';
 import type { DecorDef, FinaleDef, PieceDef } from '../level/schema';
 import type { ZoneDef } from '../physics/zones';
 import { robotArm } from '../physics/zones/arm';
+import { coaster } from '../physics/zones/coaster';
 import { drumPad } from '../physics/zones/drum';
 import { growPad, shrinkPad, splitPad } from '../physics/zones/pads';
 import { headingVector, tunnelPair, type TunnelEnd } from '../physics/zones/tunnel';
 import { bubbles, stream } from '../physics/zones/water';
 import { gusts } from '../physics/zones/wind';
 import { FAST } from './worlds/clock';
-import { CUP, FALL, rack, STREET } from './worlds/common';
+import { CUP, FALL, rack, STREET, walledRoom } from './worlds/common';
+import { rotor, stubs } from './worlds/maze';
 import { BEAT, shutter } from './worlds/music';
+import { line, LINE_BLUE, LINE_ORANGE, points, train } from './worlds/rail';
 import { wallWithDoors } from './worlds/ruins';
+import { subway } from './worlds/subway';
 import { belt, beltFloor, lever } from './worlds/toy';
 
 const magnet = (x: number, z: number, strength: number, reach: number): { post: PieceDef; field: ZoneDef } => ({
@@ -603,6 +607,90 @@ export const PRODUCTION_LINE: FinaleDef = {
         ),
         drumPad([0, 0, -5.3], 0.8, { beat: BEAT, every: 2, velocity: [0, 6.5, -4], rest: [[0, 0, -3.6]] }),
       ],
+      outOfBounds: 'lastPosition',
+      camera: { pitch: 58, maxDistance: 44 },
+    },
+  ],
+};
+
+/**
+ * Chapter 7, hole 13: a day out in town (SPEC v7 3.6). Under the street by subway,
+ * across town by train, over the fair by roller coaster, and through the garden maze
+ * to the cup. Each stretch ends where the next begins and nowhere else, so the order
+ * needs no rule.
+ */
+export const CITY_DAY_OUT: FinaleDef = {
+  id: 'ch7-finale',
+  name: { en: 'City Day Out', zh: '城市一日游' },
+  theme: 'cityday',
+  ruleCard: {
+    en: 'Subway, train, coaster, maze: one day, one ball.',
+    zh: '地铁、火车、过山车、迷宫：一天，一颗球。',
+  },
+  ruleTag: { en: 'FINALE', zh: '终局' },
+  holes: [
+    {
+      id: 'ch7-finale',
+      par: 8,
+      tee: [0, 0, 18.5],
+      goal: { type: 'cup', position: [-3.2, 0, -14.1], ...CUP },
+      challenge: { type: 'maxRotations', count: 1, text: { en: 'Turn the maze walls only once', zh: '迷宫的墙只转一次' } },
+      pieces: [
+        // The subway: where the ball starts, with the lever of the far mouth
+        ...walledRoom([-3, 14], [3, 20], 'concourse', 'tiling'),
+        // The station yard: the far mouth stands in a wall, with a dead end to the east of it
+        { type: 'floor', min: [-3, 5], max: [3, 11], surface: 'setts' },
+        { type: 'wall', from: [-3, 11], to: [3, 11], surface: 'brick' },
+        { type: 'wall', from: [3, 11], to: [3, 5], surface: 'brick' },
+        { type: 'wall', from: [-3, 5], to: [-3, 11], surface: 'brick' },
+        ...wallWithDoors([-3, 5], [3, 5], [[1.4, 2.6]], 'brick'),
+        { type: 'wall', from: [1, 11], to: [1, 9.05], surface: 'brick' },
+        { type: 'wall', from: [1, 7.95], to: [1, 5], surface: 'brick' },
+        // The fair: two places to be set down, a fence between them, and the way onto the coaster
+        { type: 'floor', min: [-4, -5], max: [4, 0], surface: 'boards' },
+        { type: 'wall', from: [-4, 0], to: [4, 0], surface: 'fence' },
+        { type: 'wall', from: [4, 0], to: [4, -5], surface: 'fence' },
+        { type: 'wall', from: [-4, -5], to: [-4, 0], surface: 'fence' },
+        ...wallWithDoors([-4, -5], [4, -5], [[3.5, 4.5]], 'fence'),
+        { type: 'wall', from: [1.5, 0], to: [1.5, -3.5], surface: 'fence' },
+        // The garden: a landing, and one room with a revolving door in it
+        { type: 'floor', min: [-0.5, -9], max: [1.5, -8], surface: 'lawn' },
+        { type: 'floor', min: [-4.5, -15], max: [1.5, -9], surface: 'lawn' },
+        { type: 'wall', from: [-0.5, -9], to: [-0.5, -8], surface: 'hedge' },
+        { type: 'wall', from: [1.5, -8], to: [1.5, -15], surface: 'hedge' },
+        { type: 'wall', from: [1.5, -15], to: [-4.5, -15], surface: 'hedge' },
+        { type: 'wall', from: [-4.5, -15], to: [-4.5, -9], surface: 'hedge' },
+        ...wallWithDoors([-4.5, -9], [1.5, -9], [[4.1, 5.9]], 'hedge'),
+        ...stubs([-1.5, -12]),
+      ],
+      field: {
+        turns: 3,
+        parts: [
+          subway(
+            'line',
+            { at: [0, 0, 14.8], facings: [180] },
+            { at: [1, 0, 8.5], facings: [90, 270], lever: [2.2, 0, 16.6] },
+          ),
+          points('points', [-2.2, 0, 9.6]),
+          train('train', [-1, 0, 5.6], [-1, 0, 4.2], [
+            line([2.8, 0, 0.8], [2.8, 0, -0.9], LINE_BLUE, undefined, [[-1, 0, 2.6], [2.8, 0, 2]]),
+            line([-1, 0, 0.8], [-1, 0, -0.9], LINE_ORANGE, 'points'),
+          ]),
+          rotor('door', [-1.5, -12], [90, 270]),
+        ],
+      },
+      decor: [
+        { type: 'column', at: [-6, -3.6, 17], size: [0.55, 3.2, 0], color: 0x56636f },
+        { type: 'column', at: [6, -3.6, 17], size: [0.55, 3.2, 0], color: 0x56636f },
+        { type: 'tower', at: [-7.5, -3.6, 8], size: [3, 2.8, 3], color: 0xd98a5a },
+        { type: 'tower', at: [7.5, -3.6, 9], size: [3, 3.4, 3], color: 0x8fb7c9 },
+        { type: 'tent', at: [8, -3.6, -3], size: [2.6, 3, 0], color: 0xe5484d },
+        { type: 'tent', at: [-8.5, -3.6, -4], size: [2.2, 3, 0], color: 0xf2c14e },
+        { type: 'pine', at: [-8.5, -3.6, -12], size: [1.2, 4.6, 0] },
+        { type: 'pine', at: [5.5, -3.6, -13], size: [1.1, 4.2, 0] },
+        { type: 'bush', at: [5, -3.6, -17], size: [1.6, 0, 0] },
+      ],
+      zones: [FALL, coaster([0, 0, -4.7], 0, [{ run: 1.2 }, { loop: 0.8 }, { run: 2.5 }])],
       outOfBounds: 'lastPosition',
       camera: { pitch: 58, maxDistance: 44 },
     },

@@ -31,6 +31,7 @@ import type {
   WaterDef,
 } from '../level/field';
 import { getSurface } from '../physics/surfaces';
+import { pointsView, rotorView, trainView, tunnelView } from './cityViews';
 
 /** What a part's picture needs to know each frame besides the part itself. */
 export interface ViewFrame {
@@ -749,6 +750,7 @@ const VALVE_SHUT = 0xe5484d;
 
 function valveView(def: ValveDef, field: FieldDef): PartView {
   if (def.look === 'lever') return leverView(def, field);
+  if (def.look === 'points') return pointsView(def, field);
   const group = new THREE.Group();
   group.position.set(def.at[0], def.at[1], def.at[2]);
   const depth = def.depth ?? 0;
@@ -1325,4 +1327,7 @@ export function registerBuiltinPartViews(): void {
   registerPartView('dial', dialView);
   registerPartView('timeZone', timeZoneView);
   registerPartView('pulse', pulseView);
+  registerPartView('tunnel', tunnelView);
+  registerPartView('train', trainView);
+  registerPartView('rotor', rotorView);
 }

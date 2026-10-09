@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { MoverDef } from '../level/schema';
 import type { Mover } from '../physics/movers';
 import { getSurface } from '../physics/surfaces';
+import { trainLook } from './cityViews';
 
 const EBONY = 0x2b2633;
 
@@ -59,6 +60,7 @@ export function buildMoverView(def: MoverDef): THREE.Object3D {
   mesh.receiveShadow = true;
   if (def.look === 'keys') return keysLook(def, mesh);
   if (def.look === 'hand') return handLook(def, mesh);
+  if (def.look === 'train') return trainLook(def, mesh);
   return mesh;
 }
 

@@ -1,4 +1,5 @@
 import { arm } from './arm';
+import { coasterZone } from './coaster';
 import { drum } from './drum';
 import { gravity } from './gravity';
 import { registerZone } from './index';
@@ -26,4 +27,5 @@ export function registerBuiltinZones(): void {
   registerZone('wind', wind);
   registerZone('arm', arm);
   registerZone('drum', drum);
+  registerZone('coaster', coasterZone);
 }

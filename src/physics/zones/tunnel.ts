@@ -2,7 +2,7 @@ import { FIXED_DT } from '../../core/loop';
 import { cos, hypot, sin } from '../../core/math';
 import type { Vec3, XYZ } from '../../core/types';
 import type { Ball } from '../ball';
-import { numberParam, perBall, vectorParam, type ZoneDef, type ZoneFactory } from './index';
+import { numberParam, perBall, vectorParam, type ZoneContext, type ZoneDef, type ZoneFactory } from './index';
 import type { ZoneShape } from './shape';
 
 /** One mouth of a tunnel. */
@@ -17,8 +17,8 @@ export interface TunnelEnd {
   facing: number;
 }
 
-const DEFAULT_RADIUS = 0.45;
-const DEFAULT_COLOR = 0x4fb3ff;
+export const DEFAULT_RADIUS = 0.45;
+export const DEFAULT_COLOR = 0x4fb3ff;
 /** Ticks the ball spends inside, about 0.3 s: half going in, half coming out. */
 const TRANSIT = 18;
 const HALF = TRANSIT / 2;
@@ -80,7 +80,8 @@ function mouthShape(end: TunnelEnd, radius: number): ZoneShape {
  */
 const lastExit = new WeakMap<Ball, number>();
 
-interface Mouth {
+/** One mouth of a tunnel as a ball of one size meets it. */
+export interface Mouth {
   /** Middle of the mouth at ball height. */
   center: XYZ;
   dir: XYZ;
@@ -89,8 +90,16 @@ interface Mouth {
   exit: XYZ;
 }
 
+/** The mouth at a point on the ground that opens toward a compass heading, for a ball of radius `ballRadius`. */
+export function mouthAt(at: Vec3, facing: number, ballRadius: number): Mouth {
+  const dir = headingVector(facing);
+  const center = { x: at[0], y: at[1] + ballRadius, z: at[2] };
+  const offset = (d: number): XYZ => ({ x: center.x + dir.x * d, y: center.y, z: center.z + dir.z * d });
+  return { center, dir, inside: offset(-INSET), exit: offset(ballRadius + OUTSET) };
+}
+
 /** True if a point moving from `p` at velocity `v` comes within `radius` of `c` during the next step. */
-function sweepHits(p: XYZ, v: XYZ, c: XYZ, radius: number): boolean {
+export function sweepHits(p: XYZ, v: XYZ, c: XYZ, radius: number): boolean {
   const dx = v.x * FIXED_DT;
   const dy = v.y * FIXED_DT;
   const dz = v.z * FIXED_DT;
@@ -106,81 +115,111 @@ const lerp = (a: XYZ, b: XYZ, t: number): XYZ => ({
   z: a.z + (b.z - a.z) * t,
 });
 
+/** What a tunnel remembers about one ball: the trip it is on, if it is inside. */
+export interface TunnelTrip {
+  transit: { from: Mouth; to: Mouth; start: XYZ; speed: number; tick: number } | null;
+}
+
+/** How a tunnel tells the round what it is doing with a ball. */
+export interface TunnelHost {
+  /** The tunnel has the ball this step. */
+  busy(): void;
+  /** It put the ball somewhere else by hand this step. */
+  snap(): void;
+  cue(name: 'tunnelEnter' | 'tunnelExit'): void;
+}
+
+/**
+ * One step of a pair of mouths, for one ball: carries on a trip under way, or takes a
+ * ball that is about to roll into either mouth. The mouths are asked for afresh each
+ * step, so a pair whose mouths can be turned (game/field/city.ts) runs on this too; a
+ * trip under way keeps the mouths it started with.
+ *
+ * Everything here is counted in ticks and decided from the ball's own position and
+ * velocity, so a stroke through a tunnel replays exactly.
+ */
+export function stepTunnel(
+  ball: Ball,
+  tick: number,
+  mouths: readonly [Mouth, Mouth],
+  radius: number,
+  trip: TunnelTrip,
+  host: TunnelHost,
+): void {
+  if (trip.transit) {
+    host.busy();
+    const { from, to, start, speed } = trip.transit;
+    const t = ++trip.transit.tick;
+    if (t < HALF) {
+      ball.body.setTranslation(lerp(start, from.inside, t / HALF), true);
+    } else if (t === HALF) {
+      // Hidden at both ends of this jump, so it is never seen crossing the course.
+      ball.body.setTranslation(to.inside, true);
+      host.snap();
+      host.cue('tunnelExit');
+    } else if (t < TRANSIT) {
+      ball.body.setTranslation(lerp(to.inside, to.exit, (t - HALF) / (TRANSIT - HALF)), true);
+    } else {
+      ball.body.setEnabled(true);
+      ball.body.setTranslation(to.exit, true);
+      ball.body.setLinvel({ x: to.dir.x * speed, y: 0, z: to.dir.z * speed }, true);
+      lastExit.set(ball, tick);
+      trip.transit = null;
+    }
+    return;
+  }
+
+  // Another zone has the ball, or it has only just come out of a tunnel.
+  if (!ball.body.isEnabled()) return;
+  const exited = lastExit.get(ball);
+  if (exited !== undefined && tick - exited < COOLDOWN) return;
+
+  const p = ball.position();
+  const v = ball.velocity();
+  for (let i = 0; i < 2; i++) {
+    const mouth = mouths[i];
+    const into = -(v.x * mouth.dir.x + v.z * mouth.dir.z);
+    // Looks one step ahead: by the time the ball touched the trunk it would have bounced.
+    if (into < MIN_ENTRY_SPEED || !sweepHits(p, v, mouth.center, radius)) continue;
+    trip.transit = { from: mouth, to: mouths[1 - i], start: { ...p }, speed: hypot(v.x, v.y, v.z), tick: 0 };
+    ball.halt();
+    ball.body.setEnabled(false);
+    host.busy();
+    host.cue('tunnelEnter');
+    return;
+  }
+}
+
 /**
  * A pair of tunnel mouths. A ball rolling into one is taken out of the simulation,
  * travels unseen for a fixed number of ticks, and is let go at the other mouth at the
  * speed it went in with, heading the way that mouth faces.
- *
- * Everything here is counted in ticks and decided from the ball's own position and
- * velocity, so a stroke through a tunnel replays exactly.
  */
 export const tunnel: ZoneFactory = (def) => {
   const radius = tunnelRadius(def);
   const ends = tunnelEnds(def);
   // The mouths sit at the height of the ball's centre, so each size of ball has its own.
   const mouthsBySize = new Map<number, [Mouth, Mouth]>();
-  const trips = perBall<{ transit: { from: Mouth; to: Mouth; start: XYZ; speed: number; tick: number } | null }>(
-    () => ({ transit: null }),
-  );
-
-  const build = (ballRadius: number): [Mouth, Mouth] =>
-    ends.map((end): Mouth => {
-      const dir = headingVector(end.facing);
-      const center = { x: end.at[0], y: end.at[1] + ballRadius, z: end.at[2] };
-      const offset = (d: number): XYZ => ({ x: center.x + dir.x * d, y: center.y, z: center.z + dir.z * d });
-      return { center, dir, inside: offset(-INSET), exit: offset(ballRadius + OUTSET) };
-    }) as [Mouth, Mouth];
+  const trips = perBall<TunnelTrip>(() => ({ transit: null }));
+  // The round the zone is in at the moment, for the one host it hands to `stepTunnel`.
+  let round: ZoneContext | null = null;
+  const host: TunnelHost = {
+    busy: () => round?.busy(),
+    snap: () => round?.snap(),
+    cue: (name) => round?.emit({ type: 'cue', name }),
+  };
 
   return {
     preStep(ctx) {
       const { ball, world } = ctx;
       const ballRadius = ball.props.radius;
       let mouths = mouthsBySize.get(ballRadius);
-      if (!mouths) mouthsBySize.set(ballRadius, (mouths = build(ballRadius)));
-      const trip = trips(ball);
-
-      if (trip.transit) {
-        ctx.busy();
-        const { from, to, start, speed } = trip.transit;
-        const t = ++trip.transit.tick;
-        if (t < HALF) {
-          ball.body.setTranslation(lerp(start, from.inside, t / HALF), true);
-        } else if (t === HALF) {
-          // Hidden at both ends of this jump, so it is never seen crossing the course.
-          ball.body.setTranslation(to.inside, true);
-          ctx.snap();
-          ctx.emit({ type: 'cue', name: 'tunnelExit' });
-        } else if (t < TRANSIT) {
-          ball.body.setTranslation(lerp(to.inside, to.exit, (t - HALF) / (TRANSIT - HALF)), true);
-        } else {
-          ball.body.setEnabled(true);
-          ball.body.setTranslation(to.exit, true);
-          ball.body.setLinvel({ x: to.dir.x * speed, y: 0, z: to.dir.z * speed }, true);
-          lastExit.set(ball, world.tick);
-          trip.transit = null;
-        }
-        return;
+      if (!mouths) {
+        mouths = [mouthAt(ends[0].at, ends[0].facing, ballRadius), mouthAt(ends[1].at, ends[1].facing, ballRadius)];
+        mouthsBySize.set(ballRadius, mouths);
       }
-
-      // Another zone has the ball, or it has only just come out of a tunnel.
-      if (!ball.body.isEnabled()) return;
-      const exited = lastExit.get(ball);
-      if (exited !== undefined && world.tick - exited < COOLDOWN) return;
-
-      const p = ball.position();
-      const v = ball.velocity();
-      for (let i = 0; i < 2; i++) {
-        const mouth = mouths[i];
-        const into = -(v.x * mouth.dir.x + v.z * mouth.dir.z);
-        // Looks one step ahead: by the time the ball touched the trunk it would have bounced.
-        if (into < MIN_ENTRY_SPEED || !sweepHits(p, v, mouth.center, radius)) continue;
-        trip.transit = { from: mouth, to: mouths[1 - i], start: { ...p }, speed: hypot(v.x, v.y, v.z), tick: 0 };
-        ball.halt();
-        ball.body.setEnabled(false);
-        ctx.busy();
-        ctx.emit({ type: 'cue', name: 'tunnelEnter' });
-        return;
-      }
+      round = ctx;
+      stepTunnel(ball, world.tick, mouths, radius, trips(ball), host);
     },
   };
 };

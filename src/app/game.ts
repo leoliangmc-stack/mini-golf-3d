@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { XYZ } from '../core/types';
 import { cupLidOpenness } from '../game/cup';
+import type { Rotor } from '../game/field/maze';
 import { RULES } from '../game/rules';
 import { Session, type InputRecord, type SessionEvent, type ShotRecord } from '../game/session';
 import { attachCameraGestures } from '../input/cameraGestures';
@@ -35,7 +36,11 @@ export type GameEvent =
   /** A moving part that sounds a note has arrived at the end of its travel: a piano key at the top (SPEC v6 3.9). */
   | { type: 'note'; degree: number }
   /** The lamp of a robot arm has changed to the next place it will go. */
-  | { type: 'lamp' };
+  | { type: 'lamp' }
+  /** The player tapped a wall group that cannot be turned: the hole's turns are used up, or the ball is in its way. */
+  | { type: 'turnRefused'; reason: 'spent' | 'blocked' }
+  /** A train that crosses the course has set off (SPEC v7 3.9). */
+  | { type: 'trainPass' };
 
 /** Ticks between the countdown running out and the hole starting over: long enough to see the blast. */
 const RESTART_TICKS = 50;
@@ -46,6 +51,13 @@ const EXPLOSIONS_BEFORE_OFFER = 3;
  * than the ball covers, since a finger hides what it is aiming at (SPEC v3 2.4).
  */
 const PICK_RADIUS_PX = 56;
+/**
+ * How far beyond the reach of a wall group's arms, as they look on screen, a tap still
+ * counts as on it, and the least a group's target is across: a fingertip, not a pixel
+ * (SPEC v7 3.5). A tap outside every group's target does nothing at all.
+ */
+const TURN_PAD_PX = 22;
+const TURN_MIN_PX = 48;
 
 /** Seconds the camera stays on a part that changed while the ball was rolling (SPEC v4 3.2). */
 const SHOWCASE_SECONDS = 1.4;
@@ -106,9 +118,12 @@ export class Game {
   /** What each robot arm's lamp showed at the last step, and which movers stood at the end of their travel. */
   private lamps: number[] = [];
   private arrived: boolean[] = [];
+  /** Which trains that cross the course were on the move at the last step. */
+  private crossing: boolean[] = [];
   private readonly listeners = new Set<(event: GameEvent) => void>();
   private readonly frameListeners = new Set<() => void>();
   private readonly projected = new THREE.Vector3();
+  private readonly projectedPoint = new THREE.Vector3();
 
   constructor(
     readonly stage: Stage,
@@ -131,7 +146,12 @@ export class Game {
       onRelease: (pull) => {
         if (this.canAim()) this.session.shoot(this.shotDirection(pull), pull.power);
       },
-      onTap: (x, y) => this.pickAt(x, y),
+      onTap: (x, y, quick) => {
+        // With several balls to choose from a tap picks one, as it always has. Otherwise
+        // a quick tap on a wall group turns it; a press that was held is nobody's tap.
+        if (this.choosing) this.pickAt(x, y);
+        else if (quick) this.turnAt(x, y);
+      },
     });
   }
 
@@ -265,6 +285,45 @@ export class Game {
     if (best) this.session.select(best);
   }
 
+  /** The wall group a point on screen is on, if any: the nearest whose target the point is inside (SPEC v7 3.5). */
+  rotorAt(x: number, y: number): Rotor | null {
+    let best: Rotor | null = null;
+    let bestDistance = Infinity;
+    for (const rotor of this.session.field?.all<Rotor>('rotor') ?? []) {
+      const [px, py, pz] = rotor.def.at;
+      const centre = this.screenPosition(this.projectedPoint.set(px, py, pz));
+      // How far its arms reach as they look from here: the view is tilted, so not the same all round.
+      let reach = 0;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const rim = this.screenPosition(
+          this.projectedPoint.set(px + Math.cos(a) * rotor.def.length, py, pz + Math.sin(a) * rotor.def.length),
+        );
+        reach = Math.max(reach, Math.hypot(rim.x - centre.x, rim.y - centre.y));
+      }
+      const distance = Math.hypot(centre.x - x, centre.y - y);
+      if (distance <= Math.max(reach + TURN_PAD_PX, TURN_MIN_PX) && distance < bestDistance) {
+        bestDistance = distance;
+        best = rotor;
+      }
+    }
+    return best;
+  }
+
+  /** Turns the wall group a tap landed on, if it can be turned; says why not, if it cannot (SPEC v7 3.5). */
+  turnAt(x: number, y: number): boolean {
+    if (this.inputBlocked || this.paused || this.session.replaying) return false;
+    const rotor = this.rotorAt(x, y);
+    return rotor !== null && this.turn(rotor.id);
+  }
+
+  /** Turns a wall group by its id, as a tap on it does. */
+  turn(id: string): boolean {
+    const check = this.session.turnCheck(id);
+    if (check === 'spent' || check === 'blocked') this.emit({ type: 'turnRefused', reason: check });
+    return check === 'ok' && this.session.rotate(id);
+  }
+
   step(): void {
     if (this.paused) return;
     this.session.step();
@@ -287,6 +346,12 @@ export class Game {
     const { session } = this;
     if (!session.playing) return;
     session.movers.forEach((mover, i) => {
+      if (mover.def.look === 'train') {
+        // It waits out of sight at either end of its line: the sound is of it setting off.
+        const moving = mover.prevPose.position.x !== mover.pose.position.x || mover.prevPose.position.z !== mover.pose.position.z;
+        if (moving && this.crossing[i] === false) this.emit({ type: 'trainPass' });
+        this.crossing[i] = moving;
+      }
       const { note, motion, position } = mover.def;
       if (note === undefined || motion.type !== 'slide') return;
       const there = Math.abs(mover.pose.position.y - (position[1] + motion.offset[1])) < 1e-6;
@@ -437,7 +502,8 @@ export class Game {
   private canAim(): boolean {
     const { session } = this;
     const open = session.phase === 'aiming' || session.frozen;
-    return !this.inputBlocked && !this.paused && !session.replaying && open;
+    // Nor while a wall group is still swinging round: the stroke would not be played (SPEC v7 5).
+    return !this.inputBlocked && !this.paused && !session.replaying && open && !session.field?.turning;
   }
 
   private shotDirection(pull: Pull): XYZ {
@@ -470,6 +536,7 @@ export class Game {
     this.showing = null;
     this.lamps = [];
     this.arrived = [];
+    this.crossing = [];
     this.restartIn = 0;
     this.explosion.stop();
     for (const id of [...this.ballViews.keys()]) this.dropView(id);

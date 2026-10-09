@@ -19,9 +19,10 @@ export const VALVE_HEIGHT = 0.9;
 
 /**
  * The post a valve stands on, and every other switch a knock works: an iron cylinder
- * that tells `part` when a ball runs into it. It reaches `depth` below `at`.
+ * that tells `part` when a ball runs into it. It reaches `depth` below `at`. Returns the
+ * handle of its collider, for a part that has more than one post to tell them apart.
  */
-export function standPost(field: Field, part: Part, at: Vec3, depth = 0): void {
+export function standPost(field: Field, part: Part, at: Vec3, depth = 0): number {
   const { world, surfaces } = field.host;
   const collider = world.raw.createCollider(
     RAPIER.ColliderDesc.cylinder((VALVE_HEIGHT + depth) / 2, VALVE_POST)
@@ -32,6 +33,7 @@ export function standPost(field: Field, part: Part, at: Vec3, depth = 0): void {
   );
   surfaces.setCollider(collider.handle, 'prop', 'iron');
   field.own(collider.handle, part);
+  return collider.handle;
 }
 
 /** A valve (SPEC v5 3.4). Its signal: it is open. */
@@ -60,8 +62,10 @@ export class Valve implements Part {
     if (this.cooldown > 0 || speed < TURN_SPEED) return;
     this.open = !this.open;
     this.cooldown = TURN_COOLDOWN;
-    // A lever is the same thing with another face and another sound (SPEC v6 3.2).
+    // A lever is the same thing with another face and another sound (SPEC v6 3.2), and
+    // so is the lever of a railway junction (SPEC v7 3.3).
     if (this.def.look === 'lever') this.field.host.cue(this.open ? 'leverOn' : 'leverOff');
+    else if (this.def.look === 'points') this.field.host.cue('pointsSwitch');
     else this.field.host.cue(this.open ? 'valveOpen' : 'valveShut');
   }
 

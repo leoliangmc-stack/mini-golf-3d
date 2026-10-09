@@ -329,8 +329,8 @@ export interface MoverDef {
    * zone's clock in place of the hole's, and runs slower or faster as the zone does.
    */
   clock?: string;
-  /** What it looks like, where a plain box will not do: a run of piano keys, the hand of a clock. */
-  look?: 'keys' | 'hand';
+  /** What it looks like, where a plain box will not do: a run of piano keys, the hand of a clock, a train that crosses the course. */
+  look?: 'keys' | 'hand' | 'train';
   /** A step of the world's scale it sounds as it arrives at the far end of its travel. Sound only. */
   note?: number;
 }

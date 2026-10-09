@@ -16,6 +16,11 @@ import type { CycleDef } from './schema';
 export interface FieldDef {
   /** The squares stones slide on. Needed only by a hole with stones. */
   grid?: GridDef;
+  /**
+   * How many times the player may turn a wall group on this hole, all groups together
+   * (SPEC v7 3.5). Needed only by a hole with rotors.
+   */
+  turns?: number;
   parts: readonly PartDef[];
 }
 
@@ -210,8 +215,11 @@ export interface ValveDef {
   depth?: number;
   /** Starts open. */
   open?: boolean;
-  /** What it looks like. A `lever` is the switch of a conveyor belt (SPEC v6 3.2). Defaults to `wheel`. */
-  look?: 'wheel' | 'lever';
+  /**
+   * What it looks like. A `lever` is the switch of a conveyor belt (SPEC v6 3.2), and
+   * `points` the lever that sets a railway junction (SPEC v7 3.3). Defaults to `wheel`.
+   */
+  look?: 'wheel' | 'lever' | 'points';
 }
 
 /**
@@ -354,7 +362,110 @@ export interface PulseDef {
   pattern: readonly (0 | 1)[];
 }
 
+/** One mouth of a tunnel that can be turned (SPEC v7 3.2). */
+export interface TunnelMouthDef {
+  /** Middle of the kiosk the mouth is set in, on the ground. The mouth turns about it. */
+  at: Vec3;
+  /**
+   * Compass headings the mouth can open toward, in degrees: 0 is -Z, 90 is +X. One for
+   * a mouth that never turns, up to four for one that does. They need not be evenly spaced.
+   */
+  facings: readonly number[];
+  /** Which of them it starts at. Defaults to the first. */
+  start?: number;
+  /** Where its lever stands, on the ground. A knock turns the mouth to its next facing. Needed by a mouth with more than one. */
+  lever?: Vec3;
+  /** How far the mouth stands out from `at`: the radius of the kiosk. Defaults to 0.55. */
+  reach?: number;
+}
+
+/**
+ * A pair of tunnel mouths, one or both of which can be turned (SPEC v7 3.2). It is the
+ * tunnel of Chapter 2 in every other way: a ball rolling into either mouth comes out
+ * of the other as fast as it went in, heading the way that mouth faces, and a mouth
+ * only takes a ball rolling against the way it faces. Turning a mouth therefore changes
+ * both where a ball comes out and where it can go in.
+ *
+ * No two facings may leave one mouth pointing straight at the other (tests/worlds.test.ts).
+ */
+export interface TunnelDef {
+  kind: 'tunnel';
+  id: string;
+  a: TunnelMouthDef;
+  b: TunnelMouthDef;
+  /** Radius of each mouth. Defaults to that of a Chapter 2 tunnel. */
+  radius?: number;
+  color?: number;
+}
+
+/** One line of a railway: where a train can take a ball (SPEC v7 3.3). */
+export interface TrainLineDef {
+  /** Where the carriage pulls up, at the far end of the line. */
+  stop: Vec3;
+  /** Where the ball is set down, on the ground beside it. It must be somewhere a ball can be left. */
+  drop: Vec3;
+  /** Corners of the track between the platform and the stop. Straight if left out. */
+  via?: readonly Vec3[];
+  /**
+   * The signal that sets the points for this line. The train takes the first line whose
+   * signal is on, and otherwise the first that has none.
+   */
+  when?: When;
+  /** Colour of its station, which the platform shows while the points are set for it. */
+  color?: number;
+}
+
+/**
+ * A train (SPEC v7 3.3). A ball that rolls onto its platform is put aboard, at any
+ * speed, and the train leaves at once for the station the points are set for. There it
+ * sets the ball down, at rest, and goes back empty. The carriage is not a thing a ball
+ * can run into, and its track runs where no ball can lie: nothing here has grip, so a
+ * ball is carried inside the train or not at all.
+ */
+export interface TrainDef {
+  kind: 'train';
+  id: string;
+  /** Where a ball boards: a point on the ground. A ball that comes within `radius` of it is taken aboard. */
+  board: Vec3;
+  /** Defaults to 0.5. */
+  radius?: number;
+  /** Where the carriage waits, beside the platform. */
+  home: Vec3;
+  lines: readonly TrainLineDef[];
+  /** How fast it runs at its quickest, in m/s. Defaults to 7. */
+  speed?: number;
+}
+
+/**
+ * A group of walls on a pivot (SPEC v7 3.5). The player turns it by hand, a quarter
+ * turn clockwise at a touch, while the ball is at rest; no ball can move it. A hole
+ * allows only so many turns (`FieldDef.turns`), and a group whose arms would sweep
+ * over a ball cannot be turned until the ball has gone. Its signal is on whenever it
+ * stands any other way than it started.
+ */
+export interface RotorDef {
+  kind: 'rotor';
+  id: string;
+  /** The pivot, on the ground. */
+  at: Vec3;
+  /**
+   * Compass headings its arms reach out along before any turn: [0, 180] is a bar,
+   * [0, 90] an L, [0, 90, 180] a T, and all four a cross.
+   */
+  arms: readonly number[];
+  /** How far each arm reaches from the pivot, in metres. */
+  length: number;
+  /** Quarter turns clockwise it has been given before the hole starts. Defaults to 0. */
+  start?: number;
+  height?: number;
+  thickness?: number;
+  surface?: string;
+}
+
 export type PartDef =
+  | TunnelDef
+  | TrainDef
+  | RotorDef
   | BeltDef
   | DialDef
   | TimeZoneDef

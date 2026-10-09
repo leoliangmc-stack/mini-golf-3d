@@ -17,9 +17,9 @@ function memoryStorage(initial: Record<string, string> = {}): StorageLike & { da
   return { data, getItem: (k) => data[k] ?? null, setItem: (k, v) => void (data[k] = v) };
 }
 
-const [chapter1, chapter2, chapter3, chapter4, chapter5, chapter6] = CHAPTERS;
+const [chapter1, chapter2, chapter3, chapter4, chapter5, chapter6, chapter7] = CHAPTERS;
 const [ice, desert] = chapter1.worlds;
-const KEY = 'minigolf.save.v6';
+const KEY = 'minigolf.save.v7';
 
 /** A progress with every hole of the first `count` in play order finished. */
 function played(count: number, storage: StorageLike | null = memoryStorage()): Progress {
@@ -52,7 +52,8 @@ describe('progress (SPEC 2.7)', () => {
     expect(new Progress(CHAPTERS, null).next(chapter3.finale, 0)).toEqual({ world: chapter4.worlds[0], index: 0 });
     expect(new Progress(CHAPTERS, null).next(chapter4.finale, 0)).toEqual({ world: chapter5.worlds[0], index: 0 });
     expect(new Progress(CHAPTERS, null).next(chapter5.finale, 0)).toEqual({ world: chapter6.worlds[0], index: 0 });
-    expect(new Progress(CHAPTERS, null).next(chapter6.finale, 0)).toBeNull();
+    expect(new Progress(CHAPTERS, null).next(chapter6.finale, 0)).toEqual({ world: chapter7.worlds[0], index: 0 });
+    expect(new Progress(CHAPTERS, null).next(chapter7.finale, 0)).toBeNull();
 
     // All 18 holes of Chapter 1 open its finale, but not Chapter 2.
     const progress = played(18);
@@ -165,6 +166,7 @@ describe('progress (SPEC 2.7)', () => {
     expect(progress.opener(chapter4)).toBe(chapter2);
     expect(progress.opener(chapter5)).toBe(chapter4);
     expect(progress.opener(chapter6)).toBe(chapter5);
+    expect(progress.opener(chapter7)).toBe(chapter6);
     expect(progress.chapterUnlocked(chapter3)).toBe(false);
     expect(progress.chapterUnlocked(chapter4)).toBe(false);
     progress.complete(chapter2.finale.holes[0].id, outcome(1, 9));
@@ -184,7 +186,7 @@ describe('progress (SPEC 2.7)', () => {
   it('knows the game is finished only when every hole has a score', () => {
     const all = played(allHoles(CHAPTERS).length - 1);
     expect(all.allComplete).toBe(false);
-    all.complete(chapter6.finale.holes[0].id, outcome(1, 12));
+    all.complete(chapter7.finale.holes[0].id, outcome(1, 12));
     expect(all.allComplete).toBe(true);
   });
 

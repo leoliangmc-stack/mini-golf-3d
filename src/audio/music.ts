@@ -54,6 +54,12 @@ export const MUSIC: Record<string, MusicDef> = {
   music: { bpm: 120, root: 57, scale: [0, 3, 5, 7, 10], wave: 'triangle', brightness: 2600 },
   clocktower: { bpm: 96, root: 62, scale: [0, 2, 3, 5, 7, 8, 11], wave: 'sine', brightness: 3000 },
   works: { bpm: 120, root: 60, scale: [0, 2, 3, 5, 7, 10], wave: 'square', brightness: 1500 },
+  // Chapter 7
+  subway: { bpm: 108, root: 57, scale: [0, 3, 5, 6, 7, 10], wave: 'sawtooth', brightness: 1000 },
+  railway: { bpm: 114, root: 62, scale: [0, 2, 4, 5, 7, 9, 11], wave: 'triangle', brightness: 2100 },
+  funfair: { bpm: 138, root: 65, scale: [0, 2, 4, 5, 7, 9, 11], wave: 'square', brightness: 1900 },
+  garden: { bpm: 86, root: 64, scale: [0, 2, 4, 7, 9], wave: 'sine', brightness: 3000 },
+  cityday: { bpm: 126, root: 60, scale: [0, 2, 4, 7, 9], wave: 'triangle', brightness: 2000 },
 };
 
 /** Chord roots, as scale steps, one per bar. */

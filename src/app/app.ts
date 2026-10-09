@@ -261,6 +261,21 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
         else if (event.name === 'dialTurn') audio.dialTurn();
         else if (event.name === 'timeSlow') audio.timeShift(true);
         else if (event.name === 'timeFast') audio.timeShift(false);
+        else if (event.name === 'tunnelTurn') audio.tunnelTurn();
+        else if (event.name === 'pointsSwitch') audio.points();
+        else if (event.name === 'trainBoard') audio.trainBoard();
+        else if (event.name === 'trainDepart') audio.trainDepart();
+        else if (event.name === 'trainArrive') audio.trainArrive();
+        else if (event.name === 'trainSetDown') audio.trainSetDown();
+        else if (event.name === 'coasterEnter') audio.coasterEnter();
+        else if (event.name === 'coasterLoop') audio.coasterLoop();
+        else if (event.name === 'coasterStall') audio.coasterStall();
+        else if (event.name === 'coasterExit') audio.coasterOut(true);
+        else if (event.name === 'coasterBack') audio.coasterOut(false);
+        else if (event.name === 'coasterHigh') audio.coasterFork(true);
+        else if (event.name === 'coasterLow') audio.coasterFork(false);
+        else if (event.name === 'rotorTurn') audio.rotorTurn();
+        else if (event.name === 'rotorStop') audio.rotorStop();
         else if (event.name === 'dragonWake') {
           audio.dragonWake();
           if (stages.includes(game.world)) track('dragon_woke', { hole: hole.id });
@@ -274,6 +289,12 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
         break;
       case 'lamp':
         audio.lamp();
+        break;
+      case 'turnRefused':
+        audio.turnRefused();
+        break;
+      case 'trainPass':
+        audio.trainPass();
         break;
       case 'showcase':
         if (stages.includes(game.world)) track('showcase', { hole: hole.id, skipped: event.skipped });

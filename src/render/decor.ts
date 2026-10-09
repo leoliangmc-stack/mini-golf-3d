@@ -231,6 +231,46 @@ function obelisk(def: DecorDef): THREE.Object3D {
 }
 
 /** A round column on a square base. A short one reads as broken. `size` is [radius, height]. */
+/** A fairground tent: a round wall and a striped cone of a roof, with a flag. `size` is [radius, height of the wall]. */
+function tent(def: DecorDef): THREE.Object3D {
+  const [radius, height] = def.size ?? [2.4, 3, 0];
+  const color = def.color ?? 0xe5484d;
+  const cloth = flat(color);
+  const pale = flat(0xfff3e0);
+  const tentGroup = group(part(new THREE.CylinderGeometry(radius, radius, height, 16), pale, 0, height / 2));
+  // The roof in gores, every other one white.
+  for (let i = 0; i < 8; i++) {
+    const gore = part(new THREE.ConeGeometry(radius * 1.12, height * 0.8, 16, 1, false, (i * Math.PI) / 4, Math.PI / 4), i % 2 ? pale : cloth, 0, height * 1.4);
+    tentGroup.add(gore);
+  }
+  tentGroup.add(
+    part(new THREE.CylinderGeometry(0.04, 0.04, 0.9, 5), flat(0x59626d), 0, height * 1.8 + 0.4),
+    part(new THREE.BoxGeometry(0.5, 0.26, 0.03), cloth, 0.27, height * 1.8 + 0.7),
+  );
+  return tentGroup;
+}
+
+/**
+ * A stretch of railway track, for a train that crosses the course on a line of its
+ * own: a bed, two rails and sleepers, on trestles. It runs along X about where it
+ * stands. `size` is [length, how far down the trestles reach].
+ */
+function track(def: DecorDef): THREE.Object3D {
+  const [length, drop] = def.size ?? [10, 3.6, 0];
+  const bed = flat(0x5b5148);
+  const line = group(part(new THREE.BoxGeometry(length, 0.05, 0.9), bed, 0, 0.005));
+  const steel = flat(0xb9c0c8);
+  for (const side of [-0.3, 0.3]) line.add(part(new THREE.BoxGeometry(length, 0.05, 0.06), steel, 0, 0.05, side));
+  const wood = flat(0x7a5a3c);
+  const ties = Math.max(1, Math.round(length / 0.5));
+  for (let i = 0; i < ties; i++) line.add(part(new THREE.BoxGeometry(0.12, 0.035, 0.82), wood, ((i + 0.5) / ties - 0.5) * length, 0.035));
+  const posts = Math.max(2, Math.round(length / 3));
+  for (let i = 0; i < posts; i++) {
+    line.add(part(new THREE.CylinderGeometry(0.1, 0.14, drop, 6), bed, ((i + 0.5) / posts - 0.5) * length, -drop / 2 - 0.02));
+  }
+  return line;
+}
+
 function column(def: DecorDef): THREE.Object3D {
   const [radius, height] = def.size ?? [0.35, 2.4, 0];
   const stone = flat(def.color ?? 0xb9b39c);
@@ -361,4 +401,6 @@ export function registerBuiltinDecor(): void {
   registerDecor('coral', coral);
   registerDecor('kelp', kelp);
   registerDecor('pipe', pipe);
+  registerDecor('tent', tent);
+  registerDecor('track', track);
 }

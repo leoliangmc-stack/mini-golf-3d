@@ -4,6 +4,7 @@ import { numberParam, vectorParam, vectorsParam } from '../physics/zones';
 import { armAt, isArm, padPoint } from '../physics/zones/arm';
 import { drumCentre, isDrum } from '../physics/zones/drum';
 import { headingVector, tunnelColor, tunnelEnds, tunnelRadius } from '../physics/zones/tunnel';
+import { coasterView } from './cityViews';
 
 /** What the player sees of a zone. */
 export interface ZoneView {
@@ -739,6 +740,7 @@ function drumView(def: ZoneDef): ZoneView {
 export function registerBuiltinZoneViews(): void {
   registerZoneView('arm', armView);
   registerZoneView('drum', drumView);
+  registerZoneView('coaster', coasterView);
   registerZoneView('current', currentView);
   registerZoneView('bubbleLift', bubbleView);
   registerZoneView('wind', windView);
