@@ -57,6 +57,12 @@ export interface HoleDef {
   zones: readonly ZoneDef[];
   /** Moving parts. They keep moving while the player aims. */
   movers?: readonly MoverDef[];
+  /**
+   * The beat every machine of the hole keeps (SPEC v6 3.4). It is counted in physics
+   * ticks, a whole number of them, so that no beat ever drifts from the one before:
+   * 30 ticks is 120 beats a minute. Sound follows it; nothing in the game follows sound.
+   */
+  beat?: BeatDef;
   /** Loose boxes the ball can shove around, if it is heavy enough. */
   crates?: readonly CrateDef[];
   /**
@@ -104,6 +110,13 @@ export interface ChallengeDef {
   seconds?: number;
   /** Id of one of the hole's works. */
   part?: string;
+}
+
+export interface BeatDef {
+  /** Physics ticks one beat lasts. A whole number. */
+  ticks: number;
+  /** Beats to the bar, the first of them the strong one. Defaults to 4. */
+  bar?: number;
 }
 
 /** Per-hole camera settings; anything left out uses the default. Angles in degrees. */
@@ -293,9 +306,12 @@ export interface PillarPiece {
  *   ground it connects and let it overlap that ground at both ends.
  * - `pusher`: an obstacle that shoves the ball. Leave more than a ball's width between
  *   it and any wall at the ends of its travel, or the ball gets crushed.
+ * - `lift`: a platform that goes up and down in the ground (SPEC v6 3.4). Level with
+ *   the ball it is rolled onto like any platform; standing higher than the ball, it is a
+ *   wall to it. Make it tall enough that nothing can get under it at the top of its travel.
  */
 export interface MoverDef {
-  role: 'platform' | 'pusher';
+  role: 'platform' | 'pusher' | 'lift';
   /** Width (x), height (y) and depth (z) before rotation. */
   size: Vec3;
   /** Centre of the box at the start of its cycle. */
@@ -308,6 +324,15 @@ export interface MoverDef {
   sweep?: ZoneShape;
   /** Where to put a ball that came to rest on the mover or in its way. Defaults to where the stroke was played from. */
   rest?: readonly Vec3[];
+  /**
+   * Id of a time zone among the hole's works (SPEC v6 3.5). The part then keeps that
+   * zone's clock in place of the hole's, and runs slower or faster as the zone does.
+   */
+  clock?: string;
+  /** What it looks like, where a plain box will not do: a run of piano keys, the hand of a clock. */
+  look?: 'keys' | 'hand';
+  /** A step of the world's scale it sounds as it arrives at the far end of its travel. Sound only. */
+  note?: number;
 }
 
 /** One back-and-forth cycle: out and back, optionally pausing at either end. */

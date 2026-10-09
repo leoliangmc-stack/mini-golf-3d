@@ -91,8 +91,8 @@ export interface GateDef extends Driven {
    * signal is on, then shut.
    */
   trap?: boolean;
-  /** What it looks like. Defaults to `slab`. */
-  look?: 'slab' | 'bars' | 'boulder' | 'door';
+  /** What it looks like. Defaults to `slab`. A `shutter` is a gate that keeps the beat (SPEC v6 3.4). */
+  look?: 'slab' | 'bars' | 'boulder' | 'door' | 'shutter';
   surface?: string;
 }
 
@@ -210,6 +210,8 @@ export interface ValveDef {
   depth?: number;
   /** Starts open. */
   open?: boolean;
+  /** What it looks like. A `lever` is the switch of a conveyor belt (SPEC v6 3.2). Defaults to `wheel`. */
+  look?: 'wheel' | 'lever';
 }
 
 /**
@@ -274,7 +276,89 @@ export interface CrumbleDef {
   surface?: string;
 }
 
+/**
+ * A conveyor belt over a rectangle of the course (SPEC v6 3.2). It carries a ball the
+ * way moving water does: the ball takes up the belt's pace, however it came on. Lay it
+ * over a floor piece of the same size. With a `when` it runs the other way while that
+ * signal is on; without one it runs one way for good.
+ */
+export interface BeltDef extends Partial<Driven> {
+  kind: 'belt';
+  id: string;
+  min: Vec2;
+  max: Vec2;
+  /** Height of the ground it lies on. Defaults to 0. */
+  y?: number;
+  /** The way it runs and how fast, [x, z] in m/s, while its signal is off. */
+  velocity: Vec2;
+  /** How quickly a ball takes up its pace, in 1/s. Defaults to that of a current. */
+  strength?: number;
+}
+
+/**
+ * A clock switch on a post (SPEC v6 3.5). A knock moves it on to the next of its
+ * `rates`, round and round. A time zone that names it runs at the rate it shows. Its
+ * signal is on whenever it shows any rate but the one it started at.
+ */
+export interface DialDef {
+  kind: 'dial';
+  id: string;
+  at: Vec3;
+  /** The rates it steps through. Defaults to slow, normal, fast: 0.5, 1, 2. */
+  rates?: readonly number[];
+  /** Which of them it starts at. Defaults to the second, which by default is normal. */
+  start?: number;
+}
+
+/**
+ * A time zone (SPEC v6 3.5): a rectangle of the course with a clock of its own. The
+ * moving parts that name it (`MoverDef.clock`) keep that clock in place of the hole's.
+ * Each tick is worth `rate` ticks of the zone's clock, so at 0.5 its machines run at
+ * half speed and at 2 at double. The ball is never slowed or sped up: only machines are.
+ *
+ * Rates are whole eighths, so that the clock is the same number in every browser.
+ */
+export interface TimeZoneDef {
+  kind: 'timeZone';
+  id: string;
+  min: Vec2;
+  max: Vec2;
+  /** Height of the ground it lies on. Defaults to 0. */
+  y?: number;
+  /** The rate it keeps when nothing calls for another. Defaults to 1. */
+  rate?: number;
+  /** Id of the clock switch that sets its rate. */
+  dial?: string;
+  /** Other rates, each with the signal that calls for it. The first whose signal is on wins, over the dial. */
+  rates?: readonly { rate: number; when: When }[];
+  /**
+   * The rate it keeps for as long as a ball is inside it, whatever else calls for
+   * another: the ball brings its own time with it (SPEC v6 3.5).
+   */
+  carried?: number;
+}
+
+/**
+ * The beat as a signal (SPEC v6 3.4): on for some beats of the hole's and off for
+ * others, round and round, whatever the ball does. A gate that listens to one opens
+ * and shuts in time. The hole must have a `beat`.
+ */
+export interface PulseDef {
+  kind: 'pulse';
+  id: string;
+  /** Where its lamps stand, on the ground: one for each beat of the pattern. */
+  at: Vec3;
+  /** Compass heading the row of lamps runs along, in degrees. Defaults to 90: along +X. */
+  heading?: number;
+  /** One entry per beat: 1 for a beat its signal is on, 0 for one it is off. */
+  pattern: readonly (0 | 1)[];
+}
+
 export type PartDef =
+  | BeltDef
+  | DialDef
+  | TimeZoneDef
+  | PulseDef
   | ValveDef
   | WaterDef
   | FloatDef

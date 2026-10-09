@@ -180,7 +180,8 @@ export class Gate implements Part {
   private set(open: boolean): void {
     this.open = open;
     this.collider.setEnabled(!open);
-    this.field.host.cue(open ? 'gateOpen' : 'gateShut');
+    if (this.def.look === 'shutter') this.field.host.cue(open ? 'shutterOpen' : 'shutterShut');
+    else this.field.host.cue(open ? 'gateOpen' : 'gateShut');
     this.field.host.changed(this.id);
   }
 

@@ -8,6 +8,7 @@ import { attachSlingshot, type Pull } from '../input/slingshot';
 import { chapterOf, holeNumber } from '../level/chapters';
 import type { ChapterDef, HoleDef, WorldDef } from '../level/schema';
 import { DEFAULT_BALL, type Ball } from '../physics/ball';
+import { isArm } from '../physics/zones/arm';
 import { AimIndicator } from '../render/aimIndicator';
 import { BallView } from '../render/ballView';
 import { FollowCamera } from '../render/camera';
@@ -30,7 +31,11 @@ export type GameEvent =
   /** The countdown has kept running out on this hole: the player is offered a way on (SPEC v2 2.6). */
   | { type: 'stuck' }
   /** The camera showed the player a part that had changed. `skipped`: they did not wait for it to finish. */
-  | { type: 'showcase'; part: string; skipped: boolean };
+  | { type: 'showcase'; part: string; skipped: boolean }
+  /** A moving part that sounds a note has arrived at the end of its travel: a piano key at the top (SPEC v6 3.9). */
+  | { type: 'note'; degree: number }
+  /** The lamp of a robot arm has changed to the next place it will go. */
+  | { type: 'lamp' };
 
 /** Ticks between the countdown running out and the hole starting over: long enough to see the blast. */
 const RESTART_TICKS = 50;
@@ -63,6 +68,8 @@ export class Game {
   inputBlocked = false;
   /** Freezes the simulation, moving parts and countdown included. */
   paused = false;
+  /** How far the frame last drawn was between two physics steps, 0..1: for sound that follows the game's clock. */
+  frameAlpha = 0;
 
   /** One picture per ball, by ball id. A ball's picture can outlive it for a moment, to fade. */
   private readonly ballViews = new Map<number, BallView>();
@@ -96,6 +103,9 @@ export class Game {
   private explosions = 0;
   /** Ticks until the hole starts over after the countdown ran out; 0 when it is not about to. */
   private restartIn = 0;
+  /** What each robot arm's lamp showed at the last step, and which movers stood at the end of their travel. */
+  private lamps: number[] = [];
+  private arrived: boolean[] = [];
   private readonly listeners = new Set<(event: GameEvent) => void>();
   private readonly frameListeners = new Set<() => void>();
   private readonly projected = new THREE.Vector3();
@@ -258,6 +268,7 @@ export class Game {
   step(): void {
     if (this.paused) return;
     this.session.step();
+    this.watchMachines();
     if (this.restartIn > 0 && --this.restartIn === 0) {
       if (this.explosions >= EXPLOSIONS_BEFORE_OFFER) {
         this.explosions = 0;
@@ -266,6 +277,28 @@ export class Game {
         this.session.reset();
       }
     }
+  }
+
+  /**
+   * Things machines do that the round has no need to know about, only the ear (SPEC v6
+   * 3.9): a key reaching the top of its travel, an arm's lamp changing.
+   */
+  private watchMachines(): void {
+    const { session } = this;
+    if (!session.playing) return;
+    session.movers.forEach((mover, i) => {
+      const { note, motion, position } = mover.def;
+      if (note === undefined || motion.type !== 'slide') return;
+      const there = Math.abs(mover.pose.position.y - (position[1] + motion.offset[1])) < 1e-6;
+      if (there && this.arrived[i] === false) this.emit({ type: 'note', degree: note });
+      this.arrived[i] = there;
+    });
+    session.zones.forEach((zone, i) => {
+      if (!isArm(zone)) return;
+      const { next } = zone.pose;
+      if (this.lamps[i] !== undefined && this.lamps[i] !== next) this.emit({ type: 'lamp' });
+      this.lamps[i] = next;
+    });
   }
 
   /**
@@ -292,11 +325,12 @@ export class Game {
     const { session } = this;
     // While time is frozen nothing is between two steps: everything is where the last one left it.
     const alpha = session.frozen ? 1 : frameAlpha;
+    this.frameAlpha = alpha;
     // The session rebuilds its movers, crates and zones on every retry, so look them up afresh.
     this.moverViews.forEach((view, i) => updateMoverView(view, session.movers[i], alpha));
     this.crateViews.forEach((view, i) => updatePropView(view, session.crates[i], alpha));
     this.pinViews.forEach((view, i) => updatePropView(view, session.goal.pins[i], alpha));
-    this.zoneViews.forEach((view, i) => view?.update?.(session.zones[i]));
+    this.zoneViews.forEach((view, i) => view?.update?.(session.zones[i], alpha));
     this.time += frameDt;
     if (session.field) this.fieldView?.update(session.field, { alpha, dt: frameDt, time: this.time });
     session.goal.cups.forEach((cup, i) => {
@@ -434,6 +468,8 @@ export class Game {
   private resetView(): void {
     this.toShow.length = 0;
     this.showing = null;
+    this.lamps = [];
+    this.arrived = [];
     this.restartIn = 0;
     this.explosion.stop();
     for (const id of [...this.ballViews.keys()]) this.dropView(id);
@@ -459,8 +495,9 @@ export class Game {
         this.resetView();
         break;
       case 'partChanged':
-        // Shown once per hole, the first time it happens.
-        if (!this.shown.has(event.part)) {
+        // Shown once per hole, the first time it happens. A part that keeps time changes
+        // all the while, in plain sight: it is nothing to go and look at.
+        if (!this.shown.has(event.part) && !this.session.field?.isClockwork(event.part)) {
           this.shown.add(event.part);
           this.toShow.push(event.part);
         }

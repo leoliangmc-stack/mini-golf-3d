@@ -1,13 +1,15 @@
 import * as THREE from 'three';
 import type { Zone, ZoneDef } from '../physics/zones';
-import { numberParam, vectorParam } from '../physics/zones';
+import { numberParam, vectorParam, vectorsParam } from '../physics/zones';
+import { armAt, isArm, padPoint } from '../physics/zones/arm';
+import { drumCentre, isDrum } from '../physics/zones/drum';
 import { headingVector, tunnelColor, tunnelEnds, tunnelRadius } from '../physics/zones/tunnel';
 
 /** What the player sees of a zone. */
 export interface ZoneView {
   object: THREE.Object3D;
-  /** Called every frame with the live zone, by views that show its state. */
-  update?(zone: Zone): void;
+  /** Called every frame with the live zone, by views that show its state. `alpha` is how far the frame is between two steps. */
+  update?(zone: Zone, alpha: number): void;
 }
 
 /** Builds the view of a zone. Zones without a registered view are invisible. */
@@ -516,7 +518,227 @@ function windView(def: ZoneDef): ZoneView {
   };
 }
 
+// --- Chapter 6: robot arms and drums ---
+
+/** One colour for each place an arm can set a ball down: on the drop itself, and on the lamp when it is next. */
+export const DROP_COLORS = [0xffb020, 0x22c7ff, 0xff5fd0];
+const STEEL = 0x4c5663;
+const SAFETY = 0xf2c230;
+
+/** A cylinder from one point to another. */
+function strut(material: THREE.Material, radius: number): { mesh: THREE.Mesh; span(a: THREE.Vector3, b: THREE.Vector3): void } {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 1, 10), material);
+  mesh.castShadow = true;
+  const way = new THREE.Vector3();
+  return {
+    mesh,
+    span(a, b) {
+      way.subVectors(b, a);
+      const length = way.length();
+      mesh.position.copy(a).addScaledVector(way, 0.5);
+      mesh.scale.y = Math.max(length, 1e-3);
+      mesh.quaternion.setFromUnitVectors(UP, way.multiplyScalar(1 / Math.max(length, 1e-6)));
+    },
+  };
+}
+
+/**
+ * A robot arm (SPEC v6 3.3): a post, an upper arm and a forearm that reach to wherever
+ * the gripper is, bent the way an elbow bends. The pad it takes a ball from has a rim
+ * that is the lamp: it is the colour of the drop the next trip goes to, and it runs
+ * down like a fuse to the moment that trip leaves. An arrow over the pad points there too.
+ */
+function armView(def: ZoneDef): ZoneView {
+  const group = new THREE.Group();
+  const pad = padPoint(def);
+  const drops = vectorsParam(def, 'drops');
+  const [bx, by, bz] = vectorParam(def, 'base');
+  const lift = numberParam(def, 'lift', 1.6);
+  const radius = def.shape.kind === 'sphere' ? def.shape.radius : 0.5;
+  const steel = new THREE.MeshLambertMaterial({ color: STEEL, flatShading: true });
+  const paint = new THREE.MeshLambertMaterial({ color: SAFETY, flatShading: true });
+  const flat = (mesh: THREE.Mesh, x: number, y: number, z: number): THREE.Mesh => {
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(x, y, z);
+    return mesh;
+  };
+
+  // The pad: a dark tray with a low rim. The rim is drawn twice: dim all the way
+  // round, and bright for as much of the wait as is left.
+  const tray = flat(new THREE.Mesh(new THREE.CircleGeometry(radius * 0.9, 32), new THREE.MeshBasicMaterial({ color: 0x232a33 })), pad.x, pad.y + 0.012, pad.z);
+  const rimDim = flat(
+    new THREE.Mesh(new THREE.RingGeometry(radius * 0.9, radius * 1.12, 48), new THREE.MeshBasicMaterial({ color: 0x59626d })),
+    pad.x,
+    pad.y + 0.014,
+    pad.z,
+  );
+  const lampMaterial = new THREE.MeshBasicMaterial({ color: DROP_COLORS[0] });
+  const rimLit = flat(new THREE.Mesh(new THREE.RingGeometry(radius * 0.9, radius * 1.12, 48), lampMaterial), pad.x, pad.y + 0.018, pad.z);
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(radius * 1.02, 0.035, 6, 32), steel);
+  lip.rotation.x = Math.PI / 2;
+  lip.position.set(pad.x, pad.y + 0.03, pad.z);
+  group.add(tray, rimDim, rimLit, lip);
+
+  // Each drop: a ring on the ground in its own colour, with a spot in the middle.
+  drops.forEach((drop, i) => {
+    const color = DROP_COLORS[i % DROP_COLORS.length];
+    const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false });
+    group.add(
+      flat(new THREE.Mesh(new THREE.RingGeometry(0.34, 0.46, 32), material), drop[0], drop[1] + 0.014, drop[2]),
+      flat(new THREE.Mesh(new THREE.CircleGeometry(0.12, 20), material), drop[0], drop[1] + 0.014, drop[2]),
+    );
+  });
+
+  // The lamp over the pad: a ball of light, and an arrow that points at the next drop.
+  const beacon = new THREE.Group();
+  beacon.position.set(pad.x, pad.y + lift + 0.75, pad.z);
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.16, 14, 10), lampMaterial);
+  const arrow = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.5), lampMaterial);
+  shaft.position.z = -0.4;
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.3, 4), lampMaterial);
+  head.rotation.x = -Math.PI / 2;
+  head.position.z = -0.78;
+  arrow.add(shaft, head);
+  beacon.add(bulb, arrow);
+  group.add(beacon);
+
+  // The arm itself. The shoulder is high enough to reach over everything it carries across.
+  const shoulder = new THREE.Vector3(bx, by + lift + 1.1, bz);
+  const wristLift = 0.5;
+  let reach = 0;
+  for (const point of [[pad.x, pad.y, pad.z], ...drops]) {
+    for (const up of [0, lift]) {
+      reach = Math.max(reach, shoulder.distanceTo(new THREE.Vector3(point[0], point[1] + up + wristLift, point[2])));
+    }
+  }
+  const bone = reach * 0.54;
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.34, lift + 1.1 + 4, 12), steel);
+  post.position.set(bx, by + (lift + 1.1 - 4) / 2, bz);
+  post.castShadow = true;
+  const turret = new THREE.Mesh(new THREE.SphereGeometry(0.36, 14, 10), paint);
+  turret.position.copy(shoulder);
+  const upper = strut(paint, 0.13);
+  const fore = strut(paint, 0.1);
+  const elbowJoint = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 8), steel);
+  const drop = strut(steel, 0.045);
+  // The gripper: a ring that goes round the ball, and three fingers under it.
+  const claw = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.03, 6, 18), steel);
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.16;
+  claw.add(ring);
+  for (let i = 0; i < 3; i++) {
+    const finger = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.2, 0.035), paint);
+    const around = (i / 3) * Math.PI * 2;
+    finger.position.set(Math.cos(around) * 0.15, 0.08, Math.sin(around) * 0.15);
+    claw.add(finger);
+  }
+  group.add(post, turret, upper.mesh, fore.mesh, elbowJoint, drop.mesh, claw);
+
+  const grip = new THREE.Vector3();
+  const wrist = new THREE.Vector3();
+  const elbow = new THREE.Vector3();
+  const way = new THREE.Vector3();
+  const bend = new THREE.Vector3();
+  const pose = (at: { x: number; y: number; z: number }): void => {
+    grip.set(at.x, at.y, at.z);
+    wrist.set(at.x, at.y + wristLift, at.z);
+    // Two bones of the same length: the elbow is over the middle of the line from the
+    // shoulder to the wrist, as far off it as the bones' length leaves room for.
+    way.subVectors(wrist, shoulder);
+    const distance = Math.min(way.length(), bone * 2 - 1e-3);
+    way.normalize();
+    bend.copy(UP).addScaledVector(way, -way.y).normalize();
+    const off = Math.sqrt(Math.max(0, bone * bone - (distance * distance) / 4));
+    elbow.copy(shoulder).addScaledVector(way, distance / 2).addScaledVector(bend, off);
+    upper.span(shoulder, elbow);
+    fore.span(elbow, wrist);
+    elbowJoint.position.copy(elbow);
+    drop.span(wrist, grip);
+    claw.position.copy(grip);
+  };
+  const lamp = (next: number, left: number): void => {
+    lampMaterial.color.setHex(DROP_COLORS[next % DROP_COLORS.length]);
+    const to = drops[next];
+    arrow.rotation.y = Math.atan2(-(to[0] - pad.x), -(to[2] - pad.z));
+    // The bright part of the rim is cut to the share of the wait still to come.
+    const sweep = Math.max(0.02, Math.min(1, left)) * Math.PI * 2;
+    rimLit.geometry.dispose();
+    rimLit.geometry = new THREE.RingGeometry(radius * 0.9, radius * 1.12, 48, 1, Math.PI / 2, sweep);
+  };
+  const first = armAt(def, 0);
+  pose(first.grip);
+  lamp(first.next, first.left);
+
+  let shown = '';
+  return {
+    object: group,
+    update(zone, alpha) {
+      if (!isArm(zone)) return;
+      const { prev, pose: now } = zone;
+      pose({
+        x: prev.grip.x + (now.grip.x - prev.grip.x) * alpha,
+        y: prev.grip.y + (now.grip.y - prev.grip.y) * alpha,
+        z: prev.grip.z + (now.grip.z - prev.grip.z) * alpha,
+      });
+      // Brighter in the last moments before a trip leaves.
+      const key = `${now.next}|${Math.round(now.left * 90)}`;
+      if (key !== shown) {
+        shown = key;
+        lamp(now.next, now.left);
+      }
+      bulb.scale.setScalar(now.left < 0.12 ? 1.35 : 1);
+    },
+  };
+}
+
+/**
+ * A drum set in the ground (SPEC v6 3.4): a skin with a rim round it. The rim fills
+ * up as the next strike comes, and the skin jumps when it lands.
+ */
+function drumView(def: ZoneDef): ZoneView {
+  const group = new THREE.Group();
+  const at = drumCentre(def);
+  const radius = def.shape.kind === 'sphere' ? def.shape.radius : 0.8;
+  group.position.set(at.x, at.y, at.z);
+  const skinMaterial = new THREE.MeshLambertMaterial({ color: 0xf3e9d2 });
+  const skin = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.9, radius * 0.9, 0.03, 32), skinMaterial);
+  skin.position.y = 0.012;
+  skin.receiveShadow = true;
+  const rim = new THREE.Mesh(new THREE.RingGeometry(radius * 0.9, radius * 1.08, 48), new THREE.MeshBasicMaterial({ color: 0x8a2e4a }));
+  rim.rotation.x = -Math.PI / 2;
+  rim.position.y = 0.016;
+  const lit = new THREE.MeshBasicMaterial({ color: 0xffd34d });
+  const fill = new THREE.Mesh(new THREE.RingGeometry(radius * 0.9, radius * 1.08, 48), lit);
+  fill.rotation.x = -Math.PI / 2;
+  fill.position.y = 0.02;
+  group.add(skin, rim, fill);
+  const cream = new THREE.Color(0xf3e9d2);
+  const flash = new THREE.Color(0xffffff);
+  let shown = -1;
+  return {
+    object: group,
+    update(zone) {
+      if (!isDrum(zone)) return;
+      const { left, striking } = zone.beat;
+      // The moments just after a strike: `left` is back near 1 and falling.
+      const ring = striking ? 1 : Math.max(0, (left - 0.8) / 0.2);
+      skin.position.y = 0.012 + 0.07 * ring;
+      skin.scale.setScalar(1 + 0.03 * ring);
+      skinMaterial.color.copy(cream).lerp(flash, ring);
+      const step = Math.round((1 - left) * 60);
+      if (step === shown) return;
+      shown = step;
+      fill.geometry.dispose();
+      fill.geometry = new THREE.RingGeometry(radius * 0.9, radius * 1.08, 48, 1, Math.PI / 2, Math.max(0.02, 1 - left) * Math.PI * 2);
+    },
+  };
+}
+
 export function registerBuiltinZoneViews(): void {
+  registerZoneView('arm', armView);
+  registerZoneView('drum', drumView);
   registerZoneView('current', currentView);
   registerZoneView('bubbleLift', bubbleView);
   registerZoneView('wind', windView);

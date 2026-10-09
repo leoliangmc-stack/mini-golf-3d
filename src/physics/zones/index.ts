@@ -1,4 +1,4 @@
-import type { Vec3 } from '../../core/types';
+import type { Vec3, XYZ } from '../../core/types';
 import type { Ball } from '../ball';
 import type { PhysicsWorld } from '../world';
 import type { ZoneShape } from './shape';
@@ -78,6 +78,10 @@ export interface Zone {
   preStep(ctx: ZoneContext): void;
   /** True once a single-use zone has been used up, for its view to show. */
   readonly spent?: boolean;
+  /** True if a ball may not be left at `point` because of this zone: on a drum that is about to strike. */
+  forbidsRest?(point: XYZ): boolean;
+  /** Where to put a ball that may not stay where it stopped. */
+  nearestRest?(point: XYZ): Vec3 | null;
 }
 
 /** Reads a list of vectors from a zone's params. */

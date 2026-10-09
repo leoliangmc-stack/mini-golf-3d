@@ -1,3 +1,5 @@
+import { FIXED_DT } from '../core/loop';
+
 /**
  * Background music is generated, not recorded: each world has a scale, a tempo and a
  * timbre, and a small sequencer plays a looping arpeggio over four chords. No audio
@@ -46,6 +48,12 @@ export const MUSIC: Record<string, MusicDef> = {
   dam: { bpm: 102, root: 55, scale: [0, 2, 3, 5, 7, 9, 10], wave: 'square', brightness: 1200 },
   canyon: { bpm: 112, root: 57, scale: [0, 3, 5, 7, 10], wave: 'sawtooth', brightness: 1300 },
   spring: { bpm: 126, root: 60, scale: [0, 2, 4, 5, 7, 9, 11], wave: 'triangle', brightness: 2300 },
+  // Chapter 6. On a hole that keeps a beat the tempo here is not used: the beat is the hole's.
+  toy: { bpm: 122, root: 65, scale: [0, 2, 4, 7, 9], wave: 'square', brightness: 2000 },
+  assembly: { bpm: 104, root: 55, scale: [0, 2, 3, 5, 7, 10], wave: 'sawtooth', brightness: 1100 },
+  music: { bpm: 120, root: 57, scale: [0, 3, 5, 7, 10], wave: 'triangle', brightness: 2600 },
+  clocktower: { bpm: 96, root: 62, scale: [0, 2, 3, 5, 7, 8, 11], wave: 'sine', brightness: 3000 },
+  works: { bpm: 120, root: 60, scale: [0, 2, 3, 5, 7, 10], wave: 'square', brightness: 1500 },
 };
 
 /** Chord roots, as scale steps, one per bar. */
@@ -57,7 +65,39 @@ const STEPS_PER_BAR = 16;
 const LOOKAHEAD = 0.25;
 const INTERVAL = 0.06;
 
-const midiToHz = (note: number): number => 440 * 2 ** ((note - 69) / 12);
+export const midiToHz = (note: number): number => 440 * 2 ** ((note - 69) / 12);
+
+/** The MIDI note a step of a world's scale is: step 0 is the root, and the scale goes on up through the octaves. */
+export function scaleNote(def: MusicDef, degree: number): number {
+  const n = def.scale.length;
+  return def.root + def.scale[((degree % n) + n) % n] + 12 * Math.floor(degree / n);
+}
+
+/** One plucked note, at an exact moment of the audio clock. */
+function pluck(
+  ctx: AudioContext,
+  output: AudioNode,
+  def: MusicDef,
+  midi: number,
+  at: number,
+  length: number,
+  level: number,
+  wave = def.wave,
+): void {
+  const osc = ctx.createOscillator();
+  const filter = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  osc.type = wave;
+  osc.frequency.value = midiToHz(midi);
+  filter.type = 'lowpass';
+  filter.frequency.value = def.brightness;
+  gain.gain.setValueAtTime(0, at);
+  gain.gain.linearRampToValueAtTime(level, at + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0008, at + length);
+  osc.connect(filter).connect(gain).connect(output);
+  osc.start(at);
+  osc.stop(at + length + 0.02);
+}
 
 export class MusicPlayer {
   private timer: number | null = null;
@@ -95,31 +135,122 @@ export class MusicPlayer {
       const inBar = this.step % STEPS_PER_BAR;
       const chord = CHORDS[Math.floor(this.step / STEPS_PER_BAR) % CHORDS.length];
       const lead = LEAD[inBar];
-      if (lead >= 0) this.pluck(def, this.note(def, chord + lead) + 12, this.nextTime, stepLength * 1.8, 0.16);
-      if (inBar % 8 === 0) this.pluck(def, this.note(def, chord) - 12, this.nextTime, stepLength * 7, 0.22, 'sine');
+      if (lead >= 0) pluck(this.ctx, this.output, def, scaleNote(def, chord + lead) + 12, this.nextTime, stepLength * 1.8, 0.16);
+      if (inBar % 8 === 0) pluck(this.ctx, this.output, def, scaleNote(def, chord) - 12, this.nextTime, stepLength * 7, 0.22, 'sine');
       this.nextTime += stepLength;
       this.step++;
     }
   }
+}
 
-  private note(def: MusicDef, degree: number): number {
-    const n = def.scale.length;
-    return def.root + def.scale[((degree % n) + n) % n] + 12 * Math.floor(degree / n);
+/** How far ahead of the game's clock notes are put down, in ticks: more than a slow frame, less than anyone would notice a pause running on. */
+const AHEAD = 12;
+/** If the game's clock and the audio clock have come this far apart, in seconds, something stopped: start counting afresh. */
+const DRIFT = 0.12;
+/** A lead line for music that keeps a hole's beat: scale steps above the chord root for each half beat of two bars. */
+const BEAT_LEAD = [0, 2, 4, 2, 5, 4, 2, 4, 0, 2, 4, 7, 5, 4, 2, -1];
+
+/**
+ * Music that follows the game (SPEC v6 3.4). On a hole that keeps a beat, the beat is
+ * so many physics ticks, and every machine moves on it. This plays to the same count:
+ * it is told the game's clock each frame and puts down the notes of the next fifth of
+ * a second at the moments the audio clock will reach them. It never tells the game
+ * anything, and it keeps no tempo of its own: stop the game and it stops, a beat late
+ * at most; let the game fall behind and the music is brought back to it.
+ */
+export class BeatPlayer {
+  private def: MusicDef | null = null;
+  /** Ticks to a beat. */
+  private beat = 30;
+  /** The last half beat that has been put down. */
+  private done = -1;
+  /** Where on the audio clock the game's tick 0 falls, as best it is known. */
+  private origin: number | null = null;
+  private readonly noise: AudioBuffer;
+
+  constructor(
+    private readonly ctx: AudioContext,
+    private readonly output: AudioNode,
+  ) {
+    this.noise = ctx.createBuffer(1, Math.round(ctx.sampleRate * 0.2), ctx.sampleRate);
+    const samples = this.noise.getChannelData(0);
+    for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
   }
 
-  private pluck(def: MusicDef, midi: number, at: number, length: number, level: number, wave = def.wave): void {
+  get playing(): boolean {
+    return this.def !== null;
+  }
+
+  start(id: string, beat: number): void {
+    this.def = MUSIC[id] ?? MUSIC.meadow;
+    this.beat = beat;
+    this.origin = null;
+  }
+
+  stop(): void {
+    this.def = null;
+    this.origin = null;
+  }
+
+  /** Call every frame the game is running, with its clock: the tick, and how far into the next. */
+  follow(tick: number, alpha: number): void {
+    const def = this.def;
+    if (!def) return;
+    const half = this.beat / 2;
+    const now = this.ctx.currentTime;
+    const clock = tick + alpha;
+    const seen = now - clock * FIXED_DT;
+    if (this.origin === null || Math.abs(seen - this.origin) > DRIFT) {
+      // The first frame, or the game was paused, or started over: pick up from here.
+      this.origin = seen;
+      this.done = Math.ceil(clock / half) - 1;
+    } else {
+      // Frames come a little early and a little late. The count does not: lean on it.
+      this.origin += (seen - this.origin) * 0.1;
+    }
+    for (let step = this.done + 1; step * half <= clock + AHEAD; step++) {
+      const at = this.origin + step * half * FIXED_DT;
+      if (at > now) this.play(def, step, at);
+      this.done = step;
+    }
+  }
+
+  private play(def: MusicDef, step: number, at: number): void {
+    const beat = Math.floor(step / 2);
+    const onBeat = step % 2 === 0;
+    const inBar = beat % 4;
+    const length = (this.beat / 2) * FIXED_DT;
+    const chord = CHORDS[Math.floor(beat / 4) % CHORDS.length];
+    const lead = BEAT_LEAD[step % BEAT_LEAD.length];
+    if (lead >= 0) pluck(this.ctx, this.output, def, scaleNote(def, chord + lead) + 12, at, length * 1.7, 0.15);
+    if (onBeat && inBar % 2 === 0) pluck(this.ctx, this.output, def, scaleNote(def, chord) - 12, at, length * 3.6, 0.24, 'sine');
+    // The beat itself: a thump on every beat, heavier on the first of the bar, and a tick between.
+    if (onBeat) this.thump(at, inBar === 0 ? 0.5 : 0.28);
+    this.tick(at, onBeat ? 0.05 : 0.09);
+  }
+
+  private thump(at: number, level: number): void {
     const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.frequency.setValueAtTime(140, at);
+    osc.frequency.exponentialRampToValueAtTime(46, at + 0.11);
+    gain.gain.setValueAtTime(level, at);
+    gain.gain.exponentialRampToValueAtTime(0.0008, at + 0.16);
+    osc.connect(gain).connect(this.output);
+    osc.start(at);
+    osc.stop(at + 0.18);
+  }
+
+  private tick(at: number, level: number): void {
+    const source = this.ctx.createBufferSource();
     const filter = this.ctx.createBiquadFilter();
     const gain = this.ctx.createGain();
-    osc.type = wave;
-    osc.frequency.value = midiToHz(midi);
-    filter.type = 'lowpass';
-    filter.frequency.value = def.brightness;
-    gain.gain.setValueAtTime(0, at);
-    gain.gain.linearRampToValueAtTime(level, at + 0.012);
-    gain.gain.exponentialRampToValueAtTime(0.0008, at + length);
-    osc.connect(filter).connect(gain).connect(this.output);
-    osc.start(at);
-    osc.stop(at + length + 0.02);
+    source.buffer = this.noise;
+    filter.type = 'highpass';
+    filter.frequency.value = 6500;
+    gain.gain.setValueAtTime(level, at);
+    gain.gain.exponentialRampToValueAtTime(0.0008, at + 0.04);
+    source.connect(filter).connect(gain).connect(this.output);
+    source.start(at, 0, 0.06);
   }
 }

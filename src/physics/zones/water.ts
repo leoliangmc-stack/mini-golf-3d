@@ -2,6 +2,7 @@ import { FIXED_DT } from '../../core/loop';
 import { hypot } from '../../core/math';
 import type { Vec3, XYZ } from '../../core/types';
 import { xyz } from '../../core/types';
+import type { Ball } from '../ball';
 import { numberParam, perBall, vectorParam, type ZoneDef, type ZoneFactory } from './index';
 import { shapeContains, type ZoneShape } from './shape';
 
@@ -20,7 +21,7 @@ import { shapeContains, type ZoneShape } from './shape';
  */
 export const current: ZoneFactory = (def) => {
   const [wx, , wz] = vectorParam(def, 'velocity');
-  const share = Math.min(1, numberParam(def, 'strength', DEFAULT_STRENGTH) * FIXED_DT);
+  const share = carryShare(numberParam(def, 'strength', DEFAULT_STRENGTH));
   const wet = perBall(() => ({ in: false }));
   return {
     preStep(ctx) {
@@ -31,13 +32,26 @@ export const current: ZoneFactory = (def) => {
       if (inside && !memory.in) ctx.emit({ type: 'cue', name: 'currentEnter' });
       memory.in = inside;
       if (!inside) return;
-      const v = ball.velocity();
-      ball.body.setLinvel({ x: v.x + (wx - v.x) * share, y: v.y, z: v.z + (wz - v.z) * share }, true);
+      carry(ball, wx, wz, share);
     },
   };
 };
 
-const DEFAULT_STRENGTH = 4;
+/** How quickly a ball takes up the pace of what carries it, in 1/s, unless told otherwise. */
+export const DEFAULT_STRENGTH = 4;
+
+/** The share of the gap between a ball's pace and its carrier's that one step closes. */
+export const carryShare = (strength: number): number => Math.min(1, strength * FIXED_DT);
+
+/**
+ * One step of being carried: the ball's speed along the ground comes a `share` nearer
+ * the pace (wx, wz). It is the whole of what moving water does to a ball, and of what a
+ * conveyor belt does (SPEC v6 3.2), which is why the two feel alike.
+ */
+export function carry(ball: Ball, wx: number, wz: number, share: number): void {
+  const v = ball.velocity();
+  ball.body.setLinvel({ x: v.x + (wx - v.x) * share, y: v.y, z: v.z + (wz - v.z) * share }, true);
+}
 
 /** A stretch of moving water over a rectangle of ground at height `y`, flowing at `velocity` [x, z] m/s. */
 export const stream = (

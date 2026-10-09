@@ -125,6 +125,13 @@
   padding: 3px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.16);
+  /* Six chapters do not fit across a small phone: there the row scrolls sideways. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .screen .tabs button {
@@ -139,6 +146,13 @@
 .screen .tabs button.on {
   background: #fff;
   color: var(--ink);
+}
+
+@media (max-width: 760px) {
+  .screen .tabs button {
+    flex: none;
+    padding: 0 11px;
+  }
 }
 
 .chapter-locked {

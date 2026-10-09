@@ -18,6 +18,8 @@ export interface FieldHost {
   outOfBounds(ball: Ball): void;
   /** A part has changed what it is doing: something for the camera to show once the ball has stopped. */
   changed(part: string): void;
+  /** Physics ticks to a beat on this hole, or null if it keeps none (SPEC v6 3.4). */
+  readonly beat: number | null;
 }
 
 /**
@@ -33,6 +35,11 @@ export interface Part {
   readonly on: boolean;
   /** True while the part is on its way somewhere. A stroke is not over until every part is still. */
   readonly busy: boolean;
+  /**
+   * True for a part that keeps the hole's clock and nothing else: no ball can change
+   * what it does (SPEC v6 3.7). A part that listens only to such parts is one too.
+   */
+  readonly timed?: boolean;
   /** Where it is, for the lines drawn between parts and for the camera. */
   readonly anchor: XYZ;
   /** Called once, when every part exists, so one can look another up. */
@@ -51,6 +58,14 @@ export interface Part {
   forbidsRest?(point: XYZ): boolean;
   /** Where to put a ball that may not stay where it stopped. */
   nearestRest?(point: XYZ): Vec3 | null;
+}
+
+/**
+ * A clock of its own, kept by a part and read by the moving parts that name it (SPEC v6
+ * 3.5). `at` gives its time at the hole's current tick or at the next one.
+ */
+export interface LocalClock {
+  at(tick: number): number;
 }
 
 /** Everything a field snapshot holds. Plain data: it can be compared, copied and stored. */
@@ -208,6 +223,8 @@ export class Field {
   private readonly byId = new Map<string, Part>();
   private readonly owners = new Map<number, Part>();
   private readonly systems = new Map<string, FieldSystem>();
+  /** The parts no ball can change: they keep the hole's clock, or listen only to parts that do. */
+  private readonly clockwork = new Set<Part>();
 
   constructor(
     readonly def: FieldDef,
@@ -224,7 +241,43 @@ export class Field {
       this.byId.set(id, part);
     });
     for (const part of this.parts) part.wire?.();
+    this.findClockwork();
     for (const part of this.parts) part.resync?.();
+  }
+
+  private findClockwork(): void {
+    for (const part of this.parts) if (part.timed) this.clockwork.add(part);
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const part of this.parts) {
+        const drive = (part as Part & { drive?: Drive | null }).drive;
+        if (this.clockwork.has(part) || !drive || drive.sources.length === 0) continue;
+        if (!drive.sources.every((source) => this.clockwork.has(source.part))) continue;
+        this.clockwork.add(part);
+        grew = true;
+      }
+    }
+  }
+
+  /**
+   * True if there is anything here for a stroke taken back to put back (SPEC v6 3.1):
+   * a part the ball can change. Works that only keep time, a gate on the beat or a belt
+   * that never turns, are the same after any stroke as before it.
+   */
+  get rewindable(): boolean {
+    return this.clockwork.size < this.parts.length;
+  }
+
+  /** True for a part that keeps time and nothing else. */
+  isClockwork(id: string): boolean {
+    return this.clockwork.has(this.part(id));
+  }
+
+  /** The clock a part keeps, for the moving parts that run on it. */
+  clock(id: string): LocalClock {
+    const part = this.part(id) as Part & Partial<LocalClock>;
+    if (typeof part.at !== 'function') throw new Error(`Part "${id}" keeps no clock of its own`);
+    return part as Part & LocalClock;
   }
 
   part(id: string): Part {
@@ -255,14 +308,14 @@ export class Field {
     return all.every((id) => this.part(id).on) && !none.some((id) => this.part(id).on);
   }
 
-  /** True while any part is on its way somewhere. */
+  /** True while any part is on its way somewhere. One that keeps time never holds a stroke open. */
   get busy(): boolean {
-    return this.parts.some((part) => part.busy);
+    return this.parts.some((part) => part.busy && !this.clockwork.has(part));
   }
 
   /** The part that is on the move, for the camera to watch while the ball waits. */
   get active(): Part | null {
-    return this.parts.find((part) => part.busy) ?? null;
+    return this.parts.find((part) => part.busy && !this.clockwork.has(part)) ?? null;
   }
 
   /** Call before stepping the world. */
@@ -291,10 +344,12 @@ export class Field {
     return { alert: this.alert, parts: this.parts.map((part) => part.save()) };
   }
 
-  /** Puts every part back the way a snapshot has it. Nothing makes a sound. */
+  /** Puts every part back the way a snapshot has it. Nothing makes a sound. A part that keeps time is left running. */
   restore(state: FieldState): void {
     this.alert = state.alert;
-    this.parts.forEach((part, i) => part.load(state.parts[i]));
+    this.parts.forEach((part, i) => {
+      if (!this.clockwork.has(part)) part.load(state.parts[i]);
+    });
     for (const part of this.parts) part.resync?.();
     for (const system of this.systems.values()) system.reset?.();
   }

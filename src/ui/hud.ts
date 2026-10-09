@@ -49,6 +49,7 @@ export function createHud(game: Game, actions: HudActions): void {
   const windArrow = byId('wind-arrow');
   const windLeft = byId('wind-left');
   const windLabel = byId('wind-label');
+  const beat = byId('beat');
 
   let toastTimer = 0;
   let resultTimer = 0;
@@ -114,7 +115,7 @@ export function createHud(game: Game, actions: HudActions): void {
       session.canUseSkill('freeze'),
       game.choosing,
       pinTotal > 0 ? session.goal.pinsLeft : -1,
-      field ? session.canUndo : -1,
+      session.rewindable ? session.canUndo : -1,
       coins.length > 0 ? coinsHeld : -1,
       dragon ? field!.alert : -1,
     ].join();
@@ -132,7 +133,8 @@ export function createHud(game: Game, actions: HudActions): void {
     picker.hidden = !game.choosing;
     pins.hidden = pinTotal === 0;
     if (pinTotal > 0) pins.textContent = TEXT.pins(session.goal.pinsLeft, pinTotal);
-    undo.hidden = !field;
+    // Only where there is something to take back: works that keep time have nothing (SPEC v6 3.1).
+    undo.hidden = !session.rewindable;
     undo.classList.toggle('unready', !session.canUndo);
     undo.setAttribute('aria-label', TEXT.undo());
     gold.hidden = coins.length === 0;
@@ -157,10 +159,9 @@ export function createHud(game: Game, actions: HudActions): void {
   const drawWind = () => {
     const zone = game.session.zones.find(isWind);
     if (!zone) {
-      if (windShown !== '') {
-        windShown = '';
-        wind.hidden = true;
-      }
+      // By what is on the page, not by what was last drawn: a new hole forgets the latter.
+      if (!wind.hidden) wind.hidden = true;
+      windShown = '';
       return;
     }
     const { x, z, left, turning } = zone.gust;
@@ -176,6 +177,34 @@ export function createHud(game: Game, actions: HudActions): void {
     windLabel.textContent = calm ? TEXT.windCalm() : TEXT.wind();
     windArrow.style.transform = `rotate(${degrees}deg)`;
     windLeft.style.transform = `scaleX(${left.toFixed(3)})`;
+  };
+
+  /**
+   * The metronome (SPEC v6 3.4): one dot for each beat of the bar, the dot of the beat
+   * the hole is in lit, the first of the bar bigger than the rest. It reads the game's
+   * clock and nothing else, so what it shows is what the machines do.
+   */
+  let beatShown = '';
+  const drawBeat = () => {
+    const def = game.hole.beat;
+    if (!def) {
+      if (!beat.hidden) beat.hidden = true;
+      beatShown = '';
+      return;
+    }
+    const bar = def.bar ?? 4;
+    const tick = game.session.world.tick;
+    const now = Math.floor(tick / def.ticks) % bar;
+    // Each beat is lit at its start and fades over its length, in a few steps.
+    const fade = 3 - Math.min(3, Math.floor(((tick % def.ticks) / def.ticks) * 4));
+    const shown = `${bar}|${now}|${fade}`;
+    if (shown === beatShown) return;
+    if (beat.childElementCount !== bar) beat.replaceChildren(...Array.from({ length: bar }, () => document.createElement('i')));
+    beatShown = shown;
+    beat.hidden = false;
+    Array.from(beat.children).forEach((dot, i) => {
+      dot.className = i === now ? `on fade${fade}` : '';
+    });
   };
 
   const fillResult = (outcome: Outcome) => {
@@ -231,6 +260,7 @@ export function createHud(game: Game, actions: HudActions): void {
     byId('ball-next').setAttribute('aria-label', TEXT.nextBall());
     extrasShown = '';
     windShown = '';
+    beatShown = '';
     holeName.textContent = TEXT.holeTitle(tr(game.world.name), game.holeNumber);
     byId('rule-tag').textContent = tr(game.world.ruleTag);
     byId('challenge').textContent = game.hole.challenge ? TEXT.challenge(tr(game.hole.challenge.text)) : '';
@@ -305,6 +335,7 @@ export function createHud(game: Game, actions: HudActions): void {
     drawTimer();
     drawExtras();
     drawWind();
+    drawBeat();
     if (!hint.classList.contains('show')) return;
     const p = game.ballScreenPosition();
     hint.style.transform = `translate(${p.x}px, ${p.y}px)`;
@@ -341,7 +372,7 @@ export function createHud(game: Game, actions: HudActions): void {
   });
   undo.addEventListener('click', () => actions.onUndo());
   window.addEventListener('keydown', (event) => {
-    if (event.code !== 'KeyZ' || event.repeat || !game.session.field) return;
+    if (event.code !== 'KeyZ' || event.repeat || !game.session.rewindable) return;
     event.preventDefault();
     actions.onUndo();
   });

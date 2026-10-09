@@ -18,8 +18,14 @@ const RAD = Math.PI / 180;
 /** Collides with everything / with nothing. */
 const SOLID = 0xffffffff;
 const GHOST = 0x00020000;
+/** A lift standing this much higher than the underside of a ball beside it is a wall to that ball. */
+const LIFT_STEP = 0.03;
 
-/** Position within a cycle, 0..1, at a given tick. Periods are whole ticks so cycles repeat exactly. */
+/**
+ * Position within a cycle, 0..1, at a given tick. Periods are whole ticks so cycles
+ * repeat exactly. The tick need not be whole: a part that keeps a time zone's clock is
+ * asked where it is at that clock's time, which goes by halves when it runs slow.
+ */
 export function cyclePhase(tick: number, period: number, phase = 0): number {
   const ticks = Math.max(2, Math.round(period / FIXED_DT));
   const u = (tick % ticks) / ticks + phase;
@@ -137,7 +143,22 @@ export class Mover implements GroundCarrier {
       // One collider cannot be solid for one ball and absent for another: with several
       // balls about, it is there as soon as any of them is over it.
       this.collider.setCollisionGroups(balls.some((ball) => this.isUnder(ball.position())) ? SOLID : GHOST);
+    } else if (this.def.role === 'lift') {
+      this.collider.setCollisionGroups(balls.some((ball) => this.meets(ball)) ? SOLID : GHOST);
     }
+  }
+
+  /**
+   * True if a lift is there for this ball: the ball is on top of it, as with any
+   * platform, or beside it and too low to roll onto it. A lift that is level with the
+   * ground is not there for a ball rolling up to it, so its edge trips nothing; one that
+   * has risen stands in the way like a wall.
+   */
+  private meets(ball: Ball): boolean {
+    const p = ball.position();
+    if (this.isUnder(p)) return true;
+    const top = this.pose.position.y + this.def.size[1] / 2;
+    return !this.covers(p) && top - (p.y - ball.props.radius) > LIFT_STEP;
   }
 
   /** Call after stepping the world. */
@@ -164,6 +185,16 @@ export class Mover implements GroundCarrier {
     const localZ = dx * s + dz * c;
     const [width, height, depth] = this.def.size;
     return Math.abs(localX) <= width / 2 && Math.abs(localZ) <= depth / 2 && point.y >= position.y + height / 2;
+  }
+
+  /** True when `point` is within the box as seen from above, at whatever height. */
+  private covers(point: XYZ): boolean {
+    const { position, yaw } = this.pose;
+    const dx = point.x - position.x;
+    const dz = point.z - position.z;
+    const c = cos(yaw);
+    const s = sin(yaw);
+    return Math.abs(dx * c - dz * s) <= this.def.size[0] / 2 && Math.abs(dx * s + dz * c) <= this.def.size[2] / 2;
   }
 
   pointVelocity(point: XYZ): XYZ {

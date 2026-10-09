@@ -261,6 +261,56 @@ export function registerThemes(): void {
     sunIntensity: 2.1,
     sea: { color: 0x4f7f7a, y: -3.6 },
   });
+  // Toy factory: a bright shop floor, painted like a nursery.
+  registerTheme('toy', {
+    sky: 0xffd9a8,
+    ambientSky: 0xffffff,
+    ambientGround: 0xf0a878,
+    ambientIntensity: 1.6,
+    sun: 0xfff6e0,
+    sunIntensity: 2.1,
+    sea: { color: 0xe8956a, y: -3.6 },
+  });
+  // Assembly line: a hall of steel under cold lamps.
+  registerTheme('assembly', {
+    sky: 0x8fa3b5,
+    ambientSky: 0xf2f7ff,
+    ambientGround: 0x5f7284,
+    ambientIntensity: 1.6,
+    sun: 0xfff3d6,
+    sunIntensity: 2,
+    sea: { color: 0x3f4d5c, y: -3.6 },
+  });
+  // Music factory: a stage at night.
+  registerTheme('music', {
+    sky: 0x1d1338,
+    ambientSky: 0xe0c8ff,
+    ambientGround: 0x4a2f7a,
+    ambientIntensity: 1.8,
+    sun: 0xffe6f5,
+    sunIntensity: 1.7,
+    sea: { color: 0x140c28, y: -3.6 },
+  });
+  // Clockwork: the inside of a clock tower, all brass and late light. ("clockwork" is the Moving Hole's.)
+  registerTheme('clocktower', {
+    sky: 0xe8c98a,
+    ambientSky: 0xfff3d9,
+    ambientGround: 0xa87f45,
+    ambientIntensity: 1.6,
+    sun: 0xffe7b8,
+    sunIntensity: 2.1,
+    sea: { color: 0x6b4f2a, y: -3.6 },
+  });
+  // The Chapter 6 finale: the whole works, end to end, under the night shift's lamps.
+  registerTheme('works', {
+    sky: 0x2b3a55,
+    ambientSky: 0xdfe9ff,
+    ambientGround: 0x55627a,
+    ambientIntensity: 1.8,
+    sun: 0xfff0d0,
+    sunIntensity: 1.9,
+    sea: { color: 0x1a2436, y: -3.6 },
+  });
   registerTheme('pirate', {
     sky: 0x9fd8f0,
     ambientSky: 0xffffff,

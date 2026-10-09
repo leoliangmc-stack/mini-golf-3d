@@ -4,10 +4,10 @@ import type { Vec3, XYZ } from '../core/types';
 import { xyz } from '../core/types';
 import { compileHole, type CompiledHole } from '../level/compile';
 import { buildHolePhysics } from '../level/physicsBuilder';
-import type { BallSize, HoleDef } from '../level/schema';
+import type { BallSize, HoleDef, MoverDef } from '../level/schema';
 import { DEFAULT_BALL, SIZE_ORDER, type Ball, type BallPose, type BallProps } from '../physics/ball';
 import { fitBall } from '../physics/fit';
-import { Mover } from '../physics/movers';
+import { Mover, moverPose, type MoverPose } from '../physics/movers';
 import { Crate } from '../physics/props';
 import { applySurface, probeGround, SurfaceMap, type ColliderKind, type GroundProbe } from '../physics/surfaces';
 import { PhysicsWorld } from '../physics/world';
@@ -350,9 +350,18 @@ export class Session implements SkillHost {
     return true;
   }
 
-  /** Whether the last stroke can be taken back right now. Only a hole with works offers it. */
+  /**
+   * True on a hole where a stroke can be taken back at all: one whose works hold
+   * something a ball can change. Works that only keep time have nothing to put back
+   * (SPEC v6 3.1), so a hole of beat gates has no undo any more than one of moving parts.
+   */
+  get rewindable(): boolean {
+    return this.field?.rewindable ?? false;
+  }
+
+  /** Whether the last stroke can be taken back right now. */
   get canUndo(): boolean {
-    return this.field !== null && this.phase === 'aiming' && !this.frozen && this.snapshots.length > 0;
+    return this.rewindable && this.phase === 'aiming' && !this.frozen && this.snapshots.length > 0;
   }
 
   /**
@@ -604,7 +613,7 @@ export class Session implements SkillHost {
 
   /** Keeps the course as it is now, for the stroke about to be played to go back to. */
   private keep(position: XYZ, size: BallSize): void {
-    if (this.field) this.snapshots.push({ position: { ...position }, size, field: this.field.save() });
+    if (this.field?.rewindable) this.snapshots.push({ position: { ...position }, size, field: this.field.save() });
   }
 
   /** Puts a ball and the course back to how a snapshot has them. */
@@ -661,7 +670,12 @@ export class Session implements SkillHost {
     const position = ball.position();
     const riding = probe?.grounded ? this.movers.find((m) => m === probe.carrier) : undefined;
     // The works of the hole have places a ball may not stay in too: where fire burns.
-    const mover = riding ?? this.movers.find((m) => m.forbidsRest(position)) ?? this.field?.forbidsRest(position);
+    // And so has a zone that acts by itself on whatever lies in it: a drum (SPEC v6 3.4).
+    const mover =
+      riding ??
+      this.movers.find((m) => m.forbidsRest(position)) ??
+      this.field?.forbidsRest(position) ??
+      this.zones.find((zone) => zone.forbidsRest?.(position));
     if (!mover) return;
     const rest = mover.nearestRest?.(position) ?? null;
     const r = ball.props.radius;
@@ -671,11 +685,18 @@ export class Session implements SkillHost {
 
   private build(): void {
     const { hole, ballProps } = this;
+    if (hole.beat && !(Number.isInteger(hole.beat.ticks) && hole.beat.ticks >= 2)) {
+      throw new Error(`Hole "${hole.id}": a beat is a whole number of ticks, not ${hole.beat.ticks}`);
+    }
     this.world = new PhysicsWorld([0, -RULES.gravity, 0]);
     this.surfaces = new SurfaceMap();
+    // The works of the round before are gone with its world: nothing may ask them the time.
+    this.field = null;
     buildHolePhysics(this.compiled, this.world, this.surfaces);
     this.zones = hole.zones.map(createZone);
-    this.movers = (hole.movers ?? []).map((def) => new Mover(def, this.world, this.surfaces));
+    this.movers = (hole.movers ?? []).map(
+      (def) => new Mover(def, this.world, this.surfaces, def.clock === undefined ? undefined : this.onClock(def)),
+    );
     this.tracks = new WeakMap();
     this.balls = new BallSet(this.world, ballProps, this.teePoint());
     this.goal = new Goal(hole.goal, this.world, this.surfaces);
@@ -688,8 +709,14 @@ export class Session implements SkillHost {
           cue: (name) => this.cue(name),
           outOfBounds: (ball) => this.zoneEvents.push({ event: { type: 'outOfBounds' }, ball }),
           changed: (part) => this.emit({ type: 'partChanged', part }),
+          beat: hole.beat?.ticks ?? null,
         })
       : null;
+    for (const def of hole.movers ?? []) {
+      if (def.clock === undefined) continue;
+      if (!this.field) throw new Error(`Hole "${hole.id}": a moving part keeps the clock "${def.clock}", and the hole has no works`);
+      this.field.clock(def.clock);
+    }
     this.snapshots = [];
     this.waiting = false;
     this.fieldWait = 0;
@@ -728,6 +755,15 @@ export class Session implements SkillHost {
     this.outcome = null;
     this.replayQueue = [];
     this.tilted = false;
+  }
+
+  /**
+   * Where a moving part is that keeps a time zone's clock in place of the hole's (SPEC
+   * v6 3.5): where its motion puts it at that clock's time. The part is built before
+   * the works are, on tick 0, when every clock still reads the same.
+   */
+  private onClock(def: MoverDef): (tick: number) => MoverPose {
+    return (tick) => moverPose(def, this.field ? this.field.clock(def.clock!).at(tick) : tick);
   }
 
   private track(ball: Ball): Track {

@@ -9,13 +9,30 @@ import { getSurface } from '../../physics/surfaces';
 import { ground, type Field, type Part } from './field';
 
 /** A ball has to change its velocity by this much against a valve, in m/s, to turn it. */
-const TURN_SPEED = 0.3;
+export const TURN_SPEED = 0.3;
 /** Ticks after a turn in which a valve does not turn again: one knock is one turn. */
-const TURN_COOLDOWN = 20;
+export const TURN_COOLDOWN = 20;
 /** Radius of the post a valve stands on. */
 export const VALVE_POST = 0.2;
 /** How far the post stands above `at`. */
 export const VALVE_HEIGHT = 0.9;
+
+/**
+ * The post a valve stands on, and every other switch a knock works: an iron cylinder
+ * that tells `part` when a ball runs into it. It reaches `depth` below `at`.
+ */
+export function standPost(field: Field, part: Part, at: Vec3, depth = 0): void {
+  const { world, surfaces } = field.host;
+  const collider = world.raw.createCollider(
+    RAPIER.ColliderDesc.cylinder((VALVE_HEIGHT + depth) / 2, VALVE_POST)
+      .setTranslation(at[0], at[1] + (VALVE_HEIGHT - depth) / 2, at[2])
+      .setFriction(0)
+      .setRestitution(getSurface('iron').restitution)
+      .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Max),
+  );
+  surfaces.setCollider(collider.handle, 'prop', 'iron');
+  field.own(collider.handle, part);
+}
 
 /** A valve (SPEC v5 3.4). Its signal: it is open. */
 export class Valve implements Part {
@@ -32,17 +49,7 @@ export class Valve implements Part {
   ) {
     this.anchor = ground(def.at);
     this.open = def.open ?? false;
-    const depth = def.depth ?? 0;
-    const { world, surfaces } = field.host;
-    const collider = world.raw.createCollider(
-      RAPIER.ColliderDesc.cylinder((VALVE_HEIGHT + depth) / 2, VALVE_POST)
-        .setTranslation(def.at[0], def.at[1] + (VALVE_HEIGHT - depth) / 2, def.at[2])
-        .setFriction(0)
-        .setRestitution(getSurface('iron').restitution)
-        .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Max),
-    );
-    surfaces.setCollider(collider.handle, 'prop', 'iron');
-    field.own(collider.handle, this);
+    standPost(field, this, def.at, def.depth ?? 0);
   }
 
   get on(): boolean {
@@ -53,7 +60,9 @@ export class Valve implements Part {
     if (this.cooldown > 0 || speed < TURN_SPEED) return;
     this.open = !this.open;
     this.cooldown = TURN_COOLDOWN;
-    this.field.host.cue(this.open ? 'valveOpen' : 'valveShut');
+    // A lever is the same thing with another face and another sound (SPEC v6 3.2).
+    if (this.def.look === 'lever') this.field.host.cue(this.open ? 'leverOn' : 'leverOff');
+    else this.field.host.cue(this.open ? 'valveOpen' : 'valveShut');
   }
 
   step(): void {

@@ -1,10 +1,12 @@
 import type { ChapterDef } from '../level/schema';
-import { COUNTDOWN_RUN, GAUNTLET, GRAND_FINALE, SPRING_TO_CANYON, TEMPLE_GATE } from './finales';
+import { COUNTDOWN_RUN, GAUNTLET, GRAND_FINALE, PRODUCTION_LINE, SPRING_TO_CANYON, TEMPLE_GATE } from './finales';
+import { ASSEMBLY_WORLD } from './worlds/assembly';
 import { BOMB_WORLD } from './worlds/bomb';
 import { BOWL_WORLD } from './worlds/bowl';
 import { CANYON_WORLD } from './worlds/canyon';
 import { CAVERN_WORLD } from './worlds/cavern';
 import { CITY_WORLD } from './worlds/city';
+import { CLOCK_WORLD } from './worlds/clock';
 import { CLONE_WORLD } from './worlds/clone';
 import { DAM_WORLD } from './worlds/dam';
 import { DESERT_WORLD } from './worlds/desert';
@@ -17,11 +19,13 @@ import { ICE_WORLD } from './worlds/ice';
 import { JUNGLE_WORLD } from './worlds/jungle';
 import { MAGNET_WORLD } from './worlds/magnet';
 import { MOVING_WORLD } from './worlds/moving';
+import { MUSIC_WORLD } from './worlds/music';
 import { PIRATE_WORLD } from './worlds/pirate';
 import { POLAR_WORLD } from './worlds/polar';
 import { REEF_WORLD } from './worlds/reef';
 import { SKY_WORLD } from './worlds/sky';
 import { TOMB_WORLD } from './worlds/tomb';
+import { TOY_WORLD } from './worlds/toy';
 
 /**
  * The game, in play order: each chapter's worlds, then its finale. Adding a chapter is
@@ -63,5 +67,13 @@ export const CHAPTERS: readonly ChapterDef[] = [
     worlds: [REEF_WORLD, POLAR_WORLD, DAM_WORLD, CANYON_WORLD],
     finale: SPRING_TO_CANYON,
     after: 'ch4',
+  },
+  // Machine Works (SPEC v6). It follows Chapter 5 on the main line.
+  {
+    id: 'ch6',
+    name: { en: 'Chapter 6', zh: '第六章' },
+    worlds: [TOY_WORLD, ASSEMBLY_WORLD, MUSIC_WORLD, CLOCK_WORLD],
+    finale: PRODUCTION_LINE,
+    after: 'ch5',
   },
 ];

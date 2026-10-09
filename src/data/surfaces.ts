@@ -110,4 +110,22 @@ export function registerSurfaces(): void {
   // Canyon
   registerSurface('mesa', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xd98a54 });
   registerSurface('canyonWall', { restitution: 0.6, rollingResistance: 0.5, drag: 0.7, color: 0xa85a36 });
+
+  // --- Chapter 6 ---
+  // The rubber of a conveyor belt. It rolls like any floor: what a belt does to a ball is the belt's doing.
+  registerSurface('belt', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x3f4753 });
+  // Toy factory
+  registerSurface('toyFloor', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x9ad9c9 });
+  // Assembly line
+  registerSurface('plant', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xa3aeba });
+  // Music factory: a stage, the keys of a piano, and something soft to land on
+  registerSurface('stage', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x5a4691 });
+  registerSurface('neonWall', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0xff5fb3 });
+  // A key is slick, like ice: a ball that rolls onto one is still rolling when it gets to the top.
+  registerSurface('ivory', { restitution: 0.2, rollingResistance: 0.3, drag: 0.12, color: 0xf5f1e6 });
+  // A ball thrown by a drum comes down fast. This takes most of that off it within a metre or so.
+  registerSurface('cushion', { restitution: 0.04, rollingResistance: 2.5, drag: 1.5, color: 0xd4527a });
+  // Clockwork
+  registerSurface('clockFloor', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0xdccba3 });
+  registerSurface('cog', { restitution: 0.5, rollingResistance: 0.5, drag: 0.7, color: 0x8f6b34 });
 }

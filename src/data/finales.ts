@@ -1,12 +1,17 @@
 import type { Vec2, Vec3 } from '../core/types';
 import type { DecorDef, FinaleDef, PieceDef } from '../level/schema';
 import type { ZoneDef } from '../physics/zones';
+import { robotArm } from '../physics/zones/arm';
+import { drumPad } from '../physics/zones/drum';
 import { growPad, shrinkPad, splitPad } from '../physics/zones/pads';
 import { headingVector, tunnelPair, type TunnelEnd } from '../physics/zones/tunnel';
 import { bubbles, stream } from '../physics/zones/water';
 import { gusts } from '../physics/zones/wind';
+import { FAST } from './worlds/clock';
 import { CUP, FALL, rack, STREET } from './worlds/common';
+import { BEAT, shutter } from './worlds/music';
 import { wallWithDoors } from './worlds/ruins';
+import { belt, beltFloor, lever } from './worlds/toy';
 
 const magnet = (x: number, z: number, strength: number, reach: number): { post: PieceDef; field: ZoneDef } => ({
   post: { type: 'pillar', at: [x, z], radius: 0.35, surface: strength > 0 ? 'magnetRed' : 'magnetBlue' },
@@ -493,6 +498,113 @@ export const SPRING_TO_CANYON: FinaleDef = {
       ],
       outOfBounds: 'lastPosition',
       camera: { pitch: 58, maxDistance: 40 },
+    },
+  ],
+};
+
+/**
+ * Chapter 6, hole 13: a production line, and the ball is what it makes (SPEC v6 3.6).
+ * A belt that has to be turned round, an arm that has to be caught on the right trip,
+ * a gate and a drum on the beat, and a piston that a clock switch slows. Each leads to
+ * the next and to nowhere else, so the order needs no rule.
+ */
+export const PRODUCTION_LINE: FinaleDef = {
+  id: 'ch6-finale',
+  name: { en: 'Production Line', zh: '一条生产线' },
+  theme: 'works',
+  ruleCard: {
+    en: 'A belt, an arm, a beat and a clock: the whole line, end to end.',
+    zh: '输送带、机械臂、节拍、时钟：整条流水线，从头走到尾。',
+  },
+  ruleTag: { en: 'FINALE', zh: '终局' },
+  holes: [
+    {
+      id: 'ch6-finale',
+      par: 7,
+      beat: { ticks: BEAT },
+      tee: [0, 0, 17.5],
+      goal: { type: 'cup', position: [0, 1, -20], ...CUP },
+      challenge: { type: 'noMoverHits', text: { en: 'Never touch a moving machine', zh: '不碰任何运动中的机器' } },
+      pieces: [
+        // The toy factory: a room, and the belt out of it
+        { type: 'floor', min: [-2.5, 14], max: [2.5, 19], surface: 'toyFloor' },
+        beltFloor([-1, 8], [1, 14]),
+        { type: 'wall', from: [-2.5, 19], to: [2.5, 19], surface: 'toyBlockRed' },
+        { type: 'wall', from: [-2.5, 14], to: [-2.5, 19], surface: 'toyBlockRed' },
+        { type: 'wall', from: [2.5, 19], to: [2.5, 14], surface: 'toyBlockRed' },
+        { type: 'wall', from: [-2.5, 14], to: [-1, 14], surface: 'toyBlockRed' },
+        { type: 'wall', from: [1, 14], to: [2.5, 14], surface: 'toyBlockRed' },
+        { type: 'wall', from: [-1, 14], to: [-1, 8], surface: 'toyBlock' },
+        { type: 'wall', from: [1, 8], to: [1, 14], surface: 'toyBlock' },
+        // The assembly line: the station the belt ends at
+        { type: 'floor', min: [-2.5, 3.5], max: [2.5, 8], surface: 'plant' },
+        { type: 'wall', from: [-2.5, 8], to: [-1, 8], surface: 'hazard' },
+        { type: 'wall', from: [1, 8], to: [2.5, 8], surface: 'hazard' },
+        { type: 'wall', from: [-2.5, 3.5], to: [-2.5, 8], surface: 'hazard' },
+        { type: 'wall', from: [2.5, 8], to: [2.5, 3.5], surface: 'hazard' },
+        { type: 'wall', from: [-2.5, 3.5], to: [2.5, 3.5], surface: 'hazard' },
+        // The music factory: a gate, and a drum under the wall of the last floor
+        { type: 'floor', min: [-2, -7], max: [2, 1], surface: 'stage' },
+        { type: 'wall', from: [-2, 1], to: [2, 1], surface: 'neonWall' },
+        { type: 'wall', from: [-2, -7], to: [-2, 1], surface: 'neonWall' },
+        { type: 'wall', from: [2, 1], to: [2, -7], surface: 'neonWall' },
+        ...wallWithDoors([-2, -2.5], [2, -2.5], [[1.2, 2.8]], 'neonWall', { height: 0.8 }),
+        // Clockwork: a soft landing, a clock switch, a piston, and the cup
+        { type: 'floor', min: [-2.5, -12], max: [2.5, -7], y: 1, depth: 1.45, surface: 'cushion' },
+        { type: 'floor', min: [-2.5, -21.5], max: [2.5, -12], y: 1, depth: 1.45, surface: 'clockFloor' },
+        { type: 'wall', from: [-2.5, -21.5], to: [-2.5, -7], y: 1, surface: 'brass' },
+        { type: 'wall', from: [2.5, -7], to: [2.5, -21.5], y: 1, surface: 'brass' },
+        { type: 'wall', from: [-2.5, -21.5], to: [2.5, -21.5], y: 1, surface: 'brass' },
+      ],
+      movers: [
+        {
+          role: 'pusher',
+          size: [2.8, 0.6, 0.5],
+          position: [-0.6, 1.3, -16.5],
+          surface: 'cog',
+          motion: { type: 'slide', offset: [1.2, 0, 0], period: 1.6, hold: [0.3, 0.3] },
+          sweep: { kind: 'box', center: [0, 1.3, -16.5], halfExtents: [2.5, 0.5, 0.6] },
+          rest: [
+            [0, 1, -15.2],
+            [0, 1, -17.8],
+          ],
+          clock: 'last',
+        },
+      ],
+      field: {
+        parts: [
+          lever('lever', [1.8, 0, 14.8]),
+          belt('belt', [-1, 8], [1, 14], [0, 1], 'lever'),
+          ...shutter('gate', [-0.8, -2.5], [0.8, -2.5], [1, 1, 0, 0]),
+          { kind: 'dial', id: 'dial', at: [1.8, 1, -13.2], start: FAST },
+          { kind: 'timeZone', id: 'last', min: [-2.5, -18.5], max: [2.5, -14.5], y: 1, dial: 'dial' },
+        ],
+      },
+      decor: [
+        { type: 'crate', at: [-6, -3.6, 16], size: [2, 3.2, 2], color: 0xf2c14e },
+        { type: 'gear', at: [6, -3.55, 12], size: [2.4, 0, 0], color: 0xe2574c },
+        { type: 'column', at: [6, -3.6, 5], size: [0.5, 3, 0], color: 0x7d8791 },
+        { type: 'pipe', at: [-7, -3.6, 4], size: [5, 0.4, 0], yaw: 90, color: 0xe6b422 },
+        { type: 'tower', at: [7, -3.6, -3], size: [3, 2.8, 3], color: 0x2b2350 },
+        { type: 'tower', at: [-7, -3.6, -8], size: [3, 3.4, 3], color: 0x3a2a66 },
+        { type: 'gear', at: [7.5, -3.55, -14], size: [3.2, 0, 0] },
+        { type: 'gear', at: [-7, -3.55, -19], size: [2.6, 0, 0], color: 0xa87f45 },
+      ],
+      zones: [
+        { type: 'outOfBounds', shape: { kind: 'box', center: [0, -6, 0], halfExtents: [80, 5, 80] } },
+        robotArm(
+          [1.5, 0, 4.6],
+          [-1.6, 0, 2.25],
+          [
+            [-1.6, 0, 7.2],
+            [0, 0, -0.2],
+          ],
+          4,
+        ),
+        drumPad([0, 0, -5.3], 0.8, { beat: BEAT, every: 2, velocity: [0, 6.5, -4], rest: [[0, 0, -3.6]] }),
+      ],
+      outOfBounds: 'lastPosition',
+      camera: { pitch: 58, maxDistance: 44 },
     },
   ],
 };

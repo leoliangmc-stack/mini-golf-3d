@@ -4,13 +4,16 @@ import { SLAB_THICKNESS, VALVE_HEIGHT, VALVE_POST, type Crumble, type Float, typ
 import type { Drive, Field, Part } from '../game/field/field';
 import { BELL_POST, type Bell, type Coin, type Dragon, type Fire } from '../game/field/hoard';
 import { BEAM_HEIGHT, CRYSTAL_RADIUS, Light, POST_RADIUS, type Crystal, type Receiver } from '../game/field/light';
+import type { Belt, Dial, Pulse, TimeZone } from '../game/field/machines';
 import type { Slider } from '../game/field/slider';
 import type { Gate, Plate, Stone } from '../game/field/tomb';
 import type {
   BellDef,
+  BeltDef,
   CoinDef,
   CrumbleDef,
   CrystalDef,
+  DialDef,
   DragonDef,
   EmitterDef,
   FieldDef,
@@ -19,9 +22,11 @@ import type {
   GateDef,
   PartDef,
   PlateDef,
+  PulseDef,
   ReceiverDef,
   SliderDef,
   StoneDef,
+  TimeZoneDef,
   ValveDef,
   WaterDef,
 } from '../level/field';
@@ -184,7 +189,7 @@ function gateView(def: GateDef): PartView {
   const trim = lambert(look === 'door' ? GOLD : new THREE.Color(color).multiplyScalar(0.62).getHex());
   const cap = solid(new THREE.BoxGeometry(length, 0.08, thickness * 1.18), trim, 0, height / 2);
   slab.add(cap);
-  if (look === 'bars' || look === 'door') {
+  if (look === 'bars' || look === 'door' || look === 'shutter') {
     // Upright ribs, so it reads as a gate and not as one more piece of wall.
     const ribs = Math.max(2, Math.round(length / 0.35));
     for (let i = 0; i < ribs; i++) {
@@ -742,7 +747,8 @@ function fireView(def: FireDef): PartView {
 const VALVE_OPEN = 0x2fbf71;
 const VALVE_SHUT = 0xe5484d;
 
-function valveView(def: ValveDef): PartView {
+function valveView(def: ValveDef, field: FieldDef): PartView {
+  if (def.look === 'lever') return leverView(def, field);
   const group = new THREE.Group();
   group.position.set(def.at[0], def.at[1], def.at[2]);
   const depth = def.depth ?? 0;
@@ -888,6 +894,299 @@ function crumbleView(def: CrumbleDef): PartView {
   };
 }
 
+// --- Chapter 6: levers, belts, clock switches, time zones and the beat ------------
+
+const BELT_MARK = 0xf2c230;
+
+/**
+ * The lever of a conveyor belt (SPEC v6 3.2): the post of a valve with a handle on it
+ * that is thrown over to one side or the other, and on top an arrow that shows which
+ * way the belt it works is asked to run.
+ */
+function leverView(def: ValveDef, field: FieldDef): PartView {
+  const group = new THREE.Group();
+  group.position.set(def.at[0], def.at[1], def.at[2]);
+  const depth = def.depth ?? 0;
+  const pipe = solid(
+    new THREE.CylinderGeometry(VALVE_POST * 0.8, VALVE_POST, VALVE_HEIGHT + depth, 12),
+    lambert(0x59626d),
+    0,
+    (VALVE_HEIGHT - depth) / 2,
+  );
+  // The belt it works: the first that names it among the signals it needs.
+  const belt = field.parts.find((part): part is BeltDef => {
+    if (part.kind !== 'belt' || part.when === undefined) return false;
+    return typeof part.when === 'string' ? part.when === def.id : (part.when.all ?? []).includes(def.id);
+  });
+  const heading = belt ? Math.atan2(-belt.velocity[0], -belt.velocity[1]) : 0;
+  const paint = new THREE.MeshLambertMaterial({ color: BELT_MARK });
+  // The arrow is built pointing along -Z and turned to the way the belt starts out.
+  const sign = new THREE.Group();
+  sign.position.y = VALVE_HEIGHT + 0.07;
+  const plate = solid(new THREE.CylinderGeometry(0.36, 0.36, 0.05, 20), lambert(0x2f3640));
+  const shaft = solid(new THREE.BoxGeometry(0.1, 0.03, 0.34), paint, 0, 0.04, 0.07);
+  const head = solid(new THREE.ConeGeometry(0.16, 0.24, 3), paint, 0, 0.04, -0.2);
+  head.rotation.set(-Math.PI / 2, 0, 0);
+  head.scale.z = 0.2;
+  sign.add(plate, shaft, head);
+  // The handle: a rod with a ball on its end, leaning away from the way the arrow points.
+  const handle = new THREE.Group();
+  handle.position.y = VALVE_HEIGHT * 0.55;
+  const rod = solid(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 8), lambert(0x2f3640), 0, 0.25, 0);
+  const knob = solid(new THREE.SphereGeometry(0.09, 12, 8), new THREE.MeshLambertMaterial({ color: 0xe5484d }), 0, 0.52, 0);
+  handle.add(rod, knob);
+  group.add(pipe, sign, handle);
+  let thrown = def.open ? 1 : 0;
+  const place = (): void => {
+    // Thrown, the arrow has gone right round and the handle has gone over.
+    sign.rotation.y = heading + thrown * Math.PI;
+    handle.rotation.set(0, heading, 0);
+    handle.rotateX((0.5 - thrown) * 1.3);
+  };
+  place();
+  return {
+    object: group,
+    update(part, { dt }) {
+      thrown = ease(thrown, (part as Valve).open ? 1 : 0, 10, dt);
+      place();
+    },
+  };
+}
+
+/**
+ * A conveyor belt (SPEC v6 3.2): a roller at each end and chevrons riding the rubber
+ * at the belt's own pace, the way it runs. When it is turned round they slow, stop and
+ * set off the other way with it, pointing the new way.
+ */
+function beltView(def: BeltDef): PartView {
+  const group = new THREE.Group();
+  const y = def.y ?? 0;
+  const width = def.max[0] - def.min[0];
+  const depth = def.max[1] - def.min[1];
+  group.position.set((def.min[0] + def.max[0]) / 2, y, (def.min[1] + def.max[1]) / 2);
+  const [vx, vz] = def.velocity;
+  const speed = Math.hypot(vx, vz);
+  const alongX = Math.abs(vx) > Math.abs(vz);
+  const length = alongX ? width : depth;
+  const across = alongX ? depth : width;
+  // A frame turned so that the belt, as it starts out, runs along its own -Z.
+  const run = new THREE.Group();
+  run.rotation.y = Math.atan2(-vx, -vz);
+  group.add(run);
+
+  const iron = lambert(0x6f7b86, false);
+  for (const end of [-1, 1]) {
+    const roller = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, across * 0.98, 10), iron);
+    roller.rotation.z = Math.PI / 2;
+    roller.position.set(0, -0.05, end * (length / 2 - 0.02));
+    run.add(roller);
+  }
+  // Slats across the rubber, and chevrons on them, all of which travel.
+  const slatMaterial = glow(0x59626d);
+  const markMaterial = new THREE.MeshBasicMaterial({ color: BELT_MARK, transparent: true, opacity: 0.9, depthWrite: false });
+  const chevron = new THREE.Shape();
+  chevron.moveTo(-0.3, -0.25);
+  chevron.lineTo(0, 0.05);
+  chevron.lineTo(0.3, -0.25);
+  chevron.lineTo(0.3, -0.05);
+  chevron.lineTo(0, 0.25);
+  chevron.lineTo(-0.3, -0.05);
+  chevron.closePath();
+  const chevronGeometry = new THREE.ShapeGeometry(chevron);
+  const slatGeometry = new THREE.PlaneGeometry(across * 0.96, 0.05);
+  const spacing = 1;
+  const rows = Math.max(2, Math.round(length / spacing));
+  const pitch = length / rows;
+  const lanes = Math.max(1, Math.round(across / 1.1));
+  const riders: { mesh: THREE.Mesh; offset: number; mark: boolean }[] = [];
+  for (let row = 0; row < rows; row++) {
+    const slat = new THREE.Mesh(slatGeometry, slatMaterial);
+    slat.rotation.x = -Math.PI / 2;
+    slat.position.y = 0.011;
+    run.add(slat);
+    riders.push({ mesh: slat, offset: row * pitch, mark: false });
+    for (let lane = 0; lane < lanes; lane++) {
+      const mark = new THREE.Mesh(chevronGeometry, markMaterial);
+      mark.position.set(((lane + 0.5) / lanes - 0.5) * across, 0.014, 0);
+      mark.scale.setScalar(0.75);
+      run.add(mark);
+      riders.push({ mesh: mark, offset: (row + 0.5) * pitch, mark: true });
+    }
+  }
+  let travelled = 0;
+  const place = (flow: number): void => {
+    for (const rider of riders) {
+      const along = (((rider.offset + travelled) % length) + length) % length;
+      rider.mesh.position.z = length / 2 - along;
+      if (!rider.mark) continue;
+      // Lying flat, its point along -Z while the belt runs as it started and along +Z once turned.
+      rider.mesh.rotation.set(-Math.PI / 2, 0, flow >= 0 ? 0 : Math.PI);
+      rider.mesh.visible = along > 0.25 && along < length - 0.25;
+    }
+    markMaterial.opacity = 0.25 + 0.65 * Math.min(1, Math.abs(flow));
+  };
+  place(1);
+  return {
+    object: group,
+    update(part, { dt }) {
+      const { flow } = part as Belt;
+      travelled += flow * speed * dt;
+      place(flow);
+    },
+  };
+}
+
+const TIME_SLOW = new THREE.Color(0x3d8bff);
+const TIME_USUAL = new THREE.Color(0xf7ecc8);
+const TIME_FAST = new THREE.Color(0xff6a2b);
+
+/** The colour of a rate: blue for slow, pale for the hole's own pace, orange for fast. */
+function rateColor(rate: number, into: THREE.Color): THREE.Color {
+  if (rate <= 1) return into.copy(TIME_SLOW).lerp(TIME_USUAL, Math.max(0, (rate - 0.5) / 0.5));
+  return into.copy(TIME_USUAL).lerp(TIME_FAST, Math.min(1, rate - 1));
+}
+
+/** How far the hand of a clock face turns for one tick of the clock it shows: once round in four seconds at the usual rate. */
+const HAND_TURN = (Math.PI * 2) / 240;
+
+/**
+ * A clock switch (SPEC v6 3.5): the post of a valve with a dial on top, a mark for each
+ * of its rates, coloured as the rates are, and a hand that points at the one it is set to.
+ */
+function dialView(def: DialDef): PartView {
+  const group = new THREE.Group();
+  group.position.set(def.at[0], def.at[1], def.at[2]);
+  const rates = def.rates ?? [0.5, 1, 2];
+  const start = def.start ?? 1;
+  group.add(solid(new THREE.CylinderGeometry(VALVE_POST * 0.8, VALVE_POST, VALVE_HEIGHT, 12), lambert(0x8f6b34), 0, VALVE_HEIGHT / 2));
+  const face = new THREE.Group();
+  face.position.y = VALVE_HEIGHT + 0.06;
+  const rimMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  face.add(solid(new THREE.CylinderGeometry(0.4, 0.4, 0.07, 24), rimMaterial));
+  face.add(solid(new THREE.CylinderGeometry(0.33, 0.33, 0.08, 24), lambert(0xfbf6e6, false)));
+  // The marks stand a third of a turn apart, the first at the top (-Z).
+  const angle = (position: number): number => (position / rates.length) * Math.PI * 2;
+  const scratch = new THREE.Color();
+  rates.forEach((rate, i) => {
+    const mark = solid(new THREE.CylinderGeometry(0.07, 0.07, 0.1, 12), new THREE.MeshBasicMaterial({ color: rateColor(rate, scratch).getHex() }));
+    mark.position.set(-Math.sin(angle(i)) * 0.23, 0, -Math.cos(angle(i)) * 0.23);
+    face.add(mark);
+  });
+  const hand = new THREE.Group();
+  hand.add(solid(new THREE.BoxGeometry(0.06, 0.04, 0.3), lambert(0x1d2b3a), 0, 0.06, -0.12));
+  face.add(hand);
+  group.add(face);
+  let shown = start;
+  const place = (rate: number): void => {
+    hand.rotation.y = angle(shown);
+    rateColor(rate, rimMaterial.color);
+  };
+  place(rates[start]);
+  return {
+    object: group,
+    update(part, { dt }) {
+      const dial = part as Dial;
+      // The hand only ever goes on round, never back: from the last mark on to the first.
+      let target = dial.position;
+      while (target < shown - 0.5) target += rates.length;
+      shown = ease(shown, target, 12, dt);
+      if (Math.abs(shown - target) < 0.002) shown = dial.position;
+      place(dial.rate);
+    },
+  };
+}
+
+/**
+ * A time zone (SPEC v6 3.5): a tint over the ground it covers, an edge to say where it
+ * ends, and clock faces lying on it whose hands turn with the zone's own clock. Its
+ * colour is its rate. Since the hands show the very clock the machines keep, they slow
+ * and quicken with them, to the tick.
+ */
+function timeZoneView(def: TimeZoneDef): PartView {
+  const group = new THREE.Group();
+  const y = def.y ?? 0;
+  const width = def.max[0] - def.min[0];
+  const depth = def.max[1] - def.min[1];
+  group.position.set((def.min[0] + def.max[0]) / 2, y, (def.min[1] + def.max[1]) / 2);
+  const tint = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.14, depthWrite: false });
+  const line = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false });
+  group.add(decal(new THREE.PlaneGeometry(width, depth), tint, 0.009));
+  const edge = 0.07;
+  for (const [w, d, x, z] of [
+    [width, edge, 0, -depth / 2 + edge / 2],
+    [width, edge, 0, depth / 2 - edge / 2],
+    [edge, depth, -width / 2 + edge / 2, 0],
+    [edge, depth, width / 2 - edge / 2, 0],
+  ]) {
+    const side = decal(new THREE.PlaneGeometry(w, d), line, 0.011);
+    side.position.x = x;
+    side.position.z = z;
+    group.add(side);
+  }
+  // Clock faces in the corners, out of the way of what the machines sweep.
+  const hands: THREE.Object3D[] = [];
+  const radius = Math.min(0.42, width / 6, depth / 6);
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const face = new THREE.Group();
+    face.position.set(sx * (width / 2 - radius - 0.2), 0.012, sz * (depth / 2 - radius - 0.2));
+    face.add(decal(new THREE.RingGeometry(radius * 0.86, radius, 28), line, 0));
+    const hand = new THREE.Group();
+    const bar = new THREE.Mesh(new THREE.PlaneGeometry(radius * 0.14, radius * 0.8), line);
+    bar.rotation.x = -Math.PI / 2;
+    bar.position.z = -radius * 0.36;
+    hand.add(bar);
+    face.add(hand);
+    group.add(face);
+    hands.push(hand);
+  }
+  const place = (rate: number, time: number): void => {
+    rateColor(rate, tint.color);
+    rateColor(rate, line.color);
+    for (const hand of hands) hand.rotation.y = -time * HAND_TURN;
+  };
+  place(def.rate ?? 1, 0);
+  return {
+    object: group,
+    update(part, { alpha }) {
+      const zone = part as TimeZone;
+      place(zone.rate, zone.now + zone.rate * alpha);
+    },
+  };
+}
+
+/**
+ * The beat (SPEC v6 3.4): a row of lamps over whatever keeps it, one for each beat of
+ * its pattern. A lamp for a beat the signal is on stands bright and one for a beat it
+ * is off stands dark, and the lamp of the beat the hole is in is the big one. So a gate
+ * shows, ahead of time, how long it will stay as it is.
+ */
+function pulseView(def: PulseDef): PartView {
+  const group = new THREE.Group();
+  group.position.set(def.at[0], def.at[1] + 1.25, def.at[2]);
+  group.rotation.y = headingYaw((def.heading ?? 90) - 90);
+  const beats = def.pattern.length;
+  const on = glow(0x7dffb0);
+  const off = glow(0xff4d6d);
+  const lamps = def.pattern.map((open, i) => {
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8), open ? on : off);
+    lamp.position.x = (i - (beats - 1) / 2) * 0.36;
+    group.add(lamp);
+    return lamp;
+  });
+  const place = (beat: number): void => lamps.forEach((lamp, i) => lamp.scale.setScalar(i === beat ? 1.9 : 1));
+  place(0);
+  let shown = 0;
+  return {
+    object: group,
+    update(part) {
+      const { beat } = part as Pulse;
+      if (beat === shown) return;
+      shown = beat;
+      place(beat);
+    },
+  };
+}
+
 // --- The lines between parts ----------------------------------------------------
 
 const LINK_WIDTH = 0.07;
@@ -1022,4 +1321,8 @@ export function registerBuiltinPartViews(): void {
   registerPartView('water', waterView);
   registerPartView('float', floatView);
   registerPartView('crumble', crumbleView);
+  registerPartView('belt', beltView);
+  registerPartView('dial', dialView);
+  registerPartView('timeZone', timeZoneView);
+  registerPartView('pulse', pulseView);
 }

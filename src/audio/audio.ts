@@ -1,4 +1,4 @@
-import { MusicPlayer } from './music';
+import { BeatPlayer, midiToHz, MUSIC, MusicPlayer, scaleNote } from './music';
 
 interface ToneSpec {
   wave?: OscillatorType;
@@ -31,11 +31,14 @@ export class AudioEngine {
   private sfxBus: GainNode | null = null;
   private musicBus: GainNode | null = null;
   private music: MusicPlayer | null = null;
+  private beatMusic: BeatPlayer | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private hum: { osc: OscillatorNode; gain: GainNode } | null = null;
   private sfxOn = true;
   private musicOn = true;
   private musicId: string | null = null;
+  /** Ticks to a beat on a hole that keeps one, or null where the music keeps its own time. */
+  private musicBeat: number | null = null;
 
   /** Call from a tap or click handler. */
   unlock(): void {
@@ -52,6 +55,7 @@ export class AudioEngine {
     this.sfxBus.connect(ctx.destination);
     this.musicBus.connect(ctx.destination);
     this.music = new MusicPlayer(ctx, this.musicBus);
+    this.beatMusic = new BeatPlayer(ctx, this.musicBus);
 
     const buffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const samples = buffer.getChannelData(0);
@@ -59,7 +63,7 @@ export class AudioEngine {
     this.noiseBuffer = buffer;
 
     this.applyVolumes();
-    if (this.musicId) this.music.play(this.musicId);
+    if (this.musicId) this.playMusic(this.musicId, this.musicBeat ?? undefined);
     // Phones keep playing a hidden tab otherwise.
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) void ctx.suspend();
@@ -86,10 +90,27 @@ export class AudioEngine {
     this.applyVolumes();
   }
 
-  /** Switches the background music to a world's theme. */
-  playMusic(id: string): void {
+  /**
+   * Switches the background music to a world's theme. On a hole that keeps a beat,
+   * `beat` is how many physics ticks one lasts: the music then keeps no time of its own
+   * and plays to the game's clock (see `followBeat`).
+   */
+  playMusic(id: string, beat?: number): void {
     this.musicId = id;
-    this.music?.play(id);
+    this.musicBeat = beat ?? null;
+    if (!this.music || !this.beatMusic) return;
+    if (beat === undefined) {
+      this.beatMusic.stop();
+      this.music.play(id);
+    } else {
+      this.music.stop();
+      this.beatMusic.start(id, beat);
+    }
+  }
+
+  /** Tells music that keeps a hole's beat what the game's clock reads. Call every frame the game is running. */
+  followBeat(tick: number, alpha: number): void {
+    if (this.musicOn) this.beatMusic?.follow(tick, alpha);
   }
 
   // --- Sound effects --------------------------------------------------------
@@ -423,6 +444,87 @@ export class AudioEngine {
   slabFall(): void {
     this.noise({ filter: 'lowpass', from: 700, to: 120, length: 0.7, level: 0.3 });
     this.tone({ from: 110, to: 45, length: 0.6, level: 0.24 });
+  }
+
+  // --- Chapter 6: machines ---
+
+  /** The lever of a belt, thrown one way or the other. */
+  lever(on: boolean): void {
+    this.tone({ wave: 'square', from: on ? 300 : 420, to: on ? 420 : 300, length: 0.07, level: 0.14 });
+    this.noise({ filter: 'bandpass', from: 2200, length: 0.05, level: 0.18, delay: 0.05 });
+  }
+
+  /** A belt winding down to turn round. */
+  beltTurn(): void {
+    this.tone({ wave: 'sawtooth', from: 150, to: 55, length: 0.5, level: 0.1 });
+    this.noise({ filter: 'lowpass', from: 900, to: 200, length: 0.5, level: 0.1 });
+  }
+
+  /** And up to speed again, the other way. */
+  beltRun(): void {
+    this.tone({ wave: 'sawtooth', from: 60, to: 140, length: 0.35, level: 0.09 });
+    this.noise({ filter: 'bandpass', from: 500, to: 1200, length: 0.3, level: 0.08 });
+  }
+
+  /** A ball caught on an arm's pad. */
+  armCatch(): void {
+    this.tone({ wave: 'triangle', from: 520, to: 780, length: 0.1, level: 0.16 });
+    this.noise({ filter: 'highpass', from: 3000, length: 0.04, level: 0.1 });
+  }
+
+  /** The arm setting off with it: a servo winding up. */
+  armLift(): void {
+    this.tone({ wave: 'sawtooth', from: 110, to: 330, length: 0.45, level: 0.08 });
+    this.tone({ wave: 'square', from: 220, to: 660, length: 0.45, level: 0.04 });
+  }
+
+  /** And setting it down. */
+  armRelease(): void {
+    this.tone({ wave: 'triangle', from: 660, to: 440, length: 0.12, level: 0.16 });
+    this.tone({ from: 130, to: 80, length: 0.1, level: 0.18, delay: 0.05 });
+  }
+
+  /** An arm's lamp changing to the next place it will go. */
+  lamp(): void {
+    this.tone({ from: 1320, length: 0.05, level: 0.07 });
+    this.tone({ from: 1760, length: 0.07, level: 0.06, delay: 0.06 });
+  }
+
+  /** A gate that keeps the beat, opening or shutting. */
+  shutter(open: boolean): void {
+    this.noise({ filter: 'bandpass', from: open ? 2600 : 1500, to: open ? 5000 : 800, length: 0.07, level: 0.14 });
+    this.tone({ wave: 'square', from: open ? 660 : 330, length: 0.05, level: 0.06 });
+  }
+
+  /** A piano key arriving at the top: a note of the world's scale. */
+  keyNote(degree: number): void {
+    const def = MUSIC[this.musicId ?? ''] ?? MUSIC.meadow;
+    const hz = midiToHz(scaleNote(def, degree) + 12);
+    this.tone({ wave: 'triangle', from: hz, length: 0.55, level: 0.2 });
+    this.tone({ from: hz * 2, length: 0.25, level: 0.06 });
+  }
+
+  /** A drum striking, ball or no ball. */
+  drumBeat(): void {
+    this.tone({ from: 190, to: 70, length: 0.16, level: 0.3 });
+    this.noise({ filter: 'bandpass', from: 900, to: 300, length: 0.09, level: 0.14 });
+  }
+
+  /** And a ball going up off it. */
+  drumThrow(): void {
+    this.tone({ wave: 'triangle', from: 260, to: 880, length: 0.3, level: 0.2 });
+  }
+
+  /** A clock switch moved on to its next rate. */
+  dialTurn(): void {
+    [0, 0.05, 0.1].forEach((delay, i) => this.tone({ wave: 'square', from: 1500 + i * 180, length: 0.025, level: 0.1, delay }));
+    this.tone({ wave: 'triangle', from: 520, length: 0.18, level: 0.12, delay: 0.14 });
+  }
+
+  /** A time zone slowing down, or speeding up: a tape running down, or up. */
+  timeShift(slower: boolean): void {
+    this.tone({ wave: 'triangle', from: slower ? 620 : 210, to: slower ? 210 : 620, length: 0.45, level: 0.13 });
+    this.tone({ from: slower ? 1240 : 420, to: slower ? 420 : 1240, length: 0.45, level: 0.05 });
   }
 
   /** Entering (`on`) or leaving a gravity zone. */

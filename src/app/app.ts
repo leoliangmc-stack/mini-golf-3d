@@ -174,7 +174,8 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
     const hole = game.hole;
     switch (event.type) {
       case 'hole':
-        audio.playMusic(game.world.theme);
+        // On a hole that keeps a beat the music keeps it too (SPEC v6 3.4).
+        audio.playMusic(game.world.theme, hole.beat?.ticks);
         if (event.intro) {
           progress.setLast(hole.id);
           track('hole_start', { hole: hole.id });
@@ -246,6 +247,20 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
         else if (event.name === 'splash') audio.splash();
         else if (event.name === 'slabCrack') audio.slabCrack();
         else if (event.name === 'slabFall') audio.slabFall();
+        else if (event.name === 'leverOn') audio.lever(true);
+        else if (event.name === 'leverOff') audio.lever(false);
+        else if (event.name === 'beltTurn') audio.beltTurn();
+        else if (event.name === 'beltRun') audio.beltRun();
+        else if (event.name === 'armCatch') audio.armCatch();
+        else if (event.name === 'armLift') audio.armLift();
+        else if (event.name === 'armRelease') audio.armRelease();
+        else if (event.name === 'shutterOpen') audio.shutter(true);
+        else if (event.name === 'shutterShut') audio.shutter(false);
+        else if (event.name === 'drumBeat') audio.drumBeat();
+        else if (event.name === 'drumThrow') audio.drumThrow();
+        else if (event.name === 'dialTurn') audio.dialTurn();
+        else if (event.name === 'timeSlow') audio.timeShift(true);
+        else if (event.name === 'timeFast') audio.timeShift(false);
         else if (event.name === 'dragonWake') {
           audio.dragonWake();
           if (stages.includes(game.world)) track('dragon_woke', { hole: hole.id });
@@ -253,6 +268,12 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
         break;
       case 'undo':
         audio.undo();
+        break;
+      case 'note':
+        audio.keyNote(event.degree);
+        break;
+      case 'lamp':
+        audio.lamp();
         break;
       case 'showcase':
         if (stages.includes(game.world)) track('showcase', { hole: hole.id, skipped: event.skipped });
@@ -290,6 +311,8 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
   game.onFrame(() => {
     const { level, attracts } = game.magnetProximity();
     audio.setHum(game.paused ? 0 : level, attracts);
+    // Music that keeps a hole's beat is told the game's clock, and never the other way round.
+    if (!game.paused) audio.followBeat(game.session.world.tick, game.frameAlpha);
   });
 
   applySettings();

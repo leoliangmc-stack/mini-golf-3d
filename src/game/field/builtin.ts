@@ -2,6 +2,7 @@ import { Crumble, Float, Valve, Water } from './elements';
 import { registerPart } from './field';
 import { Bell, Coin, Dragon, Fire } from './hoard';
 import { Crystal, Emitter, Receiver } from './light';
+import { Belt, Dial, Pulse, TimeZone } from './machines';
 import { Slider } from './slider';
 import { Gate, Plate, Stone } from './tomb';
 
@@ -22,4 +23,8 @@ export function registerBuiltinParts(): void {
   registerPart('water', (def, field, id) => new Water(def, field, id));
   registerPart('float', (def, field, id) => new Float(def, field, id));
   registerPart('crumble', (def, field, id) => new Crumble(def, field, id));
+  registerPart('belt', (def, field, id) => new Belt(def, field, id));
+  registerPart('dial', (def, field, id) => new Dial(def, field, id));
+  registerPart('timeZone', (def, field, id) => new TimeZone(def, field, id));
+  registerPart('pulse', (def, field, id) => new Pulse(def, field, id));
 }

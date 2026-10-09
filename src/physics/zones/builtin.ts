@@ -1,3 +1,5 @@
+import { arm } from './arm';
+import { drum } from './drum';
 import { gravity } from './gravity';
 import { registerZone } from './index';
 import { launcher } from './launcher';
@@ -22,4 +24,6 @@ export function registerBuiltinZones(): void {
   registerZone('current', current);
   registerZone('bubbleLift', bubbleLift);
   registerZone('wind', wind);
+  registerZone('arm', arm);
+  registerZone('drum', drum);
 }
