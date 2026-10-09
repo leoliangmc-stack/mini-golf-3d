@@ -16,8 +16,10 @@ export interface ZoneDef {
 /**
  * Things a zone can tell the game about. Forces are applied directly to the ball instead.
  * A `cue` is a named moment (a cannon firing, say) for sound and effects to react to.
+ * `caught` is raised by one of the hole's works, never by a zone: a monster has stepped
+ * onto the ball (SPEC v9 3.2). It is an out-of-bounds counted apart.
  */
-export type ZoneEvent = { type: 'outOfBounds' } | { type: 'cue'; name: string };
+export type ZoneEvent = { type: 'outOfBounds' } | { type: 'caught' } | { type: 'cue'; name: string };
 
 /**
  * What a zone works with. With several balls on the course a zone is run once per ball

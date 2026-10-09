@@ -655,6 +655,8 @@ body[data-frozen] #view {
 }
 
 #turns,
+#keys,
+#boss,
 #gold,
 #alert {
   width: fit-content;
@@ -694,7 +696,54 @@ body[data-frozen] #view {
   color: #fff;
 }
 
+/* Chapter 9: the keys in hand, and the boss's health. */
+#keys {
+  color: #fff;
+}
+
+#keys.none {
+  color: #a9b2bd;
+}
+
+#keys i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-left: 6px;
+  border-radius: 3px;
+  vertical-align: -1px;
+  background: currentColor;
+}
+
+#keys i.red {
+  color: #ff5a5a;
+}
+
+#keys i.blue {
+  color: #4aa3ff;
+}
+
+#keys i.gold {
+  color: #ffd24a;
+}
+
+#boss {
+  color: #ff6a7a;
+  letter-spacing: 0.1em;
+}
+
+#boss.shielded {
+  color: #6ad7ff;
+}
+
+#boss.down {
+  background: #6b7480;
+  color: #fff;
+}
+
 #turns[hidden],
+#keys[hidden],
+#boss[hidden],
 #gold[hidden],
 #alert[hidden] {
   display: none;

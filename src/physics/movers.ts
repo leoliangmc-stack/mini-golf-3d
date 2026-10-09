@@ -195,8 +195,8 @@ export class Mover implements GroundCarrier {
     return !this.covers(p) && top - (p.y - ball.props.radius) > LIFT_STEP;
   }
 
-  /** True if a ball is inside the box: over or under its top face, and reaching into it. */
-  private engulfs(ball: Ball): boolean {
+  /** True if a ball is inside the box: over or under its top face, and reaching into it. A part that comes back must not come back into one. */
+  engulfs(ball: Ball): boolean {
     if (!ball.body.isEnabled()) return false;
     const p = ball.position();
     const r = ball.props.radius;

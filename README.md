@@ -2,15 +2,16 @@
 
 > It's Mini Golf, but every world has a different rule.
 
-A browser mini golf game: 8 chapters, 34 worlds, 110 holes, each world built around one
+A browser mini golf game: 9 chapters, 38 worlds, 123 holes, each world built around one
 mechanic. TypeScript, Three.js and Rapier; a static site with no backend. Requirements
 live in [SPEC.md](SPEC.md) (v1, Chapter 1), [SPEC-v2.md](SPEC-v2.md) (Chapter 2),
 SPEC v3.0 (Chapter 3), SPEC v4 (Ancient Ruins, built as Chapter 4),
 [SPEC-ch5.md](SPEC-ch5.md) (Wild Elements, Chapter 5), [SPEC-ch6.md](SPEC-ch6.md)
 (Machine Works, Chapter 6, called SPEC v6 below), [SPEC-ch7.md](SPEC-ch7.md) (City &
-Carnival, Chapter 7, called SPEC v7 below) and [SPEC-ch8.md](SPEC-ch8.md) (Strange
-Dimensions, Chapter 8, called SPEC v8 below), which are the source of truth for scope and
-milestones. The SPECs for Chapters 3 and 4 are not in this repository.
+Carnival, Chapter 7, called SPEC v7 below), [SPEC-ch8.md](SPEC-ch8.md) (Strange
+Dimensions, Chapter 8, called SPEC v8 below) and [SPEC-ch9.md](SPEC-ch9.md) (Monster
+Quest, Chapter 9, the last, called SPEC v9 below), which are the source of truth for
+scope and milestones. The SPECs for Chapters 3 and 4 are not in this repository.
 
 **Play it: https://mini-golf-3d-self.vercel.app**
 
@@ -109,6 +110,17 @@ and pinch the camera; on a desktop, right-drag and the wheel do the same.
 | Z9 Chapter 8 finale: Strange Gate | done |
 | Z10 sound, music, text, save migration to version 8, the Chapter 8 tab | done; see "Not yet verified" below |
 | Z11 tune against the first playtest | not started |
+| Q1 two worlds in one place: walls and floors of each, swapped by levers, waiting for a ball to leave | done |
+| Q2 Haunted House: 3 holes | done |
+| Q3 the grid and its turns: monsters that patrol and monsters that chase, the catch, the arrow | done |
+| Q4 Monster Den: 3 holes | done |
+| Q5 keys and doors, and the keys in hand on the HUD | done |
+| Q6 Dungeon: 3 holes | done |
+| Q7 the boss: a goal of its own, the weak spot, the turn, the step, the shield, the hard stop | done |
+| Q8 Boss Lair: 3 holes | done |
+| Q9 Chapter 9 finale: Demon Castle, the `noCaught` challenge, the end of the game | done |
+| Q10 sound, music, text, save migration to version 9, the Chapter 9 tab | done; see "Not yet verified" below |
+| Q11 tune against the first playtest | not started |
 | S0 an analytics script on the page | not started: it needs a provider account |
 
 SPEC v4 lists R0 (replay check) and R1 (`cup` -> `goal`) first. Both were already done
@@ -152,6 +164,12 @@ desktop), and #12 only as far as the texts being present in both languages. Its 
 were written, not listened to. Everything in SPEC v8 7.5 is still to be tuned: how long
 a bridge stays and how long it warns, how big a hall is, how unlike the two sides of a
 mirror are, whether anyone understands that the last stroke comes back, and every par.
+And for Chapter 9, from SPEC v9 7.4: #13 (whether the arrows, the two worlds' tints and
+the colours of the keys can be read on a phone: they were looked at in a desktop
+browser) and #14 only as far as the texts being present in both languages. Its sounds
+were written, not listened to. Everything in SPEC v9 7.5 is still to be tuned: the
+grids, how many monsters and how long their paths, how hard a strike on the weak spot
+has to be, the length of the last hole, and every par.
 
 ### Open decisions
 
@@ -189,6 +207,10 @@ mirror are, whether anyone understands that the last stroke comes back, and ever
   suggests a way in for testers (`?chapter=8`). None was built: what a tester's way in
   may open, and whether it writes to the save, is a decision about the game and not
   about this chapter. `?unlock` and `?hole=` still exist in a development build only.
+- **How anyone gets to Chapter 9, and to the end of the game.** It opens with the
+  Chapter 8 finale, hole 97 on the shortest way. Chapter 9 is the last chapter: nobody
+  who has not played 97 holes will see the end. SPEC v9 7.1 records that the user chose
+  to keep the unlock order as it is for now.
 - **Tuning by feel.** Shot power, camera, surface values and every par were set by
   calculation and by a search script, not by playing on a phone. The dev panel exists
   to tune them.
@@ -207,6 +229,72 @@ deploys on push whatever a workflow says, so `npm run build` runs the replay che
 itself: if one hole's reference solution no longer plays back, the build fails and
 nothing is deployed. `.github/workflows/replay.yml` runs the same checks on every push
 and pull request, where the result can be seen before merging.
+
+### Where this differs from SPEC v9 (Monster Quest)
+
+SPEC v9 was written against this repository and its premises hold: 110 holes, 1053
+tests, save version 8, the unlock order. What follows is what building it settled, or
+changed.
+
+- **The two worlds are a part (`realm`) that owns its walls and floors.** SPEC v9 3.3
+  speaks of "pieces marked by layer". The ground of a hole is one mesh, which cannot
+  come and go in parts, so a floor of one world is a platform that is there or not, as
+  a bridge that comes and goes is, and a wall is a collider that is there or not, as a
+  gate is. The rest of the house is ordinary pieces, in both worlds.
+- **Which world is solid follows from the levers, and is in no snapshot of its own:**
+  the ghost world while an odd number of them are on. That is how two levers work one
+  swap (SPEC v9 3.3, hole 3). The levers are valves with the look of a lever, as a
+  belt's are, and they are what the snapshot holds.
+- **The tint is a veil on the floor.** SPEC v9 3.3 asks for the whole hole to change
+  colour; the sky and the light are the world's. A warm veil lies over the floor in the
+  real world and a cold one in the ghost world, and the world that is not solid is
+  drawn see-through with its edges showing.
+- **Monsters move together, in the order of the hole's data.** SPEC v9 3.2 has them go
+  one after another, by id. Each decides in turn, seeing where the ones before it are
+  going, and then all of them walk at once: the same outcome, and a shorter wait.
+- **A monster walks over the ball it catches, not into it.** Its body is a wall to a
+  rolling ball, and a wall that slides into a resting ball shoves it out of the cell
+  before the monster gets there. So a monster stepping onto a ball's cell has no body
+  for that step, and catches the ball on arrival. A monster's body fills three quarters
+  of its cell and a boss is round, so that neither touches a ball whose middle is in
+  the next cell.
+- **A ball lying on a monster's cell is caught where it lies.** SPEC v9 3.2 asks for
+  that, and a round boss leaves the corners of its four cells for a ball to lie in. The
+  monster stamps, and the stroke goes back.
+- **A shut door blocks a monster's way across it, not only the cell it stands on.**
+  Doors stand on the lines between cells; the rule looks at the middle of the step too.
+- **A door opens a few steps before a ball with its key gets there,** as a gate on a
+  signal does, so to the ball it is open at once (SPEC v9 3.5) and the picture takes a
+  moment. A ball resting against a shut door with the right key in hand opens it too.
+- **A key is a part that is held or spent; the ball carries nothing.** The snapshot of
+  the works puts a key back on the ground with everything else.
+- **The boss is round,** so that turning sweeps no corner into a ball beside it, and
+  neither its weak spot nor its shield is there while it moves or where a ball lies: it
+  waits for the ball to have gone, as a wall of the ghost world does. The shield comes
+  once the ball that struck has bounced clear, not in the same instant.
+- **The boss turns to face the ball by where the ball lies, on the grid or off it,** and
+  steps only toward a ball on the grid. A ball in the margin of a room, off the cells,
+  can still be struck at and still turns the boss; it cannot be caught.
+- **A boss hole ends when the ball has stopped,** as SPEC v9 3.6 asks, which is a thing
+  no other goal does: a cup ends the round as the ball drops. `Goal.restFirst` says so.
+- **The hard stop is in the boss itself:** struck in a stroke, it turns and does not
+  step when that stroke ends, whatever its phase.
+- **The result says "beaten in", and the last hole says "the end".** A hole with a boss
+  is not "holed". The finale of Chapter 9 is the last hole in play order; finishing it
+  shows the end of the game, and "all holes complete" only once Chapter 3 is done too.
+- **The castle's key room is off the grid.** It lies between the courtyard and the
+  throne room, and the one grid of the hole runs through it; every cell of it is
+  blocked, so no monster can follow the ball in and no ball there is on any cell.
+- **dungeon-2 has no lever.** SPEC v9 3.5 mentions the swap of worlds for its second
+  hole in passing; two red doors and one red key make the order matter on their own.
+- **The sound of a monster's step is the game watching it,** like a train's. No event
+  was added, as the SPEC says.
+- **Pars are from search again.** The thirteen reference rounds take 2, 3, 4, 1, 2, 2,
+  2, 4, 3, 1, 2, 5 and 10 strokes against pars of 3, 4, 5, 2, 3, 4, 3, 5, 4, 3, 5, 7
+  and 12. lair-1 and lair-2 lean on strokes very few players will find: a bank off two
+  walls onto the weak spot, found in one try of five hundred. SPEC v9 7.5 leaves the
+  tuning to the playtest.
+- **Scenery is built in code.**
 
 ### Where this differs from SPEC v8 (Strange Dimensions)
 
@@ -674,22 +762,23 @@ src/
              coasters and halls with joined edges), movers (among them bridges that come
              and go), loose props (crates, pins)
   level/     chapter, world and hole data schema, compiler (data -> geometry), physics builder
-  game/      session state machine, rules, goals (cup, pins, steps), the set of balls
-             (and the shadow ball of a mirror), skills, challenges, replay
+  game/      session state machine, rules, goals (cup, pins, steps, a boss), the set of
+             balls (and the shadow ball of a mirror), skills, challenges, replay
   game/field/  the works of a hole: plates, gates, stones, light, sliders, gold, the
              dragon, fire, valves, water, rafts, cracked slabs, belts, clock switches,
              time zones, the beat, tunnel mouths that turn, trains, wall groups the
-             player turns, echo zones and echo plates; how they pass signals; the
+             player turns, echo zones and echo plates, the two worlds of a haunted
+             house, monsters, keys and doors, the boss; how they pass signals; the
              snapshot a stroke goes back to
   input/     slingshot aiming, a tap told from a drag, and camera gestures on Pointer Events
   render/    Three.js scene, camera, course, ball, zone and mover views, the views of
              the works and the lines between them, the picture of a hall's far side,
-             the mirror, scenery, occlusion fading, quality tiers
+             the mirror, the ghost world, the monsters, scenery, occlusion fading, quality tiers
   audio/     synthesised sound effects and generated music, and music that keeps a hole's beat
   ui/        HTML/CSS HUD and menus, all interface text (en / zh)
   debug/     development panel, and the stroke search the reference solutions are found
              with (not included in production builds)
-  data/      surfaces, themes, the thirty-four worlds, the eight finales and the chapter
+  data/      surfaces, themes, the thirty-eight worlds, the nine finales and the chapter
              list (content only, no logic)
 tests/       determinism, tunneling, seams, terrain, rules, scoring, movers, fields, saves,
              save migration, tunnels, the moving cup, countdown, rooftops, ball sizes,
@@ -699,7 +788,8 @@ tests/       determinism, tunneling, seams, terrain, rules, scoring, movers, fie
              Chapter 6 holes (works), music on the beat, turning tunnels, trains and
              coasters (city), taps and wall groups (maze) and the Chapter 7 holes (town),
              bridges that come and go, joined edges, the shadow ball and echoes (strange)
-             and the Chapter 8 holes (dimensions), reference solutions
+             and the Chapter 8 holes (dimensions), the two worlds, monsters, keys, doors
+             and the boss (quest) and the Chapter 9 holes (castle), reference solutions
 replays/     one reference solution per hole: its inputs and how the round ended
 scripts/     the replay command and the dev server's SAVE REPLAY endpoint
 ```
@@ -707,7 +797,7 @@ scripts/     the replay command and the dev server's SAVE REPLAY endpoint
 ## Adding content
 
 A **hole** is one object in a world file under `src/data/worlds/`: tee, goal (a cup,
-pins, or steps of them), par, pieces (floors, ramps, walls, pillars, low bars), zones,
+pins, steps of them, or a boss), par, pieces (floors, ramps, walls, pillars, low bars), zones,
 movers, crates, skills, works (`field`: parts wired by `when`, and how many `turns` of a
 wall group it allows), a `beat` if its machines keep one, a `mirror` if it has a shadow
 ball, an optional third-star challenge. Nothing outside that file
@@ -732,10 +822,10 @@ A **new mechanic** is a module, registered by name so data can refer to it:
 | Mover motion | `src/physics/movers.ts` | slide, swing, spin |
 | Mover role (what a moving part is to the ball) | `src/physics/movers.ts` | platform, pusher, lift |
 | A mover that comes and goes | `src/physics/movers.ts` | `phantom` on any mover |
-| Challenge check | `src/game/challenges.ts` | noWallHits, firstStrokeInto, maxRotations |
+| Challenge check | `src/game/challenges.ts` | noWallHits, firstStrokeInto, maxRotations, noCaught |
 | Scenery model | `src/render/decor.ts` | canopy, tower, gear |
-| Part (one of the works of a hole) | `src/game/field/` | plate, gate, stone, crystal, fire, valve, water, belt, dial, timeZone, pulse, tunnel, train, rotor, echo, echoPlate |
-| Part visual | `src/render/fieldViews.ts`, `src/render/cityViews.ts`, `src/render/strangeViews.ts` | the gate slab, the dragon, a train and its track, an echo |
+| Part (one of the works of a hole) | `src/game/field/` | plate, gate, stone, crystal, fire, valve, water, belt, dial, timeZone, pulse, tunnel, train, rotor, echo, echoPlate, realm, monster, key, door, boss |
+| Part visual | `src/render/fieldViews.ts`, `src/render/cityViews.ts`, `src/render/strangeViews.ts`, `src/render/questViews.ts` | the gate slab, the dragon, a train and its track, an echo, a monster |
 
 A zone talks to the game through `ZoneContext` only: it can move the ball, hold it
 (`busy`), say that it jumped (`snap`), add time to the countdown (`addTime`) and name
@@ -756,8 +846,11 @@ its own for moving parts to run on has `at` (a `LocalClock`), and a moving part 
 it with `clock`. A part can take hold of a ball as a zone can (`hold`, `snap`): a train
 does. A part the player works by hand has `turn` (a `Turnable`): the round gives it its
 turns, counts them and records each as an input. A part that has to know of strokes is
-told when one is played (`struck`, after the snapshot is taken) and when it is over
-(`rested`): an echo zone is.
+told when one is played (`struck`, after the snapshot is taken), when every ball has
+stopped (`stopped`, once a stroke, and the stroke waits for whatever it sets moving)
+and when it is over (`rested`): an echo zone is, and a monster takes its step at
+`stopped`. A part that stands on cells of the grid says which (`cells`), so that
+another may not step onto them.
 
 `physics/`, `level/` and `game/` never mention a specific world.
 
@@ -769,14 +862,14 @@ strokes of the current round, check that a replay is identical 10 times over, an
 feel values with sliders. **COPY CHANGES** exports whatever was changed as JSON.
 
 URL switches, development only: `?hole=ice-2` starts on that hole (`ch1-finale` to
-`ch8-finale` are the finales), `?unlock` opens every hole in every chapter. `?lang=zh`
+`ch9-finale` are the finales), `?unlock` opens every hole in every chapter. `?lang=zh`
 or `?lang=en` forces a language in any build.
 
 ### Reference solutions
 
 Every hole has one in `replays/<holeId>.json`: the inputs of a round that finishes it
 (each stroke's tick, direction, power and ball, each use of a skill, each turn of a wall
-group) and how that round ended. `npm run replay` plays all 110 back without rendering, in about a second,
+group) and how that round ended. `npm run replay` plays all 123 back without rendering, in about a second,
 and prints a report; `npm test` and `npm run build` run the same check. A round has to
 end on the same tick, with the same strokes and stars, within a millimetre of the same
 place. In practice it ends in exactly the same place, to the last bit, and the tests
@@ -902,6 +995,20 @@ must match Node's exactly; that is how a difference between engines would show.
   is on the step being taken; listed first, it would look a tick late.
 - **Local clipping is on in the renderer,** for the picture of a hall's far side, which
   is cut off at the edge of its skirt. Nothing else uses it.
+
+- **Monsters act between strokes, and nowhere else.** The round calls the works once
+  when every ball has stopped; a monster that moves then holds the stroke open, and a
+  catch is an out-of-bounds counted apart (`caught`). While a ball rolls, every
+  monster is a wall standing still.
+- **A chase is decided on whole cells, a boss's turn on positions.** The step rule is
+  `chaseStep`, with integer differences for a monster and half-cell ones for a boss;
+  which way a boss faces is read from where the ball lies, which may be off the grid.
+- **A door's lookahead is three ticks, a gate's is its signal's line.** A ball at full
+  speed covers half a metre in three ticks: look further and a door opens for a ball
+  that will bounce off something first.
+- **The weak spot is a collider on the boss's body, told apart by its handle.** The
+  strike is judged by the change in the ball's speed, as a stone's shove is, so a
+  glancing touch does nothing.
 
 Decisions that are easy to undo by accident:
 

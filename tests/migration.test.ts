@@ -11,8 +11,9 @@ const V4_KEY = 'minigolf.save.v4';
 const V5_KEY = 'minigolf.save.v5';
 const V6_KEY = 'minigolf.save.v6';
 const V7_KEY = 'minigolf.save.v7';
-const KEY = 'minigolf.save.v8';
-const [chapter1, chapter2, chapter3, chapter4, chapter5, chapter6, chapter7, chapter8] = CHAPTERS;
+const V8_KEY = 'minigolf.save.v8';
+const KEY = 'minigolf.save.v9';
+const [chapter1, chapter2, chapter3, chapter4, chapter5, chapter6, chapter7, chapter8, chapter9] = CHAPTERS;
 const known = new Set(allHoles(CHAPTERS).map((hole) => hole.id));
 /** The 18 holes version 1 shipped with, in play order. */
 const v1Holes = chapter1.worlds.flatMap((world) => world.holes);
@@ -757,8 +758,8 @@ const mainLine7 = ids(
 );
 
 describe('save migration, version 7 to 8 (SPEC v8 3.8)', () => {
-  it('writes version 8', () => {
-    expect(SAVE_VERSION).toBe(8);
+  it('migrates through version 8 to the current one', () => {
+    expect(SAVE_VERSION).toBeGreaterThanOrEqual(8);
   });
 
   it('keeps every score of a version 7 save exactly as it was (SPEC v8 7.4 #9)', () => {
@@ -767,7 +768,7 @@ describe('save migration, version 7 to 8 (SPEC v8 3.8)', () => {
       const before = v7Scores(ids(v7Holes).slice(0, count));
       const loaded = readSave(v7Save(before, 'maze-2'), known)!;
       expect(loaded.migratedFrom).toBe(7);
-      expect(loaded.data.version).toBe(8);
+      expect(loaded.data.version).toBe(SAVE_VERSION);
       expect(loaded.data.holes).toEqual(before);
       expect(loaded.data.last).toBe('maze-2');
       expect(loaded.data.settings).toEqual({ lang: 'zh', sfx: true, music: true, quality: 'low' });
@@ -813,7 +814,7 @@ describe('save migration, version 7 to 8 (SPEC v8 3.8)', () => {
     progress.complete('phantom-1', { holed: true, strokes: 1, stars: 3, challengeMet: true, ticks: 10 });
     expect(storage.data[V7_KEY]).toBe(original);
     const written = JSON.parse(storage.data[KEY]);
-    expect(written.version).toBe(8);
+    expect(written.version).toBe(SAVE_VERSION);
     expect(Object.keys(written.holes)).toHaveLength(98);
   });
 
@@ -835,6 +836,112 @@ describe('save migration, version 7 to 8 (SPEC v8 3.8)', () => {
     const storage = memoryStorage({ [V7_KEY]: v7Save(v7Scores(mainLine7), null, { migratedFrom: 6 }) });
     const first = new Progress(CHAPTERS, storage);
     expect(first.migratedFrom).toBe(7);
+    first.migrationReported();
+    expect(new Progress(CHAPTERS, storage).migratedFrom).toBeNull();
+  });
+});
+
+/** The 110 holes version 8 shipped with, in play order. */
+const v8Holes = [chapter1, chapter2, chapter3, chapter4, chapter5, chapter6, chapter7, chapter8].flatMap((chapter) =>
+  [...chapter.worlds, chapter.finale].flatMap((world) => world.holes),
+);
+
+/** A save exactly as version 8 wrote it. */
+function v8Save(holes: Record<string, HoleRecord>, last: string | null = null, extra: object = {}): string {
+  return JSON.stringify({
+    version: 8,
+    holes,
+    settings: { lang: 'en', sfx: true, music: false, quality: 'auto' },
+    last,
+    ...extra,
+  });
+}
+
+const v8Scores = (list: readonly string[]): Record<string, HoleRecord> =>
+  Object.fromEntries(list.map((id, i) => [id, { stars: ((i % 3) + 1) as 1 | 2 | 3, strokes: (i % 9) + 1 }]));
+
+/** Chapters 1, 2 and 4 to 8, with Chapter 3 never played: the main line as far as version 8 went. */
+const mainLine8 = ids(
+  [chapter1, chapter2, chapter4, chapter5, chapter6, chapter7, chapter8].flatMap((chapter) => [...chapter.worlds, chapter.finale].flatMap((world) => world.holes)),
+);
+
+describe('save migration, version 8 to 9 (SPEC v9 3.9)', () => {
+  it('writes version 9', () => {
+    expect(SAVE_VERSION).toBe(9);
+  });
+
+  it('keeps every score of a version 8 save exactly as it was (SPEC v9 7.4 #11)', () => {
+    expect(v8Holes).toHaveLength(110);
+    for (const count of [0, 1, 32, 58, 97, 109, 110]) {
+      const before = v8Scores(ids(v8Holes).slice(0, count));
+      const loaded = readSave(v8Save(before, 'echo-2'), known)!;
+      expect(loaded.migratedFrom).toBe(8);
+      expect(loaded.data.version).toBe(9);
+      expect(loaded.data.holes).toEqual(before);
+      expect(loaded.data.last).toBe('echo-2');
+      expect(loaded.data.settings).toEqual({ lang: 'en', sfx: true, music: false, quality: 'auto' });
+
+      const progress = new Progress(CHAPTERS, memoryStorage({ [V8_KEY]: v8Save(before, 'echo-2') }));
+      expect(progress.completedHoles).toBe(count);
+      for (const [id, record] of Object.entries(before)) expect(progress.record(id)).toEqual(record);
+      for (const world of [...chapter9.worlds, chapter9.finale]) {
+        for (const hole of world.holes) expect(progress.record(hole.id)).toBeNull();
+      }
+    }
+  });
+
+  it('opens Chapter 9 with the Chapter 8 finale, and with nothing less', () => {
+    const almost = new Progress(CHAPTERS, memoryStorage({ [V8_KEY]: v8Save(v8Scores(ids(v8Holes).slice(0, 109))) }));
+    expect(almost.chapterUnlocked(chapter9)).toBe(false);
+    for (const world of [...chapter9.worlds, chapter9.finale]) {
+      world.holes.forEach((_, index) => expect(almost.isUnlocked(world, index)).toBe(false));
+    }
+
+    // The main line, with Chapter 3 never played: open, on what is its 98th hole.
+    const main = new Progress(CHAPTERS, memoryStorage({ [V8_KEY]: v8Save(v8Scores(mainLine8), 'ch8-finale') }));
+    expect(main.completedHoles).toBe(97);
+    expect(main.opener(chapter9)).toBe(chapter8);
+    expect(main.chapterUnlocked(chapter9)).toBe(true);
+    expect(main.isUnlocked(chapter9.worlds[0], 0)).toBe(true);
+    expect(main.isUnlocked(chapter9.worlds[0], 1)).toBe(false);
+    expect(main.isUnlocked(chapter9.worlds[1], 0)).toBe(false);
+    expect(main.isUnlocked(chapter9.finale, 0)).toBe(false);
+
+    // All 110: PLAY takes the returning player straight to the new chapter.
+    const done = new Progress(CHAPTERS, memoryStorage({ [V8_KEY]: v8Save(v8Scores(ids(v8Holes)), 'ch8-finale') }));
+    expect(done.resume()).toEqual({ world: chapter9.worlds[0], index: 0 });
+    expect(done.allComplete).toBe(false);
+  });
+
+  it('writes the new save under a new key and leaves the version 8 save untouched', () => {
+    const original = v8Save(v8Scores(ids(v8Holes)), 'ch8-finale');
+    const storage = memoryStorage({ [V8_KEY]: original, [V7_KEY]: v7Save(v7Scores(ids(v7Holes))), [V1_KEY]: v1Save(scores(18)) });
+    const progress = new Progress(CHAPTERS, storage);
+    progress.complete('haunted-1', { holed: true, strokes: 2, stars: 3, challengeMet: true, ticks: 10 });
+    expect(storage.data[V8_KEY]).toBe(original);
+    const written = JSON.parse(storage.data[KEY]);
+    expect(written.version).toBe(9);
+    expect(Object.keys(written.holes)).toHaveLength(111);
+  });
+
+  it('takes the newest of the older saves, and still carries a version 1 save all the way', () => {
+    const several = memoryStorage({
+      [V8_KEY]: v8Save(v8Scores(ids(v8Holes).slice(0, 100))),
+      [V7_KEY]: v7Save(v7Scores(ids(v7Holes).slice(0, 90))),
+      [V6_KEY]: v6Save(v6Scores(ids(v6Holes).slice(0, 75))),
+      [V2_KEY]: v2Save(v2Scores(25)),
+    });
+    expect(new Progress(CHAPTERS, several).completedHoles).toBe(100);
+    const oldest = new Progress(CHAPTERS, memoryStorage({ [V1_KEY]: v1Save(scores(18), 'gravity-3') }));
+    expect(oldest.completedHoles).toBe(18);
+    expect(oldest.migratedFrom).toBe(1);
+    expect(oldest.chapterUnlocked(chapter9)).toBe(false);
+  });
+
+  it('reports the return once, as coming from version 8', () => {
+    const storage = memoryStorage({ [V8_KEY]: v8Save(v8Scores(mainLine8), null, { migratedFrom: 7 }) });
+    const first = new Progress(CHAPTERS, storage);
+    expect(first.migratedFrom).toBe(8);
     first.migrationReported();
     expect(new Progress(CHAPTERS, storage).migratedFrom).toBeNull();
   });

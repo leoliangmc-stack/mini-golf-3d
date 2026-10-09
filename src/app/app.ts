@@ -152,6 +152,8 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
       // The last hole in the list is not the end of the game for a player who went
       // straight from Chapter 2 to Chapter 4.
       if (!upNext() && progress.allComplete) return TEXT.allComplete(allHoles(CHAPTERS).length);
+      // The last hole of the last chapter, with Chapter 3 perhaps still to play (SPEC v9 3.7).
+      if (!upNext()) return TEXT.theEnd();
       if (game.isFinale && game.chapter) return TEXT.chapterComplete(tr(game.chapter.name));
       return game.isLastHole ? TEXT.worldComplete() : '';
     },
@@ -297,6 +299,17 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
         else if (event.name === 'echoStart') audio.echoStart();
         else if (event.name === 'echoPlateDown') audio.echoPlate(true);
         else if (event.name === 'echoPlateUp') audio.echoPlate(false);
+        else if (event.name === 'realmGhost') audio.realmSwap(true);
+        else if (event.name === 'realmReal') audio.realmSwap(false);
+        else if (event.name === 'monsterStep' || event.name === 'bossStep') audio.monsterStep();
+        else if (event.name === 'caught') audio.caught();
+        else if (event.name === 'keyTake') audio.keyTake();
+        else if (event.name === 'doorOpen') audio.doorOpen();
+        else if (event.name === 'bossTurn') audio.bossTurn();
+        else if (event.name === 'bossHit') audio.bossHit();
+        else if (event.name === 'shieldHit') audio.shieldHit();
+        else if (event.name === 'shieldOpen') audio.shieldOpen();
+        else if (event.name === 'bossDown') audio.bossDown();
         else if (event.name === 'dragonWake') {
           audio.dragonWake();
           if (stages.includes(game.world)) track('dragon_woke', { hole: hole.id });
@@ -342,7 +355,9 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
           track('stroke_limit', { hole: hole.id });
         }
         if (game.isFinale) {
-          audio.chapterComplete();
+          // The last hole of the game gets a fanfare of its own (SPEC v9 3.10).
+          if (upNext() === null) audio.gameComplete();
+          else audio.chapterComplete();
           track('chapter_complete', { chapter: game.chapter?.id ?? '', stars: progress.worldStars(game.world) });
         } else if (game.isLastHole) {
           audio.worldComplete();

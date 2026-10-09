@@ -17,6 +17,7 @@ import { BallSet } from './ballSet';
 import { challengeMet, emptyStats, type RoundStats } from './challenges';
 import { cupOpenAt, cupPositionAt, type CupPose } from './cup';
 import { Field, type FieldState, type TurnCheck } from './field/field';
+import type { Boss } from './field/quest';
 import { Goal, type CupState } from './goal';
 import { cupCaptures, RULES, starsFor, StopDetector } from './rules';
 import { getSkill, type SkillHost, type SkillState } from './skills';
@@ -70,6 +71,8 @@ export type SessionEvent =
   | { type: 'bounce'; kind: ColliderKind; speed: number }
   /** The last ball in play left the course and was put back, at the cost of a stroke. */
   | { type: 'outOfBounds'; strokes: number }
+  /** A monster caught the ball (SPEC v9 3.2): the stroke was taken back, at the cost of a stroke. */
+  | { type: 'caught'; strokes: number }
   /** The rolling ball moved onto a different surface. */
   | { type: 'surface'; id: string }
   /** A named moment, e.g. a cannon firing, for sound and effects. */
@@ -189,6 +192,8 @@ export class Session implements SkillHost {
   private won = false;
   /** Ticks the balls have been at rest while crates or pins were still moving. */
   private propWait = 0;
+  /** The works have had their turn since the stroke was played (SPEC v9 3.2): once a stroke. */
+  private turnTaken = false;
   /** The same, for the works of the hole. */
   private fieldWait = 0;
   /** The course before each stroke still standing, oldest first (SPEC v4 3.8). Only on a hole with works. */
@@ -353,6 +358,7 @@ export class Session implements SkillHost {
     this.track(ball).stop.reset();
     this.propWait = 0;
     this.fieldWait = 0;
+    this.turnTaken = false;
     if (frozen) this.cue('airShot');
     this.emit({ type: 'shot', strokes: this.strokes, power: p, ball: ball.id, frozen });
     if (frozen) this.emit({ type: 'resumed' });
@@ -592,12 +598,18 @@ export class Session implements SkillHost {
           if (ball !== shadow) playersAtRest = false;
         }
       }
-      if (this.goal.met) this.won = true;
+      // A boss is beaten the moment it is struck, but the hole ends when the balls have stopped (SPEC v9 3.6).
+      if (this.goal.met && (!this.goal.restFirst || atRest)) this.won = true;
       // With the hole won, the round still waits for balls on their way to the cup:
       // a second one dropping in is worth something (SPEC v3 2.4).
       const waiting =
         rolling && !playersAtRest && this.balls.playable.length > 0 && this.goal.cups.some((cup) => cup.sunk > 0);
       const still = rolling && atRest && !this.won;
+      // The balls have stopped: the works that act between strokes take their turn, and the stroke waits for them.
+      if (still && !this.turnTaken) {
+        this.turnTaken = true;
+        this.field?.stopped();
+      }
       const settled = still && !this.detained() && this.propsSettled() && this.fieldSettled();
       this.waiting = still && !settled;
       if (this.won && !waiting) this.finish(true);
@@ -720,6 +732,7 @@ export class Session implements SkillHost {
     this.lastShotPosition = snapshot.position;
     this.lastShotSize = snapshot.size;
     this.waiting = false;
+    this.turnTaken = false;
     this.phase = 'aiming';
     this.track(ball).stop.reset();
     ball.recordPose(true);
@@ -816,7 +829,11 @@ export class Session implements SkillHost {
       this.balls.shadow = this.balls.add([x, y + ballProps.radius, z]);
     }
     this.shadowFrom = this.balls.shadow ? { ...this.balls.shadow.position() } : STILL;
-    this.goal = new Goal(hole.goal, this.world, this.surfaces);
+    this.goal = new Goal(hole.goal, this.world, this.surfaces, {
+      // The works are built after the goal: looked up when asked, not before.
+      bossDown: (id) => (this.field?.part(id) as Boss | undefined)?.hp === 0,
+      bossAt: (id) => this.field?.part(id).anchor ?? { x: 0, y: 0, z: 0 },
+    });
     this.crates = (hole.crates ?? []).map((def) => new Crate(def, this.world, this.surfaces));
     this.field = hole.field
       ? new Field(hole.field, {
@@ -825,6 +842,8 @@ export class Session implements SkillHost {
           balls: () => this.balls.live,
           cue: (name) => this.cue(name),
           outOfBounds: (ball) => this.zoneEvents.push({ event: { type: 'outOfBounds' }, ball }),
+          caught: (ball) => this.zoneEvents.push({ event: { type: 'caught' }, ball }),
+          cups: () => this.goal.cups.filter((cup) => cup.active).map((cup) => cup.pose.position),
           changed: (part) => this.emit({ type: 'partChanged', part }),
           hold: (ball) => {
             this.track(ball).busy = true;
@@ -843,6 +862,7 @@ export class Session implements SkillHost {
     this.snapshots = [];
     this.waiting = false;
     this.fieldWait = 0;
+    this.turnTaken = false;
     this.skills = new Map(Object.entries(hole.skills ?? {}).map(([id, uses]) => [id, { max: uses, charges: uses }]));
     this.zoneEvents = [];
     this.zoneContext = {
@@ -971,16 +991,17 @@ export class Session implements SkillHost {
 
   private handleZoneEvents(): void {
     if (this.zoneEvents.length === 0) return;
-    const out: Ball[] = [];
+    // Each ball that is to be put back, and why: a monster's catch is an out-of-bounds counted apart.
+    const out = new Map<Ball, 'outOfBounds' | 'caught'>();
     for (const { event, ball } of this.zoneEvents.splice(0)) {
-      if (event.type === 'outOfBounds') {
-        if (!out.includes(ball)) out.push(ball);
+      if (event.type === 'outOfBounds' || event.type === 'caught') {
+        if (!out.has(ball)) out.set(ball, event.type);
         continue;
       }
       this.stats.cues[event.name] = (this.stats.cues[event.name] ?? 0) + 1;
       this.emit(event);
     }
-    for (const ball of out) {
+    for (const [ball, why] of out) {
       // The shadow goes back where the stroke found it, and that is all: it costs
       // nothing, and whatever it did on the way stays done (SPEC v8 3.4).
       if (ball === this.balls.shadow) {
@@ -1012,12 +1033,14 @@ export class Session implements SkillHost {
         this.returnShadow();
       }
       this.strokes++;
-      this.stats.outOfBounds++;
+      if (why === 'caught') this.stats.caught++;
+      else this.stats.outOfBounds++;
       this.stats.rests.push({ ...target });
       this.phase = 'aiming';
+      this.turnTaken = false;
       this.track(ball).stop.reset();
       ball.recordPose(true);
-      this.emit({ type: 'outOfBounds', strokes: this.strokes });
+      this.emit({ type: why, strokes: this.strokes });
       if (this.strokes >= this.strokeLimit) this.finish(false);
     }
   }

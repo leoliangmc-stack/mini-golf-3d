@@ -11,14 +11,15 @@ export interface StorageLike {
   setItem(key: string, value: string): void;
 }
 
-const KEY = 'minigolf.save.v8';
+const KEY = 'minigolf.save.v9';
 /**
- * Where versions 7, 6, 5, 4, 3, 2 and 1 kept their saves, newest first. An older save is read once, to
+ * Where versions 8, 7, 6, 5, 4, 3, 2 and 1 kept their saves, newest first. An older save is read once, to
  * carry the scores over, and never written again: an older build does not understand a
  * newer save and would start the player from nothing, so if this build is ever rolled
  * back, the save that build wrote is still there for it.
  */
 const LEGACY_KEYS = [
+  'minigolf.save.v8',
   'minigolf.save.v7',
   'minigolf.save.v6',
   'minigolf.save.v5',

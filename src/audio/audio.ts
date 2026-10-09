@@ -667,6 +667,83 @@ export class AudioEngine {
     if (down) this.tone({ wave: 'triangle', from: 196, to: 147, length: 0.1, level: 0.14 });
   }
 
+  // --- Chapter 9: the monster quest ---
+
+  /** The worlds swapping: a shiver up into the ghost world, or down out of it. */
+  realmSwap(ghost: boolean): void {
+    this.tone({ wave: 'sine', from: ghost ? 300 : 900, to: ghost ? 900 : 300, length: 0.4, level: 0.12 });
+    this.tone({ wave: 'triangle', from: ghost ? 150 : 450, to: ghost ? 450 : 150, length: 0.4, level: 0.05 });
+    this.noise({ filter: 'bandpass', from: ghost ? 400 : 2400, to: ghost ? 2400 : 400, length: 0.35, level: 0.07 });
+  }
+
+  /** A monster taking its step: a heavy foot. */
+  monsterStep(): void {
+    this.tone({ from: 90, to: 50, length: 0.16, level: 0.26 });
+    this.noise({ filter: 'lowpass', from: 500, to: 150, length: 0.12, level: 0.14 });
+  }
+
+  /** The ball caught: a snap, and a fall. */
+  caught(): void {
+    this.noise({ filter: 'highpass', from: 1800, length: 0.06, level: 0.2 });
+    this.tone({ wave: 'square', from: 440, to: 110, length: 0.45, level: 0.14, delay: 0.05 });
+    this.tone({ wave: 'sawtooth', from: 220, to: 55, length: 0.45, level: 0.08, delay: 0.05 });
+  }
+
+  /** A key taken: a jingle. */
+  keyTake(): void {
+    [0, 0.06, 0.12].forEach((delay, i) => this.tone({ wave: 'triangle', from: 1760 + i * 220, length: 0.12, level: 0.1, delay }));
+    this.tone({ wave: 'sine', from: 2637, length: 0.3, level: 0.06, delay: 0.18 });
+  }
+
+  /** A door unlocking and swinging open. */
+  doorOpen(): void {
+    this.tone({ wave: 'square', from: 520, length: 0.04, level: 0.12 });
+    this.tone({ wave: 'square', from: 390, length: 0.05, level: 0.12, delay: 0.07 });
+    this.noise({ filter: 'bandpass', from: 300, to: 900, length: 0.4, level: 0.1, delay: 0.12 });
+  }
+
+  /** The boss turning round: a growl. */
+  bossTurn(): void {
+    this.tone({ wave: 'sawtooth', from: 70, to: 95, length: 0.3, level: 0.12 });
+    this.noise({ filter: 'lowpass', from: 400, length: 0.25, level: 0.08 });
+  }
+
+  /** The weak spot struck. */
+  bossHit(): void {
+    this.tone({ wave: 'square', from: 220, to: 110, length: 0.18, level: 0.2 });
+    this.tone({ wave: 'sawtooth', from: 160, to: 60, length: 0.5, level: 0.12, delay: 0.05 });
+    this.noise({ filter: 'highpass', from: 2200, length: 0.08, level: 0.16 });
+  }
+
+  /** A ball off the shield: ringing metal, nothing given. */
+  shieldHit(): void {
+    this.tone({ wave: 'sine', from: 1319, length: 0.35, level: 0.14 });
+    this.tone({ wave: 'sine', from: 1976, length: 0.2, level: 0.06 });
+  }
+
+  /** The shield unlocked and opening. */
+  shieldOpen(): void {
+    this.tone({ wave: 'triangle', from: 1319, to: 2637, length: 0.3, level: 0.12 });
+    this.noise({ filter: 'bandpass', from: 2000, to: 6000, length: 0.3, level: 0.08, delay: 0.1 });
+  }
+
+  /** The boss beaten: a roar, falling away. */
+  bossDown(): void {
+    this.tone({ wave: 'sawtooth', from: 180, to: 40, length: 1.2, level: 0.16 });
+    this.tone({ wave: 'square', from: 90, to: 30, length: 1.2, level: 0.1 });
+    this.noise({ filter: 'lowpass', from: 1200, to: 100, length: 1.1, level: 0.16 });
+  }
+
+  /** The last hole of the game done: the chapter fanfare, and more of it. */
+  gameComplete(): void {
+    this.chapterComplete();
+    [0.6, 0.72, 0.84, 0.96, 1.2].forEach((delay, i) => {
+      const hz = [523, 659, 784, 1047, 1319][i];
+      this.tone({ wave: 'triangle', from: hz, length: i === 4 ? 1.4 : 0.3, level: 0.14, delay });
+      this.tone({ wave: 'sine', from: hz / 2, length: i === 4 ? 1.4 : 0.3, level: 0.06, delay });
+    });
+  }
+
   /** Entering (`on`) or leaving a gravity zone. */
   gravityShift(on: boolean): void {
     this.tone({ from: on ? 280 : 900, to: on ? 900 : 280, length: 0.28, level: 0.13 });

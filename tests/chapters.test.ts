@@ -3,7 +3,7 @@ import { CHAPTERS } from '../src/data/chapters';
 import { allHoles, chapterOf, holeNumber, isFinale, stagesOf } from '../src/level/chapters';
 import { TEST_WORLD } from '../src/data/worlds/test';
 
-const [chapter1, chapter2, chapter3, chapter4, chapter5, chapter6, chapter7, chapter8] = CHAPTERS;
+const [chapter1, chapter2, chapter3, chapter4, chapter5, chapter6, chapter7, chapter8, chapter9] = CHAPTERS;
 
 describe('chapters (SPEC v2 2.1)', () => {
   it('puts the finale after the worlds, as one more stage', () => {
@@ -16,6 +16,7 @@ describe('chapters (SPEC v2 2.1)', () => {
     expect(stagesOf(chapter6).map((stage) => stage.id)).toEqual(['toy', 'assembly', 'music', 'clock', 'ch6-finale']);
     expect(stagesOf(chapter7).map((stage) => stage.id)).toEqual(['subway', 'rail', 'fair', 'maze', 'ch7-finale']);
     expect(stagesOf(chapter8).map((stage) => stage.id)).toEqual(['phantom', 'hall', 'mirror', 'echo', 'ch8-finale']);
+    expect(stagesOf(chapter9).map((stage) => stage.id)).toEqual(['haunted', 'den', 'dungeon', 'lair', 'ch9-finale']);
   });
 
   it('numbers a finale as the last hole of its chapter: 19, then 13 each', () => {
@@ -33,6 +34,8 @@ describe('chapters (SPEC v2 2.1)', () => {
     expect(holeNumber(chapter7, chapter7.finale, 0)).toBe(13);
     expect(holeNumber(chapter8, chapter8.worlds[2], 1)).toBe(8);
     expect(holeNumber(chapter8, chapter8.finale, 0)).toBe(13);
+    expect(holeNumber(chapter9, chapter9.worlds[3], 2)).toBe(12);
+    expect(holeNumber(chapter9, chapter9.finale, 0)).toBe(13);
   });
 
   it('finds the chapter a world or a finale belongs to', () => {
@@ -47,7 +50,8 @@ describe('chapters (SPEC v2 2.1)', () => {
     expect(chapterOf(CHAPTERS, chapter6.finale)).toBe(chapter6);
     expect(chapterOf(CHAPTERS, chapter7.worlds[3])).toBe(chapter7);
     expect(chapterOf(CHAPTERS, chapter8.finale)).toBe(chapter8);
-    expect(allHoles(CHAPTERS)).toHaveLength(110);
+    expect(chapterOf(CHAPTERS, chapter9.worlds[1])).toBe(chapter9);
+    expect(allHoles(CHAPTERS)).toHaveLength(123);
   });
 
   it('gives every stage its text in both languages', () => {

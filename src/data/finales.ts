@@ -1,4 +1,5 @@
 import type { Vec2, Vec3 } from '../core/types';
+import type { Cell } from '../level/field';
 import type { DecorDef, FinaleDef, PieceDef } from '../level/schema';
 import type { ZoneDef } from '../physics/zones';
 import { robotArm } from '../physics/zones/arm';
@@ -14,6 +15,10 @@ import { CUP, FALL, rack, STREET, walledRoom } from './worlds/common';
 import { SKIRT } from './worlds/hall';
 import { rotor, stubs } from './worlds/maze';
 import { BEAT, shutter } from './worlds/music';
+import { chaser, patrol } from './worlds/den';
+import { key, lockedDoor } from './worlds/dungeon';
+import { swapLever } from './worlds/haunted';
+import { boss } from './worlds/lair';
 import { phantomBridge } from './worlds/phantom';
 import { line, LINE_BLUE, LINE_ORANGE, points, train } from './worlds/rail';
 import { wallWithDoors } from './worlds/ruins';
@@ -808,6 +813,96 @@ export const STRANGE_GATE: FinaleDef = {
       zones: [FALL, hall([-4, 5], [4, 13], { x: true })],
       outOfBounds: 'lastPosition',
       camera: { pitch: 58, maxDistance: 48 },
+    },
+  ],
+};
+
+/** Every cell of the castle's key room: no monster may enter it, and no ball there is on the grid. */
+const KEY_ROOM: Cell[] = [];
+for (let col = 0; col < 8; col++) for (let row = 12; row < 20; row++) KEY_ROOM.push([col, row]);
+
+/**
+ * Chapter 9, hole 13, and the last hole of the game: the demon's castle (SPEC v9 3.7).
+ * Through the gatehouse by swapping worlds, across a courtyard of monsters, through
+ * the key room for the red key that opens the throne room and the gold one that opens
+ * the boss's shield, and then the boss, with three strikes to its back. There is no
+ * cup: the hole ends when it is beaten.
+ */
+export const DEMON_CASTLE: FinaleDef = {
+  id: 'ch9-finale',
+  name: { en: 'Demon Castle', zh: '魔王城' },
+  theme: 'castle',
+  ruleCard: {
+    en: 'Two worlds, the monsters, the keys, and the demon on its throne.',
+    zh: '表里世界、怪兽、钥匙，和王座上的魔王。',
+  },
+  ruleTag: { en: 'FINALE', zh: '终局' },
+  holes: [
+    {
+      id: 'ch9-finale',
+      par: 12,
+      tee: [0, 0, 22],
+      goal: { type: 'boss', part: 'demon' },
+      challenge: { type: 'noCaught', text: { en: 'Never get caught', zh: '一次都不被抓' } },
+      pieces: [
+        // The gatehouse: the portcullis across it is in the real world only
+        { type: 'floor', min: [-2.5, 14], max: [2.5, 24], surface: 'boards2' },
+        { type: 'wall', from: [-2.5, 24], to: [2.5, 24], surface: 'panel' },
+        { type: 'wall', from: [-2.5, 14], to: [-2.5, 24], surface: 'panel' },
+        { type: 'wall', from: [2.5, 24], to: [2.5, 14], surface: 'panel' },
+        // The courtyard, its wall to the gatehouse with the way in, and its wall to the key room with the way on
+        { type: 'floor', min: [-4, 4], max: [4, 14], surface: 'denFloor' },
+        ...wallWithDoors([-4, 14], [4, 14], [[3, 5]], 'denWall'),
+        { type: 'wall', from: [-4, 4], to: [-4, 14], surface: 'denWall' },
+        { type: 'wall', from: [4, 14], to: [4, 4], surface: 'denWall' },
+        ...wallWithDoors([-4, 4], [4, 4], [[3, 5]], 'masonry'),
+        // The key room
+        { type: 'floor', min: [-4, -4], max: [4, 4], surface: 'flagstone' },
+        { type: 'wall', from: [-4, -4], to: [-4, 4], surface: 'masonry' },
+        { type: 'wall', from: [4, 4], to: [4, -4], surface: 'masonry' },
+        ...wallWithDoors([-4, -4], [4, -4], [[3, 5]], 'masonry', { height: 0.8 }),
+        // The throne room
+        { type: 'floor', min: [-4, -16], max: [4, -4], surface: 'lairFloor' },
+        { type: 'wall', from: [-4, -16], to: [-4, -4], surface: 'lairWall' },
+        { type: 'wall', from: [4, -4], to: [4, -16], surface: 'lairWall' },
+        { type: 'wall', from: [4, -16], to: [-4, -16], surface: 'lairWall' },
+      ],
+      field: {
+        grid: { origin: [-3.5, -15.5], cols: 8, rows: 30, blocked: KEY_ROOM },
+        parts: [
+          swapLever('lever', [1.8, 0, 20]),
+          {
+            kind: 'realm',
+            id: 'gatehouse',
+            levers: ['lever'],
+            real: { walls: [{ from: [-2.5, 17], to: [2.5, 17], surface: 'panel' }] },
+            ghost: { walls: [{ from: [-2.5, 16], to: [0.5, 16], surface: 'ectoplasm' }] },
+          },
+          patrol('walker', [[0, 25], [1, 25], [2, 25], [3, 25], [4, 25], [5, 25], [6, 25], [7, 25]]),
+          chaser('hunter', [6, 21]),
+          key('red', [-2.5, 0, 2], 'red'),
+          key('gold', [2.5, 0, -2], 'gold'),
+          lockedDoor('door', [-4, -4], [4, -4], [3, 5], 'red'),
+          boss('demon', [3, 5], 3, { shield: 'gold' }),
+        ],
+      },
+      decor: [
+        { type: 'column', at: [-4.5, -3.6, 23], size: [0.45, 2.8, 0], color: 0x5a4a52 },
+        { type: 'column', at: [4.5, -3.6, 23], size: [0.45, 2.8, 0], color: 0x5a4a52 },
+        { type: 'tower', at: [-7, -3.6, 16], size: [3, 4, 3], color: 0x3a3340 },
+        { type: 'tower', at: [7, -3.6, 16], size: [3, 4, 3], color: 0x3a3340 },
+        { type: 'rock', at: [-6.5, -3.6, 9], size: [2.4, 0, 0], color: 0x4b4149 },
+        { type: 'obelisk', at: [6.5, -3.6, 8], size: [1.2, 5, 0], color: 0x3a3340 },
+        { type: 'column', at: [-6, -3.6, 0], size: [0.5, 3, 0], color: 0x5b5663 },
+        { type: 'column', at: [6, -3.6, 0], size: [0.5, 3, 0], color: 0x5b5663 },
+        { type: 'crystals', at: [-6.5, -3.6, -8], size: [2, 0, 0], color: 0xff6a3d },
+        { type: 'crystals', at: [6.5, -3.6, -12], size: [2, 0, 0], color: 0xff6a3d },
+        { type: 'obelisk', at: [-6.5, -3.6, -15], size: [1.3, 6, 0], color: 0x2c1f2e },
+        { type: 'obelisk', at: [6.5, -3.6, -17], size: [1.3, 6, 0], color: 0x2c1f2e },
+      ],
+      zones: [FALL],
+      outOfBounds: 'lastPosition',
+      camera: { pitch: 58, maxDistance: 52 },
     },
   ],
 };

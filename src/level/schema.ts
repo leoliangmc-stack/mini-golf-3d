@@ -179,8 +179,18 @@ export type BallSize = 'small' | 'medium' | 'large';
  * - `sequence`: the steps one after the other. A cup that is not the current step is
  *   not there yet: it appears when the steps before it are done. A cup ends the round
  *   for the ball that drops into it, so it belongs at the end.
+ * - `boss`: beat one of the hole's works (SPEC v9 3.6).
  */
-export type GoalDef = CupGoal | KnockdownGoal | SequenceGoal;
+export type GoalDef = CupGoal | KnockdownGoal | SequenceGoal | BossGoal;
+
+/**
+ * Beat the boss (SPEC v9 3.6): strike the weak spot of the part called `part` until
+ * it has no health left. There is no cup; the hole ends once the balls have stopped.
+ */
+export interface BossGoal {
+  type: 'boss';
+  part: string;
+}
 
 export interface CupGoal extends CupDef {
   type: 'cup';

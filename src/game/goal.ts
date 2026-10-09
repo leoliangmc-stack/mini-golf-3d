@@ -1,5 +1,6 @@
 import type { XYZ } from '../core/types';
 import { xyz } from '../core/types';
+import type { FieldDef } from '../level/field';
 import type { CupGoal, GoalDef, KnockdownGoal, PinDef } from '../level/schema';
 import { Pin, tiltCosine } from '../physics/props';
 import type { SurfaceMap } from '../physics/surfaces';
@@ -31,15 +32,36 @@ function pinsAnchor(pins: readonly PinDef[]): XYZ {
   return { x: sum.x / n, y: sum.y / n, z: sum.z / n };
 }
 
+/** Where a boss stands as the hole starts: the middle of its four cells, on the ground. */
+function bossStart(id: string, field?: FieldDef): XYZ {
+  const def = field?.parts.find((part) => part.kind === 'boss' && part.id === id);
+  const grid = field?.grid;
+  if (!def || def.kind !== 'boss' || !grid) return { x: 0, y: 0, z: 0 };
+  const cell = grid.cell ?? 1;
+  return { x: grid.origin[0] + (def.cell[0] + 0.5) * cell, y: grid.y ?? 0, z: grid.origin[1] + (def.cell[1] + 0.5) * cell };
+}
+
 /**
  * The point a goal is at, for the camera to keep in view with the ball: the middle of
- * a cup's track, the middle of a group of pins, the first step of a sequence.
+ * a cup's track, the middle of a group of pins, the first step of a sequence, where a
+ * boss starts (which needs the hole's works, `field`).
  */
-export function goalAnchor(goal: GoalDef): XYZ {
+export function goalAnchor(goal: GoalDef, field?: FieldDef): XYZ {
   if (goal.type === 'cup') return cupAnchor(goal);
   if (goal.type === 'knockdown') return pinsAnchor(goal.pins);
-  return goal.steps.length > 0 ? goalAnchor(goal.steps[0]) : { x: 0, y: 0, z: 0 };
+  if (goal.type === 'boss') return bossStart(goal.part, field);
+  return goal.steps.length > 0 ? goalAnchor(goal.steps[0], field) : { x: 0, y: 0, z: 0 };
 }
+
+/** What a goal with a boss in it asks the round about the boss, which is one of the hole's works. */
+export interface GoalHost {
+  /** True once the boss called `id` has no health left. */
+  bossDown(id: string): boolean;
+  /** Where that boss is right now. */
+  bossAt(id: string): XYZ;
+}
+
+const NO_HOST: GoalHost = { bossDown: () => false, bossAt: () => ({ x: 0, y: 0, z: 0 }) };
 
 /** A cup while a round is on. */
 export interface CupState {
@@ -64,6 +86,7 @@ export interface PinGroup {
 type Node =
   | { kind: 'cup'; cup: CupState }
   | { kind: 'pins'; group: PinGroup }
+  | { kind: 'boss'; id: string }
   | { kind: 'sequence'; steps: Node[] };
 
 /**
@@ -78,11 +101,19 @@ export class Goal {
   readonly groups: PinGroup[] = [];
   /** True if any cup travels or has a lid, so a ball lying still can still be taken. */
   readonly live: boolean;
+  /** True for a goal with a boss in it: the hole ends once the balls have stopped, not the moment it is met (SPEC v9 3.6). */
+  readonly restFirst: boolean;
   private readonly root: Node;
 
-  constructor(def: GoalDef, world: PhysicsWorld, surfaces: SurfaceMap) {
+  constructor(
+    def: GoalDef,
+    world: PhysicsWorld,
+    surfaces: SurfaceMap,
+    private readonly host: GoalHost = NO_HOST,
+  ) {
     this.root = this.build(def, world, surfaces);
     this.live = this.cups.some((cup) => cup.live);
+    this.restFirst = JSON.stringify(def).includes('"boss"') && hasBoss(this.root);
     this.refresh();
   }
 
@@ -109,6 +140,7 @@ export class Goal {
       this.pins.push(...group.pins);
       return { kind: 'pins', group };
     }
+    if (def.type === 'boss') return { kind: 'boss', id: def.part };
     // A cup ends the round for the ball that drops in, so a step with a cup in it can
     // only be the last: after an earlier one there would be no ball left to play the
     // rest with, and no way for the round to end.
@@ -122,7 +154,14 @@ export class Goal {
 
   /** True once everything the goal asks for has been done. */
   get met(): boolean {
-    return done(this.root);
+    return this.done(this.root);
+  }
+
+  private done(node: Node): boolean {
+    if (node.kind === 'cup') return node.cup.sunk > 0;
+    if (node.kind === 'pins') return node.group.pins.every((pin) => pin.down);
+    if (node.kind === 'boss') return this.host.bossDown(node.id);
+    return node.steps.every((step) => this.done(step));
   }
 
   /** Pins still standing, over the whole goal. */
@@ -144,7 +183,7 @@ export class Goal {
         let open = active;
         for (const step of node.steps) {
           visit(step, open);
-          open &&= done(step);
+          open &&= this.done(step);
         }
       }
     };
@@ -156,10 +195,11 @@ export class Goal {
   focus(): XYZ {
     const current = (node: Node): Node => {
       if (node.kind !== 'sequence' || node.steps.length === 0) return node;
-      return current(node.steps.find((step) => !done(step)) ?? node.steps[node.steps.length - 1]);
+      return current(node.steps.find((step) => !this.done(step)) ?? node.steps[node.steps.length - 1]);
     };
     const node = current(this.root);
     if (node.kind === 'cup') return cupAnchor(node.cup.def);
+    if (node.kind === 'boss') return this.host.bossAt(node.id);
     if (node.kind === 'pins') {
       const standing = node.group.pins.filter((pin) => !pin.down);
       return pinsAnchor((standing.length > 0 ? standing : node.group.pins).map((pin) => pin.def));
@@ -168,8 +208,7 @@ export class Goal {
   }
 }
 
-function done(node: Node): boolean {
-  if (node.kind === 'cup') return node.cup.sunk > 0;
-  if (node.kind === 'pins') return node.group.pins.every((pin) => pin.down);
-  return node.steps.every(done);
+function hasBoss(node: Node): boolean {
+  if (node.kind === 'boss') return true;
+  return node.kind === 'sequence' && node.steps.some(hasBoss);
 }

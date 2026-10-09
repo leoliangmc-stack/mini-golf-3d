@@ -411,6 +411,56 @@ export function registerThemes(): void {
     sunIntensity: 1.9,
     sea: { color: 0x121c33, y: -3.6 },
   });
+  // Haunted house: candlelight; the ghost world is drawn cold over it.
+  registerTheme('haunted', {
+    sky: 0x2b2238,
+    ambientSky: 0xffe6c4,
+    ambientGround: 0x4a3650,
+    ambientIntensity: 1.6,
+    sun: 0xffd9a8,
+    sunIntensity: 1.9,
+    sea: { color: 0x1c1626, y: -3.6 },
+  });
+  // Monster den: a cave by torchlight.
+  registerTheme('den', {
+    sky: 0x1f1a24,
+    ambientSky: 0xd9c9b8,
+    ambientGround: 0x3b3340,
+    ambientIntensity: 1.7,
+    sun: 0xffc98a,
+    sunIntensity: 1.8,
+    sea: { color: 0x15111a, y: -3.6 },
+  });
+  // Dungeon: grey light through a grating.
+  registerTheme('dungeon', {
+    sky: 0x454554,
+    ambientSky: 0xe6e8f2,
+    ambientGround: 0x55525f,
+    ambientIntensity: 1.6,
+    sun: 0xeef0ff,
+    sunIntensity: 1.9,
+    sea: { color: 0x2a2a35, y: -3.6 },
+  });
+  // Boss lair: embers underfoot.
+  registerTheme('lair', {
+    sky: 0x2a1420,
+    ambientSky: 0xffd2b8,
+    ambientGround: 0x5a2a30,
+    ambientIntensity: 1.7,
+    sun: 0xffb48a,
+    sunIntensity: 1.9,
+    sea: { color: 0x1a0c12, y: -3.6 },
+  });
+  // The Chapter 9 finale: the demon's castle under a red sky.
+  registerTheme('castle', {
+    sky: 0x3a1a2e,
+    ambientSky: 0xffdcc8,
+    ambientGround: 0x4a2a3a,
+    ambientIntensity: 1.6,
+    sun: 0xffc0a0,
+    sunIntensity: 1.9,
+    sea: { color: 0x1e0f18, y: -3.6 },
+  });
   registerTheme('pirate', {
     sky: 0x9fd8f0,
     ambientSky: 0xffffff,

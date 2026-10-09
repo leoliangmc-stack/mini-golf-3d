@@ -64,7 +64,7 @@ export function renderThumbnail(
   camera.configure(hole.camera);
   const [tx, ty, tz] = hole.tee;
   const tee = { x: tx, y: ty, z: tz };
-  camera.snapTo(tee, goalAnchor(hole.goal), framingPoints(hole, tee));
+  camera.snapTo(tee, goalAnchor(hole.goal, hole.field), framingPoints(hole, tee));
 
   const target = new THREE.WebGLRenderTarget(width, height, { samples: 4 });
   const pixels = new Uint8Array(width * height * 4);

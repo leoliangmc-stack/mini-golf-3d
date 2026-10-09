@@ -32,6 +32,7 @@ import type {
 } from '../level/field';
 import { getSurface } from '../physics/surfaces';
 import { pointsView, rotorView, trainView, tunnelView } from './cityViews';
+import { bossView, doorView, keyView, monsterView, realmView } from './questViews';
 import { echoPlateView, echoView } from './strangeViews';
 
 /** What a part's picture needs to know each frame besides the part itself. */
@@ -50,7 +51,8 @@ export interface PartView {
   update?(part: Part, frame: ViewFrame): void;
 }
 
-export type PartViewBuilder<D extends PartDef = PartDef> = (def: D, field: FieldDef) => PartView;
+/** `bounds` is the ground the hole covers, for a picture that has to reach over all of it. */
+export type PartViewBuilder<D extends PartDef = PartDef> = (def: D, field: FieldDef, bounds?: Bounds) => PartView;
 
 const registry = new Map<string, PartViewBuilder>();
 
@@ -1291,7 +1293,7 @@ export function buildFieldView(def: FieldDef, bounds?: Bounds): FieldView {
   const group = new THREE.Group();
   const grid = gridView(def);
   if (grid) group.add(grid);
-  const views = def.parts.map((part) => registry.get(part.kind)?.(part, def) ?? null);
+  const views = def.parts.map((part) => registry.get(part.kind)?.(part, def, bounds) ?? null);
   for (const view of views) if (view) group.add(view.object);
   const hasLight = def.parts.some((part) => part.kind === 'emitter');
   const beams = hasLight ? beamsView(bounds) : null;
@@ -1333,4 +1335,9 @@ export function registerBuiltinPartViews(): void {
   registerPartView('rotor', rotorView);
   registerPartView('echo', echoView);
   registerPartView('echoPlate', echoPlateView);
+  registerPartView('realm', realmView);
+  registerPartView('monster', monsterView);
+  registerPartView('key', keyView);
+  registerPartView('door', doorView);
+  registerPartView('boss', bossView);
 }

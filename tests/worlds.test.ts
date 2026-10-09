@@ -26,7 +26,7 @@ describe('world data', () => {
     }
   });
 
-  it('is the game the SPECs describe: 18 + 1 holes, then 12 + 1 seven times over, 110 in all', () => {
+  it('is the game the SPECs describe: 18 + 1 holes, then 12 + 1 eight times over, 123 in all', () => {
     expect(CHAPTERS.map((chapter) => chapter.worlds.map((world) => world.id))).toEqual([
       ['ice', 'desert', 'sky', 'pirate', 'magnet', 'gravity'],
       ['forest', 'city', 'moving', 'bomb'],
@@ -36,19 +36,21 @@ describe('world data', () => {
       ['toy', 'assembly', 'music', 'clock'],
       ['subway', 'rail', 'fair', 'maze'],
       ['phantom', 'hall', 'mirror', 'echo'],
+      ['haunted', 'den', 'dungeon', 'lair'],
     ]);
     const counts = CHAPTERS.map((chapter) => stagesOf(chapter).flatMap((stage) => stage.holes).length);
-    expect(counts).toEqual([19, 13, 13, 13, 13, 13, 13, 13]);
-    expect(holes.length - TEST_WORLD.holes.length).toBe(110);
+    expect(counts).toEqual([19, 13, 13, 13, 13, 13, 13, 13, 13]);
+    expect(holes.length - TEST_WORLD.holes.length).toBe(123);
   });
 
   it.each(holes)('$hole.id is well formed', ({ hole }) => {
     const session = new Session(hole);
     const { ground } = session.compiled;
-    // Every hole can be finished: it has a cup or pins.
+    // Every hole can be finished: it has a cup or pins, or a boss to beat (SPEC v9 3.6).
     const cups = goalCups(hole.goal);
     const pins = goalPins(hole.goal);
-    expect(cups.length + pins.length).toBeGreaterThan(0);
+    const bosses = JSON.stringify(hole.goal).includes('"boss"') ? 1 : 0;
+    expect(cups.length + pins.length + bosses).toBeGreaterThan(0);
     // A cup is on the ground, and stays on it wherever its track takes it.
     for (const cup of cups) {
       for (const point of cupTrack(cup)) {

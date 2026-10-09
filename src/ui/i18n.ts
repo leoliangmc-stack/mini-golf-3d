@@ -110,6 +110,19 @@ export const TEXT = {
   noTurnsLeft: pick('NO TURNS LEFT', '转动次数用完了'),
   ballInTheWay: pick('THE BALL IS IN THE WAY', '球挡住了这组墙'),
   shadowBack: pick('THE SHADOW IS BACK WHERE IT WAS', '影子球回到了原位'),
+  caught: pick('CAUGHT!  +1', '被抓住了  +1'),
+  keys: pick('KEYS', '钥匙'),
+  noKeys: pick('NO KEY', '没有钥匙'),
+  boss: pick('BOSS', 'BOSS'),
+  shieldUp: pick('THE SHIELD IS UP: FIND THE KEY', '护盾升起：去找钥匙'),
+  bossDown: pick('THE BOSS IS DOWN!', 'BOSS 倒下了！'),
+  theEnd: pick('THE END · YOU BEAT THE GAME!', '全部通关！'),
+  /** Result of a hole whose goal is a boss. */
+  beatenIn: (strokes: number) => (zh() ? `${strokes} 杆击败` : `BEATEN IN ${strokes}`),
+  keyColor: (color: string) => {
+    const names = zh() ? { red: '红', blue: '蓝', gold: '金' } : { red: 'RED', blue: 'BLUE', gold: 'GOLD' };
+    return (names as Record<string, string>)[color] ?? color;
+  },
   /** How many turns of a wall group the hole still allows, out of how many. */
   turns: (left: number, total: number) => (zh() ? `转动 ${left} / ${total}` : `TURNS ${left} / ${total}`),
   allComplete: (holes: number) => (zh() ? `${holes} 洞全部完成！` : `ALL ${holes} HOLES COMPLETE!`),

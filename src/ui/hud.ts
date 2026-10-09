@@ -44,6 +44,8 @@ export function createHud(game: Game, actions: HudActions): void {
   const pins = byId('pins');
   const undo = byId<HTMLButtonElement>('undo');
   const gold = byId('gold');
+  const keys = byId('keys');
+  const boss = byId('boss');
   const turns = byId('turns');
   const alert = byId('alert');
   const wind = byId('wind');
@@ -110,6 +112,10 @@ export function createHud(game: Game, actions: HudActions): void {
     const coins = field?.all('coin') ?? [];
     const coinsHeld = coins.filter((coin) => coin.on).length;
     const dragon = field?.all('dragon')[0] as { def: { threshold: number }; on: boolean } | undefined;
+    // Chapter 9: the keys in hand, and the boss.
+    const keyParts = (field?.all('key') ?? []) as unknown as { def: { color: string }; carried: boolean }[];
+    const carried = keyParts.filter((part) => part.carried).map((part) => part.def.color);
+    const bossPart = field?.all('boss')[0] as unknown as { def: { hp: number }; hp: number; shielded: boolean } | undefined;
     const state = [
       skill ? skill.charges : -1,
       session.frozen,
@@ -120,6 +126,8 @@ export function createHud(game: Game, actions: HudActions): void {
       coins.length > 0 ? coinsHeld : -1,
       dragon ? field!.alert : -1,
       field && field.turnsAllowed > 0 ? field.turnsLeft : -1,
+      keyParts.length > 0 ? carried.join('+') : '-',
+      bossPart ? `${bossPart.hp}/${bossPart.shielded}` : '-',
     ].join();
     if (state === extrasShown) return;
     extrasShown = state;
@@ -145,6 +153,17 @@ export function createHud(game: Game, actions: HudActions): void {
     if (field && turnsAllowed > 0) {
       turns.textContent = TEXT.turns(field.turnsLeft, turnsAllowed);
       turns.classList.toggle('spent', field.turnsLeft === 0);
+    }
+    keys.hidden = keyParts.length === 0;
+    if (keyParts.length > 0) {
+      keys.replaceChildren(carried.length > 0 ? TEXT.keys() : TEXT.noKeys(), ...carried.map((color) => Object.assign(document.createElement('i'), { className: color })));
+      keys.classList.toggle('none', carried.length === 0);
+    }
+    boss.hidden = !bossPart;
+    if (bossPart) {
+      boss.textContent = `${TEXT.boss()} ${'♥'.repeat(bossPart.hp)}${'♡'.repeat(Math.max(0, bossPart.def.hp - bossPart.hp))}`;
+      boss.classList.toggle('shielded', bossPart.shielded);
+      boss.classList.toggle('down', bossPart.hp === 0);
     }
     gold.hidden = coins.length === 0;
     if (coins.length > 0) {
@@ -218,8 +237,9 @@ export function createHud(game: Game, actions: HudActions): void {
 
   const fillResult = (outcome: Outcome) => {
     const { challenge, par, goal } = game.hole;
-    // A hole with no cup is not "holed": its pins are cleared.
-    const done = goalCups(goal).length === 0 ? TEXT.clearedIn(outcome.strokes) : TEXT.holedIn(outcome.strokes);
+    // A hole with no cup is not "holed": its pins are cleared, or its boss is beaten (SPEC v9 3.6).
+    const bossGoal = JSON.stringify(goal).includes('"boss"');
+    const done = bossGoal ? TEXT.beatenIn(outcome.strokes) : goalCups(goal).length === 0 ? TEXT.clearedIn(outcome.strokes) : TEXT.holedIn(outcome.strokes);
     byId('result-sub').textContent = actions.resultHeading();
     byId('result-title').textContent = outcome.holed ? done : TEXT.strokeLimit();
     byId('result-par').textContent = `${TEXT.result(outcome.strokes, par)}  ·  ${TEXT.time(outcome.ticks * FIXED_DT)}`;
@@ -304,6 +324,9 @@ export function createHud(game: Game, actions: HudActions): void {
       case 'outOfBounds':
         showToast(TEXT.outOfBounds());
         break;
+      case 'caught':
+        showToast(TEXT.caught());
+        break;
       case 'timeAdded':
         showToast(TEXT.timeBonus(event.seconds));
         break;
@@ -326,6 +349,8 @@ export function createHud(game: Game, actions: HudActions): void {
         if (event.name === 'dragonWake') showToast(TEXT.dragonWakes());
         else if (event.name === 'dragonStir') showToast(TEXT.dragonStirs());
         else if (event.name === 'shadowBack') showToast(TEXT.shadowBack());
+        else if (event.name === 'bossDown') showToast(TEXT.bossDown());
+        else if (event.name === 'bossHit' && (game.session.field?.all('boss')[0] as unknown as { shielded: boolean } | undefined)?.shielded) showToast(TEXT.shieldUp());
         break;
       case 'pinDown':
         // On a hole that is all pins the result panel says it; here there is more to do.

@@ -173,4 +173,25 @@ export function registerSurfaces(): void {
   registerSurface('echoFloor', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x7a8ca3 });
   registerSurface('echoWall', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0x34405a });
   registerSurface('hush', { restitution: 0.04, rollingResistance: 2.5, drag: 1.5, color: 0x7fa58c });
+
+  // --- Chapter 9 ---
+  // A monster's hide, and a boss's: dull, so a ball that runs into one does not fly off across the room.
+  registerSurface('monster', { restitution: 0.4, rollingResistance: 0.5, drag: 0.7, color: 0x6a4c93 });
+  // Its weak spot gives a little; its shield gives nothing.
+  registerSurface('weakSpot', { restitution: 0.5, rollingResistance: 0.5, drag: 0.7, color: 0xff4f6a });
+  registerSurface('shield', { restitution: 0.75, rollingResistance: 0.5, drag: 0.7, color: 0x6ad7ff });
+  // Haunted house: floorboards and panelling, and what the ghost world is made of
+  registerSurface('boards2', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x8d6a4a });
+  registerSurface('panel', { restitution: 0.6, rollingResistance: 0.5, drag: 0.7, color: 0x4a3028 });
+  registerSurface('ectoplasm', { restitution: 0.6, rollingResistance: 0.5, drag: 0.7, color: 0x8ff3e8 });
+  registerSurface('ectoFloor', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x5fc9c0 });
+  // Monster den: a cave floor and its rock
+  registerSurface('denFloor', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x8a7f72 });
+  registerSurface('denWall', { restitution: 0.6, rollingResistance: 0.5, drag: 0.7, color: 0x4b4149 });
+  // Dungeon: flagstones and masonry
+  registerSurface('flagstone', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x9a9aa0 });
+  registerSurface('masonry', { restitution: 0.65, rollingResistance: 0.5, drag: 0.7, color: 0x4f4a57 });
+  // Boss lair: a scorched floor and black rock
+  registerSurface('lairFloor', { restitution: 0.2, rollingResistance: 0.5, drag: 0.7, color: 0x6b4a52 });
+  registerSurface('lairWall', { restitution: 0.6, rollingResistance: 0.5, drag: 0.7, color: 0x2c1f2e });
 }

@@ -5,6 +5,7 @@ import { Bell, Coin, Dragon, Fire } from './hoard';
 import { Crystal, Emitter, Receiver } from './light';
 import { Belt, Dial, Pulse, TimeZone } from './machines';
 import { Rotor } from './maze';
+import { Boss, Door, Key, Monster, Realm } from './quest';
 import { Slider } from './slider';
 import { Echo, EchoPlate } from './strange';
 import { Gate, Plate, Stone } from './tomb';
@@ -35,4 +36,9 @@ export function registerBuiltinParts(): void {
   registerPart('train', (def, field, id) => new Train(def, field, id));
   registerPart('echo', (def, field, id) => new Echo(def, field, id));
   registerPart('echoPlate', (def, field, id) => new EchoPlate(def, field, id));
+  registerPart('realm', (def, field, id) => new Realm(def, field, id));
+  registerPart('monster', (def, field, id) => new Monster(def, field, id));
+  registerPart('key', (def, field, id) => new Key(def, field, id));
+  registerPart('door', (def, field, id) => new Door(def, field, id));
+  registerPart('boss', (def, field, id) => new Boss(def, field, id));
 }

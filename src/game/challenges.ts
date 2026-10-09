@@ -22,6 +22,8 @@ export interface RoundStats {
   timeLeft: number | null;
   /** Strokes taken back. */
   undos: number;
+  /** Times a monster caught the ball (SPEC v9 3.2). Counted apart from going out of bounds. */
+  caught: number;
   /** Ids of the hole's works whose signal was on when the hole ended: a gate that had opened, a dragon awake. */
   partsOn: Set<string>;
   /** Coins still lying on the course when the hole ended. */
@@ -40,6 +42,7 @@ export const emptyStats = (): RoundStats => ({
   cues: {},
   timeLeft: null,
   undos: 0,
+  caught: 0,
   partsOn: new Set(),
   coinsLeft: 0,
   turns: 0,
@@ -94,6 +97,8 @@ export function registerBuiltinChallenges(): void {
   );
   /** No stroke was taken back (SPEC v5 3.6). */
   registerChallenge('noUndo', (stats) => stats.undos === 0);
+  /** No monster ever caught the ball (SPEC v9 3.7). */
+  registerChallenge('noCaught', (stats) => stats.caught === 0);
   /** Every coin was picked up (SPEC v4 3.6). */
   registerChallenge('allCoins', (stats) => stats.coinsLeft === 0);
   /** The part called `part` was never set off, or only in a stroke that was taken back: the dragon is still asleep. */

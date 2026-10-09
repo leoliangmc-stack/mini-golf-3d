@@ -66,6 +66,12 @@ export const MUSIC: Record<string, MusicDef> = {
   looking: { bpm: 94, root: 58, scale: [0, 2, 3, 5, 7, 8, 11], wave: 'triangle', brightness: 1600 },
   echo: { bpm: 74, root: 64, scale: [0, 2, 5, 7, 9], wave: 'sine', brightness: 3200 },
   strange: { bpm: 116, root: 56, scale: [0, 1, 4, 6, 7, 10], wave: 'sawtooth', brightness: 1200 },
+  // Chapter 9
+  haunted: { bpm: 70, root: 57, scale: [0, 2, 3, 5, 7, 8, 11], wave: 'sine', brightness: 2200 },
+  den: { bpm: 96, root: 52, scale: [0, 3, 5, 6, 7, 10], wave: 'sawtooth', brightness: 900 },
+  dungeon: { bpm: 84, root: 55, scale: [0, 2, 3, 5, 7, 8, 10], wave: 'triangle', brightness: 1500 },
+  lair: { bpm: 128, root: 50, scale: [0, 1, 3, 5, 6, 8, 10], wave: 'sawtooth', brightness: 1100 },
+  castle: { bpm: 120, root: 52, scale: [0, 2, 3, 5, 7, 8, 11], wave: 'square', brightness: 1300 },
 };
 
 /** Chord roots, as scale steps, one per bar. */

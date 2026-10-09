@@ -2,6 +2,7 @@ import type { ChapterDef } from '../level/schema';
 import {
   CITY_DAY_OUT,
   COUNTDOWN_RUN,
+  DEMON_CASTLE,
   GAUNTLET,
   GRAND_FINALE,
   PRODUCTION_LINE,
@@ -18,7 +19,9 @@ import { CITY_WORLD } from './worlds/city';
 import { CLOCK_WORLD } from './worlds/clock';
 import { CLONE_WORLD } from './worlds/clone';
 import { DAM_WORLD } from './worlds/dam';
+import { DEN_WORLD } from './worlds/den';
 import { DESERT_WORLD } from './worlds/desert';
+import { DUNGEON_WORLD } from './worlds/dungeon';
 import { ECHO_WORLD } from './worlds/echo';
 import { FAIR_WORLD } from './worlds/fair';
 import { FOREST_WORLD } from './worlds/forest';
@@ -26,9 +29,11 @@ import { FREEZE_WORLD } from './worlds/freeze';
 import { GRAVITY_WORLD } from './worlds/gravity';
 import { GROW_WORLD } from './worlds/grow';
 import { HALL_WORLD } from './worlds/hall';
+import { HAUNTED_WORLD } from './worlds/haunted';
 import { HOARD_WORLD } from './worlds/hoard';
 import { ICE_WORLD } from './worlds/ice';
 import { JUNGLE_WORLD } from './worlds/jungle';
+import { LAIR_WORLD } from './worlds/lair';
 import { MAGNET_WORLD } from './worlds/magnet';
 import { MAZE_WORLD } from './worlds/maze';
 import { MIRROR_WORLD } from './worlds/mirror';
@@ -108,5 +113,13 @@ export const CHAPTERS: readonly ChapterDef[] = [
     worlds: [PHANTOM_WORLD, HALL_WORLD, MIRROR_WORLD, ECHO_WORLD],
     finale: STRANGE_GATE,
     after: 'ch7',
+  },
+  // Monster Quest (SPEC v9). It follows Chapter 8 on the main line, and closes the game.
+  {
+    id: 'ch9',
+    name: { en: 'Chapter 9', zh: '第九章' },
+    worlds: [HAUNTED_WORLD, DEN_WORLD, DUNGEON_WORLD, LAIR_WORLD],
+    finale: DEMON_CASTLE,
+    after: 'ch8',
   },
 ];

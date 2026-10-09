@@ -491,7 +491,119 @@ export interface EchoPlateDef {
   radius?: number;
 }
 
+/** One wall of a layer of a haunted house (SPEC v9 3.3), like a `WallPiece`. */
+export interface RealmWallDef {
+  from: Vec2;
+  to: Vec2;
+  /** Height of the ground it stands on. Defaults to 0. */
+  y?: number;
+  height?: number;
+  thickness?: number;
+  surface?: string;
+}
+
+/** One floor of a layer: a slab that is there only while its layer is solid. Lay it over air, or over the other layer's floor. */
+export interface RealmFloorDef {
+  min: Vec2;
+  max: Vec2;
+  /** Height of its top. Defaults to 0. */
+  y?: number;
+  surface?: string;
+}
+
+export interface RealmLayerDef {
+  walls?: readonly RealmWallDef[];
+  floors?: readonly RealmFloorDef[];
+}
+
+/**
+ * Two worlds in one place (SPEC v9 3.3): the real one and the ghost one, each with
+ * walls and floors of its own, and only one of them solid at a time. The rest of the
+ * hole's pieces are in both. A knock on a lever swaps them: the ghost world is solid
+ * while an odd number of the levers are on. A wall or a floor that becomes solid
+ * waits for any ball that is in its place to have gone.
+ *
+ * Its signal: the ghost world is the solid one.
+ */
+export interface RealmDef {
+  kind: 'realm';
+  id: string;
+  /** Ids of the levers (valves) that swap the worlds. */
+  levers: readonly string[];
+  real: RealmLayerDef;
+  ghost: RealmLayerDef;
+}
+
+/**
+ * A monster on the grid (SPEC v9 3.4). It stands still while a ball rolls and takes
+ * one step each time the ball has stopped: along its `path` and back for one that
+ * patrols, toward the ball for one that chases. A step into the ball's cell catches
+ * the ball, and the stroke is taken back at the cost of a stroke.
+ */
+export interface MonsterDef {
+  kind: 'monster';
+  id: string;
+  mode: 'patrol' | 'chase';
+  /** Where it starts. A patrol monster starts at the first cell of its path. */
+  cell?: Cell;
+  /** The cells a patrol monster walks, in order; it walks them back again from the end. */
+  path?: readonly Cell[];
+}
+
+export type KeyColor = 'red' | 'blue' | 'gold';
+
+/** A key on the ground (SPEC v9 3.5). A ball that rolls over it takes it. Its signal: it has been taken. */
+export interface KeyDef {
+  kind: 'key';
+  id: string;
+  at: Vec3;
+  color: KeyColor;
+}
+
+/**
+ * A locked door across a doorway (SPEC v9 3.5). A ball carrying a key of its colour
+ * opens it as it arrives, and the key is spent; to any other ball it is a wall. Once
+ * open it stays open. Its signal: it is open.
+ */
+export interface DoorDef {
+  kind: 'door';
+  id: string;
+  from: Vec2;
+  to: Vec2;
+  /** Height of the ground it stands on. Defaults to 0. */
+  y?: number;
+  height?: number;
+  thickness?: number;
+  color: KeyColor;
+}
+
+/**
+ * A boss on the grid (SPEC v9 3.6), standing on two cells by two, with its weak spot
+ * on its back. Each time the ball has stopped it turns to face the ball, and once it
+ * has been struck it also takes a step toward the ball first, as a chasing monster
+ * does. A ball striking the weak spot hard enough takes one off its health, once a
+ * stroke. Its signal: it is beaten.
+ */
+export interface BossDef {
+  kind: 'boss';
+  id: string;
+  /** The cell at the lowest column and row of the four it stands on. */
+  cell: Cell;
+  /** Compass heading it faces at the start: 0 is -Z, 90 is +X. Defaults to 180. */
+  facing?: number;
+  hp: number;
+  /** Colour of the key that opens the shield over its weak spot from the third phase on. Without one there is no shield. */
+  shield?: KeyColor;
+  /** How hard a ball has to strike the weak spot, as the change in its speed in m/s. Defaults to 1.5. */
+  hitSpeed?: number;
+}
+
 export type PartDef =
+  | RealmDef
+  | MonsterDef
+  | KeyDef
+  | DoorDef
+  | BossDef
   | EchoDef
   | EchoPlateDef
   | TunnelDef

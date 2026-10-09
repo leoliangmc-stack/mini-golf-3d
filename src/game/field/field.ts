@@ -16,6 +16,10 @@ export interface FieldHost {
   cue(name: string): void;
   /** A part has taken a ball off the course. */
   outOfBounds(ball: Ball): void;
+  /** A monster has caught a ball (SPEC v9 3.2): the stroke is taken back, as after an out-of-bounds, but counted apart. */
+  caught(ball: Ball): void;
+  /** Where the hole's cups are right now: cells a monster may not step onto. */
+  cups(): readonly XYZ[];
   /** A part has changed what it is doing: something for the camera to show once the ball has stopped. */
   changed(part: string): void;
   /**
@@ -67,6 +71,12 @@ export interface Part {
   hit?(ball: Ball, speed: number, collider: number): void;
   /** A stroke has just been played with `ball`. Called after the snapshot it goes back to was taken. */
   struck?(ball: Ball): void;
+  /**
+   * Every ball has stopped, and the stroke will end once no part is busy (SPEC v9
+   * 3.2). Once a stroke. A part that acts between strokes, a monster, moves now; the
+   * stroke waits for it.
+   */
+  stopped?(): void;
   /** That stroke is over: everything has stopped. Not called for a stroke that was taken back or ended out of bounds. */
   rested?(): void;
   save(): unknown;
@@ -416,6 +426,11 @@ export class Field {
   /** A stroke has just been played with `ball`. */
   struck(ball: Ball): void {
     for (const part of this.parts) part.struck?.(ball);
+  }
+
+  /** Every ball has stopped: the parts that move between strokes take their turn, in the order of the hole's data. */
+  stopped(): void {
+    for (const part of this.parts) part.stopped?.();
   }
 
   /** The stroke is over: every ball has stopped where it will lie. */
