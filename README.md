@@ -747,6 +747,12 @@ put off. It had shipped. The differences that follow from that come first.
 
 ### Where this differs from SPEC v1.0
 
+- **The gesture hint is a see-through hand, and it shows on all three Snow & Ice
+  holes.** SPEC 2.8 puts it on the first hole until the first stroke. Here each of the
+  three shows it until the first stroke played on that hole, so a player who reaches
+  the ramp or the bridge has the gesture in front of them again. Nothing is saved: the
+  hand is back on a later visit to those holes. It pulls straight down the screen,
+  toward the player, which on all three holes is the line of the first stroke.
 - **Audio is synthesised, not CC0 recordings.** Sound effects and a generated music
   loop per world come from Web Audio code (`src/audio/`), so the game ships no audio
   files. Swap in recorded tracks by replacing `src/audio/music.ts`.

@@ -3,6 +3,7 @@ import { FIXED_DT } from '../core/loop';
 import { goalCups } from '../game/goal';
 import type { Outcome } from '../game/session';
 import { byId } from './dom';
+import { INPUT } from '../input/slingshot';
 import { isWind } from '../physics/zones/wind';
 import { onLangChange, TEXT, tr } from './i18n';
 
@@ -59,8 +60,12 @@ export function createHud(game: Game, actions: HudActions): void {
   let aiming = false;
   let cardOpen = false;
   let lastOutcome: Outcome | null = null;
-  /** The slingshot hint is shown until the player's first stroke, then never again. */
-  let slingshotLearned = false;
+  /**
+   * The slingshot hand is shown on a hole that asks for it until the first stroke played
+   * there, then not again on that hole. Each of the first holes shows it afresh: a player
+   * at the ramp or the bridge has the gesture in front of them again.
+   */
+  let strokePlayed = false;
 
   const showToast = (text: string) => {
     window.clearTimeout(toastTimer);
@@ -301,7 +306,7 @@ export function createHud(game: Game, actions: HudActions): void {
   const refresh = () => {
     strokes.textContent = TEXT.strokes(game.session.strokes, game.hole.par);
     const wantsHint =
-      !slingshotLearned && (game.hole.hints?.includes('slingshot') ?? false) && game.session.phase === 'aiming';
+      !strokePlayed && (game.hole.hints?.includes('slingshot') ?? false) && game.session.phase === 'aiming';
     hint.classList.toggle('show', wantsHint && !aiming && !cardOpen);
   };
 
@@ -309,6 +314,7 @@ export function createHud(game: Game, actions: HudActions): void {
     switch (event.type) {
       case 'hole':
         hideTransient();
+        strokePlayed = false;
         // The rule card introduces a world, so it shows on that world's first hole only.
         setCard(event.intro && game.holeIndex === 0);
         relabel();
@@ -319,7 +325,7 @@ export function createHud(game: Game, actions: HudActions): void {
         if (event.power !== null) powerFill.style.height = `${Math.round(event.power * 100)}%`;
         break;
       case 'shot':
-        slingshotLearned = true;
+        strokePlayed = true;
         break;
       case 'outOfBounds':
         showToast(TEXT.outOfBounds());
@@ -377,6 +383,10 @@ export function createHud(game: Game, actions: HudActions): void {
     if (!hint.classList.contains('show')) return;
     const p = game.ballScreenPosition();
     hint.style.transform = `translate(${p.x}px, ${p.y}px)`;
+    // The hand pulls no further than a finger could: a real pull is full power
+    // `edgeMarginPx` short of the screen edge (see `dragRoom`), and the ball often sits
+    // near the bottom one.
+    hint.style.setProperty('--room', `${Math.max(0, window.innerHeight - p.y - INPUT.edgeMarginPx)}px`);
   });
 
   onLangChange(relabel);

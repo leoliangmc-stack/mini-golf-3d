@@ -44,6 +44,7 @@ export const ICE_WORLD: WorldDef = {
       par: 2,
       tee: [0, 0, 4.5],
       goal: { type: 'cup', position: [5.5, 1, -6], ...CUP },
+      hints: ['slingshot'],
       challenge: {
         type: 'firstStrokeInto',
         shape: { kind: 'box', center: [5.5, 1, -6], halfExtents: [1.5, 1, 2] },
@@ -79,6 +80,7 @@ export const ICE_WORLD: WorldDef = {
       par: 3,
       tee: [0, 0, 5.5],
       goal: { type: 'cup', position: [2, 0, -8], ...CUP },
+      hints: ['slingshot'],
       challenge: {
         type: 'firstStrokeInto',
         shape: { kind: 'box', center: [0, 0, -6], halfExtents: [3, 1, 3] },

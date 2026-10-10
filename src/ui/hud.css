@@ -196,7 +196,11 @@ body:not([data-mode='play']) #hud {
   transform: translate(-50%, 0);
 }
 
-/* Tutorial hint: a finger that pulls back from the ball and lets go. Anchored at the ball. */
+/*
+ * Tutorial hint: a see-through hand that comes down on the ball, pulls back and lets go,
+ * leaving a trail of the pull. Anchored at the ball; the fingertip is the origin. One
+ * cycle is 2.4 s: the hand arrives, presses (18%), pulls (to 60%), holds, lifts (82%).
+ */
 #hint {
   position: absolute;
   left: 0;
@@ -205,7 +209,11 @@ body:not([data-mode='play']) #hud {
   height: 0;
   opacity: 0;
   transition: opacity 0.25s;
-  --pull: min(90px, 22vh);
+  /* How far the hand pulls: a good pull, but never past the screen edge (`--room` is set from the ball's place each frame). */
+  --room: 90px;
+  --pull: max(36px, min(90px, 22vh, var(--room)));
+  --hand: 52px;
+  --cycle: 2.4s;
 }
 
 #hint.show {
@@ -235,58 +243,121 @@ body:not([data-mode='play']) #hud {
   border-radius: 2px;
   background: #fff;
   box-shadow: 0 0 0 1px rgba(29, 43, 58, 0.25);
-  animation: hint-band 2.2s ease-out infinite;
+  animation: hint-band var(--cycle) ease-out infinite;
 }
 
-.hint-finger {
+/* Where the finger touches the glass: a ring under the fingertip while it is pressed. */
+.hint-touch {
   position: absolute;
-  left: -19px;
-  top: -19px;
-  width: 38px;
-  height: 38px;
+  left: -13px;
+  top: -13px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  border: 3px solid #fff;
-  background: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 2px 10px rgba(29, 43, 58, 0.3);
-  animation: hint-finger 2.2s ease-out infinite;
+  border: 2px solid #fff;
+  background: rgba(255, 255, 255, 0.35);
+  animation: hint-touch var(--cycle) ease-out infinite;
 }
 
-@keyframes hint-finger {
+/* The hand: its fingertip, at (16, 4) of the drawing, sits on the origin. */
+.hint-hand {
+  position: absolute;
+  left: calc(var(--hand) * -16 / 48);
+  top: calc(var(--hand) * -4 / 48);
+  width: var(--hand);
+  height: calc(var(--hand) * 54 / 48);
+  overflow: visible;
+  fill: rgba(255, 255, 255, 0.6);
+  stroke: rgba(29, 43, 58, 0.7);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 3px 6px rgba(29, 43, 58, 0.35));
+  transform-origin: calc(var(--hand) * 16 / 48) calc(var(--hand) * 4 / 48);
+  animation: hint-hand var(--cycle) ease-out infinite;
+}
+
+@keyframes hint-hand {
   0% {
     opacity: 0;
-    transform: translateY(0) scale(1.3);
+    transform: translateY(0) scale(1.18);
   }
-  12% {
+  10% {
+    opacity: 1;
+    transform: translateY(0) scale(1.18);
+  }
+  18% {
+    transform: translateY(0) scale(1);
+  }
+  60%,
+  74% {
+    opacity: 1;
+    transform: translateY(var(--pull)) scale(1);
+  }
+  82% {
+    opacity: 1;
+    transform: translateY(var(--pull)) scale(1.18);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(var(--pull)) scale(1.18);
+  }
+}
+
+@keyframes hint-touch {
+  0%,
+  17% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  18% {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
   60%,
-  76% {
+  78% {
     opacity: 1;
     transform: translateY(var(--pull)) scale(1);
   }
   86%,
   100% {
     opacity: 0;
-    transform: translateY(var(--pull)) scale(1.5);
+    transform: translateY(var(--pull)) scale(1.6);
   }
 }
 
 @keyframes hint-band {
   0%,
-  12% {
+  18% {
     height: 0;
     opacity: 1;
   }
   60%,
-  76% {
+  78% {
     height: var(--pull);
     opacity: 1;
   }
-  80%,
+  86%,
   100% {
     height: 0;
     opacity: 0;
+  }
+}
+
+/* Without motion the hand is shown at the end of its pull, trail and all. */
+@media (prefers-reduced-motion: reduce) {
+  .hint-hand,
+  .hint-touch,
+  .hint-band {
+    animation: none;
+  }
+
+  .hint-hand,
+  .hint-touch {
+    transform: translateY(var(--pull));
+  }
+
+  .hint-band {
+    height: var(--pull);
   }
 }
 

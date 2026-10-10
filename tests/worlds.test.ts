@@ -26,6 +26,11 @@ describe('world data', () => {
     }
   });
 
+  it('shows the slingshot hand on every hole of the first world, and nowhere else (SPEC 2.8)', () => {
+    const withHint = holes.filter(({ hole }) => hole.hints?.includes('slingshot')).map(({ hole }) => hole.id);
+    expect(withHint).toEqual(CHAPTERS[0].worlds[0].holes.map((hole) => hole.id));
+  });
+
   it('is the game the SPECs describe: 18 + 1 holes, then 12 + 1 eight times over, 123 in all', () => {
     expect(CHAPTERS.map((chapter) => chapter.worlds.map((world) => world.id))).toEqual([
       ['ice', 'desert', 'sky', 'pirate', 'magnet', 'gravity'],
