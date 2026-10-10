@@ -20,12 +20,13 @@ beforeAll(setupEngine);
 const holes = allHoles(CHAPTERS);
 
 describe('reference solutions (SPEC v3 2.9)', () => {
+  // Plays every hole in one go: a second here, five on the CI runner's two cores.
   it('has exactly one for every hole of the game', () => {
     const report = checkAllReplays();
     expect(report.missing).toEqual([]);
     expect(report.orphans).toEqual([]);
     expect(Object.keys(REPLAYS).sort()).toEqual(holes.map((hole) => hole.id).sort());
-  });
+  }, 60_000);
 
   it.each(holes)('$id still ends exactly as recorded', (hole) => {
     const check = checkReplay(hole, REPLAYS[hole.id]);
