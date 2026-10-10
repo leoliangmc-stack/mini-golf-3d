@@ -45,6 +45,8 @@ body {
   pointer-events: none;
   padding: calc(var(--safe-top) + 10px) calc(var(--safe-right) + 14px) calc(var(--safe-bottom) + 10px)
     calc(var(--safe-left) + 14px);
+  /* One cycle of the tutorial hand, shared with the power bar that fills in step with it. */
+  --hint-cycle: 2.4s;
 }
 
 .hud-top {
@@ -160,7 +162,8 @@ body:not([data-mode='play']) #hud {
   transition: opacity 0.12s;
 }
 
-#power.active {
+#power.active,
+#power.demo {
   opacity: 1;
 }
 
@@ -171,6 +174,26 @@ body:not([data-mode='play']) #hud {
   background: linear-gradient(to top, #6fcf6f, #ffd23d 55%, var(--accent));
   background-size: 100% min(46vh, 180px);
   background-position: bottom;
+}
+
+/* While the tutorial hand pulls, the bar fills to what that pull would play (`--demo`, set from the ball's place). */
+#power.demo #power-fill {
+  animation: hint-power var(--hint-cycle) ease-out infinite;
+}
+
+@keyframes hint-power {
+  0%,
+  18% {
+    height: 0%;
+  }
+  60%,
+  78% {
+    height: var(--demo, 50%);
+  }
+  82%,
+  100% {
+    height: 0%;
+  }
 }
 
 #toast {
@@ -199,7 +222,8 @@ body:not([data-mode='play']) #hud {
 /*
  * Tutorial hint: a see-through hand that comes down on the ball, pulls back and lets go,
  * leaving a trail of the pull. Anchored at the ball; the fingertip is the origin. One
- * cycle is 2.4 s: the hand arrives, presses (18%), pulls (to 60%), holds, lifts (82%).
+ * cycle: the hand arrives, presses (18%), pulls (to 60%), holds, lifts (82%). The parts
+ * animate only while shown, so that they and the power bar set off together.
  */
 #hint {
   position: absolute;
@@ -209,11 +233,9 @@ body:not([data-mode='play']) #hud {
   height: 0;
   opacity: 0;
   transition: opacity 0.25s;
-  /* How far the hand pulls: a good pull, but never past the screen edge (`--room` is set from the ball's place each frame). */
-  --room: 90px;
-  --pull: max(36px, min(90px, 22vh, var(--room)));
+  /* How far the hand pulls. Set from the ball's place each frame; this is only a fallback. */
+  --pull: 90px;
   --hand: 52px;
-  --cycle: 2.4s;
 }
 
 #hint.show {
@@ -243,7 +265,10 @@ body:not([data-mode='play']) #hud {
   border-radius: 2px;
   background: #fff;
   box-shadow: 0 0 0 1px rgba(29, 43, 58, 0.25);
-  animation: hint-band var(--cycle) ease-out infinite;
+}
+
+#hint.show .hint-band {
+  animation: hint-band var(--hint-cycle) ease-out infinite;
 }
 
 /* Where the finger touches the glass: a ring under the fingertip while it is pressed. */
@@ -256,7 +281,10 @@ body:not([data-mode='play']) #hud {
   border-radius: 50%;
   border: 2px solid #fff;
   background: rgba(255, 255, 255, 0.35);
-  animation: hint-touch var(--cycle) ease-out infinite;
+}
+
+#hint.show .hint-touch {
+  animation: hint-touch var(--hint-cycle) ease-out infinite;
 }
 
 /* The hand: its fingertip, at (16, 4) of the drawing, sits on the origin. */
@@ -273,7 +301,10 @@ body:not([data-mode='play']) #hud {
   stroke-linejoin: round;
   filter: drop-shadow(0 3px 6px rgba(29, 43, 58, 0.35));
   transform-origin: calc(var(--hand) * 16 / 48) calc(var(--hand) * 4 / 48);
-  animation: hint-hand var(--cycle) ease-out infinite;
+}
+
+#hint.show .hint-hand {
+  animation: hint-hand var(--hint-cycle) ease-out infinite;
 }
 
 @keyframes hint-hand {
@@ -343,11 +374,12 @@ body:not([data-mode='play']) #hud {
   }
 }
 
-/* Without motion the hand is shown at the end of its pull, trail and all. */
+/* Without motion the hand is shown at the end of its pull, trail, power bar and all. */
 @media (prefers-reduced-motion: reduce) {
-  .hint-hand,
-  .hint-touch,
-  .hint-band {
+  #hint.show .hint-hand,
+  #hint.show .hint-touch,
+  #hint.show .hint-band,
+  #power.demo #power-fill {
     animation: none;
   }
 
@@ -358,6 +390,10 @@ body:not([data-mode='play']) #hud {
 
   .hint-band {
     height: var(--pull);
+  }
+
+  #power.demo #power-fill {
+    height: var(--demo, 50%);
   }
 }
 

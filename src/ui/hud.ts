@@ -3,12 +3,19 @@ import { FIXED_DT } from '../core/loop';
 import { goalCups } from '../game/goal';
 import type { Outcome } from '../game/session';
 import { byId } from './dom';
-import { INPUT } from '../input/slingshot';
+import { dragRoom, dragToPull, fullDragPx, TAP } from '../input/slingshot';
 import { isWind } from '../physics/zones/wind';
 import { onLangChange, TEXT, tr } from './i18n';
 
 /** Delay before the result panel, so the ball is seen dropping into the cup first. */
 const RESULT_DELAY_MS = 700;
+/**
+ * The tutorial hand. It pulls `pullPx` down the screen, or `pullFraction` of the screen's
+ * height on a small one, never less than `minPullPx`; and on a hole of the first chapter
+ * it comes to show the gesture once the player has looked at the hole for `idleMs`
+ * without touching the screen, before their first stroke there.
+ */
+const HAND = { pullPx: 90, pullFraction: 0.22, minPullPx: 36, idleMs: 8000 };
 
 export interface HudActions {
   onPause(): void;
@@ -66,6 +73,11 @@ export function createHud(game: Game, actions: HudActions): void {
    * at the ramp or the bridge has the gesture in front of them again.
    */
   let strokePlayed = false;
+  /** Milliseconds the player has looked at a hole they could play without touching the screen. */
+  let idleMs = 0;
+  let lastFrame = performance.now();
+  /** The hand is up because the player has been idle. Down again at a touch, or a stroke. */
+  let nudged = false;
 
   const showToast = (text: string) => {
     window.clearTimeout(toastTimer);
@@ -305,9 +317,17 @@ export function createHud(game: Game, actions: HudActions): void {
 
   const refresh = () => {
     strokes.textContent = TEXT.strokes(game.session.strokes, game.hole.par);
-    const wantsHint =
-      !strokePlayed && (game.hole.hints?.includes('slingshot') ?? false) && game.session.phase === 'aiming';
-    hint.classList.toggle('show', wantsHint && !aiming && !cardOpen);
+    const hinted = game.hole.hints?.includes('slingshot') ?? false;
+    const wantsHint = !strokePlayed && (hinted || nudged) && game.session.phase === 'aiming';
+    const showHint = wantsHint && !aiming && !cardOpen;
+    hint.classList.toggle('show', showHint);
+    // The power bar fills as the hand pulls. Both animations start on this same frame, so they keep step.
+    power.classList.toggle('demo', showHint);
+  };
+
+  /** The player touched the screen: whatever the hand was showing, they are not idle. */
+  const touched = () => {
+    idleMs = 0;
   };
 
   game.on((event) => {
@@ -315,6 +335,8 @@ export function createHud(game: Game, actions: HudActions): void {
       case 'hole':
         hideTransient();
         strokePlayed = false;
+        idleMs = 0;
+        nudged = false;
         // The rule card introduces a world, so it shows on that world's first hole only.
         setCard(event.intro && game.holeIndex === 0);
         relabel();
@@ -380,16 +402,45 @@ export function createHud(game: Game, actions: HudActions): void {
     drawExtras();
     drawWind();
     drawBeat();
+    // Time the player has spent looking at a hole they could play, by the clock on the
+    // wall: a frame that was long in coming (the browser throttling, the machine busy)
+    // was time all the same. A ball rolling, a menu, a card, a notice, a tab out of
+    // sight: not looking, not idle.
+    const now = performance.now();
+    const dt = now - lastFrame;
+    lastFrame = now;
+    const playable =
+      game.session.phase === 'aiming' && !game.paused && !game.offScreen && !game.inputBlocked && !document.hidden;
+    idleMs = playable ? idleMs + dt : 0;
+    const nudge = idleMs >= HAND.idleMs && !strokePlayed && game.chapter === game.chapters[0];
+    if (nudge !== nudged) {
+      nudged = nudge;
+      refresh();
+    }
     if (!hint.classList.contains('show')) return;
     const p = game.ballScreenPosition();
+    const { innerWidth: width, innerHeight: height } = window;
     hint.style.transform = `translate(${p.x}px, ${p.y}px)`;
-    // The hand pulls no further than a finger could: a real pull is full power
-    // `edgeMarginPx` short of the screen edge (see `dragRoom`), and the ball often sits
-    // near the bottom one.
-    hint.style.setProperty('--room', `${Math.max(0, window.innerHeight - p.y - INPUT.edgeMarginPx)}px`);
+    // The hand pulls straight down the screen, toward the player, and no further than a
+    // finger could: a real pull is full power `edgeMarginPx` short of the screen edge
+    // (see `dragRoom`), and the ball often sits near the bottom one.
+    const room = dragRoom(p.x, p.y, 0, 1, width, height);
+    const pull = Math.max(HAND.minPullPx, Math.min(HAND.pullPx, HAND.pullFraction * height, room));
+    hint.style.setProperty('--pull', `${pull}px`);
+    // And the power bar rises to what that pull would play, by the input's own sums.
+    const demo = dragToPull(0, pull, fullDragPx(width, height), room, TAP.touchSlopPx).power;
+    power.style.setProperty('--demo', `${Math.round(demo * 100)}%`);
   });
 
   onLangChange(relabel);
+  // Any press or wheel, anywhere on the page: the canvas, a button, a menu.
+  window.addEventListener('pointerdown', touched, true);
+  window.addEventListener('wheel', touched, { capture: true, passive: true });
+  // A tab that was out of sight was not being looked at.
+  document.addEventListener('visibilitychange', () => {
+    lastFrame = performance.now();
+    idleMs = 0;
+  });
 
   card.addEventListener('pointerdown', () => {
     setCard(false);
