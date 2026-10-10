@@ -64,6 +64,8 @@ export class AudioEngine {
 
     this.applyVolumes();
     if (this.musicId) this.playMusic(this.musicId, this.musicBeat ?? undefined);
+    // A context made inside a gesture can still start suspended on iOS.
+    void ctx.resume();
     // Phones keep playing a hidden tab otherwise.
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) void ctx.suspend();
@@ -71,13 +73,12 @@ export class AudioEngine {
     });
     // A call, Siri or another app's sound interrupts the context on iOS, and a resume
     // from outside a gesture may be refused: the next tap anywhere starts it again.
-    document.addEventListener(
-      'pointerdown',
-      () => {
-        if (ctx.state !== 'running') void ctx.resume();
-      },
-      { passive: true },
-    );
+    // Only the end of a touch counts as a gesture (pointerup and click), never its start.
+    const wake = () => {
+      if (ctx.state !== 'running') void ctx.resume();
+    };
+    document.addEventListener('pointerup', wake, { passive: true });
+    document.addEventListener('click', wake, { passive: true });
   }
 
   setSfx(on: boolean): void {

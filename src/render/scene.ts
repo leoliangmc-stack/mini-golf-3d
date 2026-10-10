@@ -17,8 +17,17 @@ export interface Stage {
 /** Direction the sunlight comes from. */
 const SUN_DIRECTION = new THREE.Vector3(8, 16, 10).normalize();
 
-export function createStage(canvas: HTMLCanvasElement): Stage {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+export interface StageOptions {
+  /**
+   * Multisampling is decided when the renderer is made and cannot change after. Off on
+   * a handheld, where the screen's own density hides the jaggies and the fill rate is
+   * what runs out first.
+   */
+  antialias: boolean;
+}
+
+export function createStage(canvas: HTMLCanvasElement, { antialias }: StageOptions = { antialias: true }): Stage {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias, powerPreference: 'high-performance' });
   renderer.shadowMap.enabled = true;
   // The picture of the far side of a hall is cut off at the edge of its skirt (render/strangeViews.ts).
   renderer.localClippingEnabled = true;

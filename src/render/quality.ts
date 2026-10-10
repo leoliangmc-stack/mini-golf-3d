@@ -20,12 +20,23 @@ const ORDER: Tier[] = ['low', 'medium', 'high'];
 const MIN_FPS = 45;
 const WINDOW_SECONDS = 3;
 
-/** A starting guess from what the browser reveals about the device. */
-function guessTier(): Tier {
+/** A phone or a tablet: something played with a finger. */
+export function isHandheld(): boolean {
+  return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+}
+
+/**
+ * A starting guess from what the browser reveals about the device. A handheld never
+ * starts high: a budget phone has eight cores and 4 GB like a laptop, but not the GPU
+ * to fill its screen at two device pixels per CSS pixel with a 2048 shadow map, and the
+ * automatic step down takes six seconds to notice, on the first hole of all places.
+ */
+export function guessTier(): Tier {
   const nav = navigator as Navigator & { deviceMemory?: number };
   const cores = nav.hardwareConcurrency ?? 4;
   const memory = nav.deviceMemory ?? 4;
   if (cores <= 4 && memory <= 2) return 'low';
+  if (isHandheld()) return 'medium';
   return cores >= 6 && memory >= 4 ? 'high' : 'medium';
 }
 

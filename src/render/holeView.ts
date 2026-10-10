@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { XYZ } from '../core/types';
 import { cupTrack } from '../game/cup';
 import { goalCups } from '../game/goal';
@@ -12,6 +13,8 @@ import { mirrorView } from './strangeViews';
 
 /** How much darker the sides of the ground are than its top. */
 const SIDE_SHADE = 0.68;
+/** A block lower than this never hides the ball on its own level (see render/occlusion.ts). */
+const LOW = 0.5;
 
 /** The visible course of one hole. */
 export interface HoleView {
@@ -32,27 +35,7 @@ export function buildHoleView(compiled: CompiledHole, hole: HoleDef): HoleView {
   };
 
   for (const block of buildBlocks(compiled)) add(block);
-  for (const box of compiled.boxes) {
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(box.halfExtents[0] * 2, box.halfExtents[1] * 2, box.halfExtents[2] * 2),
-      new THREE.MeshLambertMaterial({ color: getSurface(box.surface).color }),
-    );
-    mesh.position.set(box.center[0], box.center[1], box.center[2]);
-    mesh.quaternion.set(box.rotation[0], box.rotation[1], box.rotation[2], box.rotation[3]);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    add(mesh);
-  }
-  for (const c of compiled.cylinders) {
-    const mesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(c.radius, c.radius, c.halfHeight * 2, 20),
-      new THREE.MeshLambertMaterial({ color: getSurface(c.surface).color, flatShading: true }),
-    );
-    mesh.position.set(c.center[0], c.center[1], c.center[2]);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    add(mesh);
-  }
+  for (const solid of buildSolids(compiled)) add(solid);
   for (const decor of hole.decor ?? []) add(buildDecor(decor));
   // The mirror is see-through already: it is never faded out of the way.
   if (hole.mirror) group.add(mirrorView(hole.mirror));
@@ -70,7 +53,7 @@ export function buildHoleView(compiled: CompiledHole, hole: HoleDef): HoleView {
 /** Frees the GPU resources of a view built by buildHoleView. */
 export function disposeHoleView(group: THREE.Object3D): void {
   group.traverse((object) => {
-    if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.Line)) return;
+    if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.Line) && !(object instanceof THREE.Points)) return;
     // An instanced mesh keeps its per-instance buffers apart from the geometry.
     if (object instanceof THREE.InstancedMesh) object.dispose();
     object.geometry.dispose();
@@ -136,6 +119,61 @@ function buildBlocks(compiled: CompiledHole): THREE.Mesh[] {
     mesh.receiveShadow = true;
     return mesh;
   });
+}
+
+/**
+ * The hole's solid blocks: walls, posts and the like. The low ones are merged, one mesh
+ * per surface and floor level, because a hole has dozens of walls and on a phone every
+ * mesh is a draw call, twice over with the shadow pass. A wall never hides the ball on
+ * its own level (it is lower than the fader's clearance), so merging the walls of one
+ * level costs the fader nothing; those of a higher level fade together when they stand
+ * between the camera and a ball below them. Anything taller keeps a mesh of its own, so
+ * that one building or pillar can be faded without the rest.
+ */
+function buildSolids(compiled: CompiledHole): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = [];
+  const low = new Map<string, { surface: string; flat: boolean; parts: THREE.BufferGeometry[] }>();
+  const place = (
+    geometry: THREE.BufferGeometry,
+    surface: string,
+    flat: boolean,
+    center: readonly number[],
+    rotation?: readonly number[],
+  ) => {
+    if (rotation) geometry.applyQuaternion(new THREE.Quaternion(rotation[0], rotation[1], rotation[2], rotation[3]));
+    geometry.translate(center[0], center[1], center[2]);
+    geometry.computeBoundingBox();
+    const bounds = geometry.boundingBox!;
+    if (bounds.max.y - bounds.min.y >= LOW) {
+      meshes.push(solidMesh(geometry, surface, flat));
+      return;
+    }
+    const key = `${surface}|${flat}|${Math.round(bounds.min.y * 4)}`;
+    const group = low.get(key) ?? { surface, flat, parts: [] };
+    group.parts.push(geometry);
+    low.set(key, group);
+  };
+  for (const box of compiled.boxes) {
+    const geometry = new THREE.BoxGeometry(box.halfExtents[0] * 2, box.halfExtents[1] * 2, box.halfExtents[2] * 2);
+    place(geometry, box.surface, false, box.center, box.rotation);
+  }
+  for (const c of compiled.cylinders) {
+    place(new THREE.CylinderGeometry(c.radius, c.radius, c.halfHeight * 2, 20), c.surface, true, c.center);
+  }
+  for (const { surface, flat, parts } of low.values()) {
+    const merged = parts.length === 1 ? parts[0] : mergeGeometries(parts);
+    if (!merged) throw new Error(`The ${surface} blocks of a hole could not be merged into one mesh`);
+    if (merged !== parts[0]) for (const part of parts) part.dispose();
+    meshes.push(solidMesh(merged, surface, flat));
+  }
+  return meshes;
+}
+
+function solidMesh(geometry: THREE.BufferGeometry, surface: string, flat: boolean): THREE.Mesh {
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ color: getSurface(surface).color, flatShading: flat }));
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 /** A line on the ground along the path a moving cup follows, so the player can see where it is going. */

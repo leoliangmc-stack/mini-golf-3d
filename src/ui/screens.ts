@@ -17,8 +17,12 @@ export interface ScreenActions {
   settingsChanged(): void;
   /** Any button was pressed. */
   click(): void;
-  /** A picture of a world, as an image URL, if one can be made. */
-  thumbnail(world: WorldDef): string | null;
+  /**
+   * A picture of a world, as an image URL, if one is ready. Otherwise null now, and
+   * `later` is called with it once it has been made: a page of cards asks for several
+   * at once, and making them all before the page can show would stall a phone.
+   */
+  thumbnail(world: WorldDef, later: (url: string) => void): string | null;
 }
 
 export interface Screens {
@@ -87,9 +91,12 @@ export function createScreens(chapters: readonly ChapterDef[], progress: Progres
     const open = progress.isUnlocked(world, 0);
     const card = button('', () => show('world', world), finale ? 'world-card finale' : 'world-card');
     card.disabled = !open;
-    const image = actions.thumbnail(world);
     const picture = el('div', { className: open ? 'world-picture' : 'world-picture locked' });
-    if (image) picture.style.backgroundImage = `url(${image})`;
+    const showPicture = (url: string) => {
+      picture.style.backgroundImage = `url(${url})`;
+    };
+    const image = actions.thumbnail(world, showPicture);
+    if (image) showPicture(image);
     if (!open) picture.append(el('span', { textContent: '🔒' }));
     card.append(
       picture,

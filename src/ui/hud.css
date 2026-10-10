@@ -445,10 +445,9 @@ body:not([data-mode='play']) #hud {
   }
 }
 
-@media (orientation: portrait) {
-  #rotate {
-    display: flex;
-  }
+/* Set by src/ui/orientation.ts from the device's orientation, not the window's shape. */
+body[data-portrait] #rotate {
+  display: flex;
 }
 
 @media (prefers-reduced-motion: reduce) {

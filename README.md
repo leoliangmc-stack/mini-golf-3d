@@ -152,7 +152,7 @@ Everything in SPEC v6 7.5 is still to be tuned: the pace of the belts, the round
 arm, the beat, how hard a drum throws, the rates of the clocks, and every par. And for
 Chapter 7, from SPEC v7 7.4: #6 as far as a finger on a phone goes (the rule that tells a
 tap from a drag is tested, and a click and a drag with a mouse were tried in a desktop
-browser; whether 10 px and 350 ms are right under a thumb has not been tried at all) and
+browser; whether 16 px and 350 ms are right under a thumb has not been tried at all) and
 #12 only as far as the texts being present in both languages. Its sounds were written,
 not listened to. Everything in SPEC v7 7.5 is still to be tuned: what a loop asks for
 and what the track takes off a ball, the speed at the fork, the turns each maze hole
@@ -229,6 +229,11 @@ deploys on push whatever a workflow says, so `npm run build` runs the replay che
 itself: if one hole's reference solution no longer plays back, the build fails and
 nothing is deployed. `.github/workflows/replay.yml` runs the same checks on every push
 and pull request, where the result can be seen before merging.
+
+`vercel.json` marks everything under `/assets/` as cacheable for a year and immutable:
+every file there carries a hash of its content in its name, so a returning player
+fetches only what changed. Without it the host answered `max-age=0, must-revalidate`,
+and every visit asked the server about the engine again before playing.
 
 ### Where this differs from SPEC v9 (Monster Quest)
 
@@ -448,10 +453,16 @@ save version 6, the unlock order. What follows is what building it settled, or c
   lies anywhere within reach of its arms: not only where an arm is, but anywhere one
   passes.
 - **A press that is held is nothing.** SPEC v7 3.5 gives two outcomes, a tap or an aim.
-  There are three: a press that never moved 10 px and ended within 350 ms is a tap; one
-  that moved is an aim; one that stayed put for longer is neither a stroke, as before,
-  nor a tap. Turns are few, and a finger that came down to aim and thought better of it
-  must not spend one. Picking a ball in Chapter 3 still takes any press on the spot.
+  There are three: a press that never moved past its slop (10 px for a mouse, 16 px for
+  a finger or a pen, whose pad rolls on the glass) and ended within 350 ms is a tap; one
+  that moved further is an aim; one that stayed put for longer is neither a stroke, as
+  before, nor a tap. Turns are few, and a finger that came down to aim and thought better
+  of it must not spend one. Picking a ball in Chapter 3 still takes any press on the spot.
+  The slop also counts for nothing toward an aim's power: the weakest stroke there is
+  takes 6% of the full drag, and before this a finger that rolled 11 px when it meant to
+  tap a wall played exactly that stroke. The power bar and the aim arrow appear only
+  once the press has moved past its slop, so a tap, or the first finger of a two-finger
+  camera gesture, no longer flashes them or cuts a camera showcase short.
 - **A tap counts within a fingertip of a group's reach:** 22 px beyond the circle its
   arms sweep as it looks on screen, and never less than 48 px from its pivot. Where two
   groups' targets overlap the nearer pivot wins. A tap anywhere else does nothing.
@@ -745,9 +756,17 @@ put off. It had shipped. The differences that follow from that come first.
   sideways (or weakens), so the ball slides across the floor and along walls. There is
   no rolling on walls or ceilings.
 - **Surfaces have no friction coefficient.** See the engine notes below.
-- **Rapier's `-compat` package inlines its WASM**, which makes the engine chunk about
-  1.8 MB gzipped. The start screen itself is 6 kB and shows immediately; the engine
-  loads behind it.
+- **Rapier's WASM is a file of its own.** The `-compat` package inlined it in the
+  script as base64, which made the engine chunk 5.4 MB (1.9 MB compressed), three
+  quarters of it that text; the browser could not compile it until the whole script
+  had arrived, and every push changed the chunk's name, so every returning player
+  fetched the engine again. Now `@dimforge/rapier3d-deterministic` imports the `.wasm`
+  as a module (`vite-plugin-wasm`): the game chunk is 1.3 MB (250 kB compressed), the
+  WASM 3.1 MB (850 kB) that is fetched in parallel, compiled as it streams in, and
+  cached for a year under its own hash. The tests and the replay check get the same
+  binary inlined for Node by the plugin; both builds ship byte-identical WASM. The
+  start screen itself is 6 kB and shows immediately; `index.html` carries preload tags
+  for the chunk and the WASM so both fetches start with the page.
 
 ## Layout
 

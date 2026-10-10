@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import indexHtml from '../index.html?raw';
 import { CHAPTERS } from '../src/data/chapters';
 import { allHoles, chapterOf, holeNumber, isFinale, stagesOf } from '../src/level/chapters';
 import { TEST_WORLD } from '../src/data/worlds/test';
@@ -52,6 +53,11 @@ describe('chapters (SPEC v2 2.1)', () => {
     expect(chapterOf(CHAPTERS, chapter8.finale)).toBe(chapter8);
     expect(chapterOf(CHAPTERS, chapter9.worlds[1])).toBe(chapter9);
     expect(allHoles(CHAPTERS)).toHaveLength(123);
+  });
+
+  it('is counted rightly in the link preview, which is static text in index.html', () => {
+    const worlds = CHAPTERS.reduce((sum, chapter) => sum + chapter.worlds.length, 0);
+    expect(indexHtml).toContain(`${CHAPTERS.length} chapters, ${worlds} worlds, ${allHoles(CHAPTERS).length} holes.`);
   });
 
   it('gives every stage its text in both languages', () => {

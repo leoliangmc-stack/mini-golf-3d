@@ -37,14 +37,20 @@ export function dragRoom(x: number, y: number, dx: number, dy: number, width: nu
  * that (the camera parks the ball near the bottom edge, and a pull toward the cup heads
  * straight for it), full power lands where the room ends: gentle pulls keep their usual
  * rate and the missing length is made up toward the end.
+ *
+ * The first `deadPx` of a drag count for nothing: that is the distance a press may
+ * waver and still be a tap (see `TAP`), and a drag only just past it must not play
+ * the weakest stroke there is, which a thumb that meant to tap a wall would then do.
  */
-export function dragToPull(dx: number, dy: number, fullPx: number, roomPx = fullPx): Pull {
+export function dragToPull(dx: number, dy: number, fullPx: number, roomPx = fullPx, deadPx = 0): Pull {
   const len = Math.hypot(dx, dy);
   if (len < 1e-6) return { x: 0, y: 0, power: 0 };
+  const pulled = Math.max(0, len - deadPx);
+  const full = fullPx - deadPx;
   // The floor keeps a twitch right at the edge from being a full shot.
-  const reach = Math.min(fullPx, Math.max(roomPx, INPUT.minRoomFraction * fullPx));
-  const t = len / reach;
-  const power = t >= 1 ? 1 : len / fullPx + (1 - reach / fullPx) * t * t;
+  const reach = Math.min(full, Math.max(roomPx - deadPx, INPUT.minRoomFraction * full));
+  const t = pulled / reach;
+  const power = t >= 1 ? 1 : pulled / full + (1 - reach / full) * t * t;
   return { x: dx / len, y: dy / len, power };
 }
 
@@ -65,12 +71,18 @@ export interface SlingshotHandlers {
 /**
  * Input feel for telling a tap from a drag, mutable for tuning (SPEC v7 7.5).
  *
- * A press that never moves further than `slopPx` is no stroke, however long it is
+ * A press that never moves further than the slop is no stroke, however long it is
  * held: a finger that only wavers in place must not play one of nearly no power. It is
  * a tap, something done on purpose to a thing on the course, only if it also ends
  * within `maxMs`: a finger that came down to aim and thought better of it is neither.
+ * A finger gets more slop than a mouse: its pad rolls on the glass as it presses.
  */
-export const TAP = { slopPx: 10, maxMs: 350 };
+export const TAP = { slopPx: 10, touchSlopPx: 16, maxMs: 350 };
+
+/** How far a press of this kind may wander and still be a tap. */
+export function slopFor(pointerType: string): number {
+  return pointerType === 'mouse' ? TAP.slopPx : TAP.touchSlopPx;
+}
 
 /**
  * What a press that has ended was (SPEC v7 3.5). `farPx` is the furthest it ever got
@@ -81,8 +93,8 @@ export const TAP = { slopPx: 10, maxMs: 350 };
  * - `tap`: quick and on the spot. Never a stroke.
  * - `hold`: on the spot but not quick. Neither a stroke nor a tap.
  */
-export function classifyPress(farPx: number, heldMs: number): 'tap' | 'hold' | 'drag' {
-  if (farPx > TAP.slopPx) return 'drag';
+export function classifyPress(farPx: number, heldMs: number, slopPx = TAP.slopPx): 'tap' | 'hold' | 'drag' {
+  if (farPx > slopPx) return 'drag';
   return heldMs <= TAP.maxMs ? 'tap' : 'hold';
 }
 
@@ -92,19 +104,21 @@ export function classifyPress(farPx: number, heldMs: number): 'tap' | 'hold' | '
  */
 export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers): () => void {
   const active = new Set<number>();
-  let aiming: { id: number; x: number; y: number; far: number; at: number } | null = null;
+  /** The press that may become an aim. `aiming` is set once it has moved past its slop. */
+  let press: { id: number; x: number; y: number; far: number; at: number; slop: number; aiming: boolean } | null = null;
 
-  const pullTo = (from: { x: number; y: number }, e: PointerEvent): Pull => {
+  const pullTo = (from: { x: number; y: number; slop: number }, e: PointerEvent): Pull => {
     const dx = e.clientX - from.x;
     const dy = e.clientY - from.y;
     const { innerWidth: width, innerHeight: height } = window;
-    return dragToPull(dx, dy, fullDragPx(width, height), dragRoom(from.x, from.y, dx, dy, width, height));
+    return dragToPull(dx, dy, fullDragPx(width, height), dragRoom(from.x, from.y, dx, dy, width, height), from.slop);
   };
 
   const cancel = () => {
-    if (!aiming) return;
-    aiming = null;
-    handlers.onAim(null);
+    if (!press) return;
+    const wasAiming = press.aiming;
+    press = null;
+    if (wasAiming) handlers.onAim(null);
   };
 
   const onDown = (e: PointerEvent) => {
@@ -113,38 +127,42 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
     if (active.size > 1) return cancel();
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (!handlers.canAim()) return;
-    aiming = { id: e.pointerId, x: e.clientX, y: e.clientY, far: 0, at: e.timeStamp };
+    press = { id: e.pointerId, x: e.clientX, y: e.clientY, far: 0, at: e.timeStamp, slop: slopFor(e.pointerType), aiming: false };
     try {
       target.setPointerCapture(e.pointerId);
     } catch {
       // Capture is a nicety (keeps the drag alive outside the canvas); aiming works without it.
     }
-    handlers.onAim(pullTo(aiming, e));
+    // The aim itself waits for the finger to move: a tap, and the first finger of a
+    // two-finger camera gesture, must not flash the power bar or cut a showcase short.
   };
 
   const onMove = (e: PointerEvent) => {
-    if (aiming?.id !== e.pointerId) return;
-    aiming.far = Math.max(aiming.far, Math.hypot(e.clientX - aiming.x, e.clientY - aiming.y));
-    handlers.onAim(pullTo(aiming, e));
+    if (press?.id !== e.pointerId) return;
+    press.far = Math.max(press.far, Math.hypot(e.clientX - press.x, e.clientY - press.y));
+    if (press.far <= press.slop && !press.aiming) return;
+    press.aiming = true;
+    handlers.onAim(pullTo(press, e));
   };
 
   const onUp = (e: PointerEvent) => {
     active.delete(e.pointerId);
-    if (aiming?.id !== e.pointerId) return;
-    const pull = pullTo(aiming, e);
-    const far = Math.max(aiming.far, Math.hypot(e.clientX - aiming.x, e.clientY - aiming.y));
-    const press = classifyPress(far, e.timeStamp - aiming.at);
-    aiming = null;
-    handlers.onAim(null);
+    if (press?.id !== e.pointerId) return;
+    const pull = pullTo(press, e);
+    const far = Math.max(press.far, Math.hypot(e.clientX - press.x, e.clientY - press.y));
+    const kind = classifyPress(far, e.timeStamp - press.at, press.slop);
+    const wasAiming = press.aiming;
+    press = null;
+    if (wasAiming) handlers.onAim(null);
     // A press on the spot is never a stroke, however it is read: picking a ball or
     // turning a wall must not play one. And a drag is never a tap.
-    if (press === 'drag') handlers.onRelease(pull);
-    else handlers.onTap?.(e.clientX, e.clientY, press === 'tap');
+    if (kind === 'drag') handlers.onRelease(pull);
+    else handlers.onTap?.(e.clientX, e.clientY, kind === 'tap');
   };
 
   const onCancel = (e: PointerEvent) => {
     active.delete(e.pointerId);
-    if (aiming?.id === e.pointerId) cancel();
+    if (press?.id === e.pointerId) cancel();
   };
 
   // A release the page never sees (the window losing focus, the app being switched
@@ -157,6 +175,10 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
   const onHidden = () => {
     if (document.hidden) forget();
   };
+  // The screen turning under a finger, or a split-screen window changing shape, ends
+  // the drag: a release that arrives after the course has gone must not play a stroke
+  // nobody saw.
+  const upright = window.matchMedia('(orientation: portrait)');
 
   const block = (e: Event) => e.preventDefault();
 
@@ -168,6 +190,7 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
   target.addEventListener('contextmenu', block);
   window.addEventListener('blur', forget);
   document.addEventListener('visibilitychange', onHidden);
+  upright.addEventListener('change', forget);
   // iOS Safari ignores user-scalable=no; these stop pinch and double-tap zoom.
   document.addEventListener('gesturestart', block);
   document.addEventListener('dblclick', block);
@@ -181,6 +204,7 @@ export function attachSlingshot(target: HTMLElement, handlers: SlingshotHandlers
     target.removeEventListener('contextmenu', block);
     window.removeEventListener('blur', forget);
     document.removeEventListener('visibilitychange', onHidden);
+    upright.removeEventListener('change', forget);
     document.removeEventListener('gesturestart', block);
     document.removeEventListener('dblclick', block);
   };

@@ -9,12 +9,13 @@ import type { WorldDef } from '../level/schema';
 import { initPhysics } from '../physics/rapier';
 import { registerBuiltinDecor } from '../render/decor';
 import { registerBuiltinPartViews } from '../render/fieldViews';
-import { QualityController } from '../render/quality';
+import { isHandheld, QualityController } from '../render/quality';
 import { createStage } from '../render/scene';
 import { renderThumbnail } from '../render/thumbnail';
 import { registerBuiltinZoneViews } from '../render/zoneViews';
 import { createHud } from '../ui/hud';
 import { setLang, TEXT, tr } from '../ui/i18n';
+import { isPortrait, onOrientationChange } from '../ui/orientation';
 import { createScreens } from '../ui/screens';
 import { track } from './analytics';
 import { Game } from './game';
@@ -23,6 +24,102 @@ import { SAVE_VERSION } from './save';
 
 /** A ball that lands this hard has dropped from somewhere, in m/s of velocity change. */
 const HARD_LANDING = 4;
+/** Seconds between frames while the game is paused: the course behind a menu stands still. */
+const PAUSED_FRAME_SECONDS = 0.25;
+
+/** The sound each cue makes. The two cues that depend on more than their name are handled where they arrive. */
+const CUE_SOUNDS: Record<string, (audio: AudioEngine) => void> = {
+  launcherLoad: (a) => a.cannonLoad(),
+  launcherFire: (a) => a.cannonFire(),
+  gravityOn: (a) => a.gravityShift(true),
+  gravityOff: (a) => a.gravityShift(false),
+  tunnelEnter: (a) => a.tunnelEnter(),
+  tunnelExit: (a) => a.tunnelExit(),
+  cupOpen: (a) => a.cupLid(true),
+  cupShut: (a) => a.cupLid(false),
+  timerTick: (a) => a.timerTick(),
+  timerWarn: (a) => a.timerWarn(),
+  grow: (a) => a.grow(),
+  shrink: (a) => a.shrink(),
+  split: (a) => a.split(),
+  freeze: (a) => a.freeze(),
+  resume: (a) => a.resume(),
+  strike: (a) => a.strike(),
+  cupAppear: (a) => a.cupAppear(),
+  plateUp: (a) => a.plate(false),
+  gateOpen: (a) => a.gate(true),
+  gateShut: (a) => a.gate(false),
+  stoneSlide: (a) => a.stoneSlide(),
+  stoneBlocked: (a) => a.stoneBlocked(),
+  stoneLand: (a) => a.stoneLand(),
+  crystalTurn: (a) => a.crystalTurn(),
+  beamLock: (a) => a.beamLock(),
+  sliderStart: (a) => a.sliderStart(),
+  sliderStop: (a) => a.sliderStop(),
+  coin: (a) => a.coin(),
+  bell: (a) => a.bell(),
+  dragonStir: (a) => a.dragonStir(),
+  fireOn: (a) => a.fire(),
+  currentEnter: (a) => a.current(),
+  bubbleCatch: (a) => a.bubbleCatch(),
+  bubbleRelease: (a) => a.bubbleRelease(),
+  gust: (a) => a.gust(),
+  valveOpen: (a) => a.valve(true),
+  valveShut: (a) => a.valve(false),
+  waterRise: (a) => a.waterMove(true),
+  waterFall: (a) => a.waterMove(false),
+  waterSettle: (a) => a.waterSettle(),
+  splash: (a) => a.splash(),
+  slabCrack: (a) => a.slabCrack(),
+  slabFall: (a) => a.slabFall(),
+  leverOn: (a) => a.lever(true),
+  leverOff: (a) => a.lever(false),
+  beltTurn: (a) => a.beltTurn(),
+  beltRun: (a) => a.beltRun(),
+  armCatch: (a) => a.armCatch(),
+  armLift: (a) => a.armLift(),
+  armRelease: (a) => a.armRelease(),
+  shutterOpen: (a) => a.shutter(true),
+  shutterShut: (a) => a.shutter(false),
+  drumBeat: (a) => a.drumBeat(),
+  drumThrow: (a) => a.drumThrow(),
+  dialTurn: (a) => a.dialTurn(),
+  timeSlow: (a) => a.timeShift(true),
+  timeFast: (a) => a.timeShift(false),
+  tunnelTurn: (a) => a.tunnelTurn(),
+  pointsSwitch: (a) => a.points(),
+  trainBoard: (a) => a.trainBoard(),
+  trainDepart: (a) => a.trainDepart(),
+  trainArrive: (a) => a.trainArrive(),
+  trainSetDown: (a) => a.trainSetDown(),
+  coasterEnter: (a) => a.coasterEnter(),
+  coasterLoop: (a) => a.coasterLoop(),
+  coasterStall: (a) => a.coasterStall(),
+  coasterExit: (a) => a.coasterOut(true),
+  coasterBack: (a) => a.coasterOut(false),
+  coasterHigh: (a) => a.coasterFork(true),
+  coasterLow: (a) => a.coasterFork(false),
+  rotorTurn: (a) => a.rotorTurn(),
+  rotorStop: (a) => a.rotorStop(),
+  wrap: (a) => a.wrap(),
+  mirrorShot: (a) => a.mirrorShot(),
+  shadowBack: (a) => a.shadowBack(),
+  echoStart: (a) => a.echoStart(),
+  echoPlateDown: (a) => a.echoPlate(true),
+  echoPlateUp: (a) => a.echoPlate(false),
+  realmGhost: (a) => a.realmSwap(true),
+  realmReal: (a) => a.realmSwap(false),
+  monsterStep: (a) => a.monsterStep(),
+  bossStep: (a) => a.monsterStep(),
+  caught: (a) => a.caught(),
+  keyTake: (a) => a.keyTake(),
+  doorOpen: (a) => a.doorOpen(),
+  bossTurn: (a) => a.bossTurn(),
+  bossHit: (a) => a.bossHit(),
+  shieldHit: (a) => a.shieldHit(),
+  shieldOpen: (a) => a.shieldOpen(),
+  bossDown: (a) => a.bossDown(),
+};
 
 export interface App {
   /** Call from the first tap: unlocks audio and opens the main menu (or the requested hole). */
@@ -57,11 +154,25 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
   progress.unlockAll = dev && query.has('unlock');
   if (progress.settings.lang && !query.has('lang')) setLang(progress.settings.lang);
 
-  const stage = createStage(canvas);
+  const stage = createStage(canvas, { antialias: !isHandheld() });
   const quality = new QualityController(progress.settings.quality, (tier) => stage.applyQuality(tier));
   const game = new Game(stage, canvas, CHAPTERS, worlds);
   const audio = new AudioEngine();
   const thumbnails = new Map<WorldDef, string | null>();
+  /** Worlds whose picture is wanted, made one per frame so that a page of cards never stalls. */
+  const wanted: { world: WorldDef; later: (url: string) => void }[] = [];
+  let makingThumbnails = false;
+  const makeThumbnail = () => {
+    makingThumbnails = false;
+    const next = wanted.shift();
+    if (!next) return;
+    if (!thumbnails.has(next.world)) thumbnails.set(next.world, renderThumbnail(stage.renderer, next.world));
+    const url = thumbnails.get(next.world);
+    if (url) next.later(url);
+    if (wanted.length === 0) return;
+    makingThumbnails = true;
+    requestAnimationFrame(makeThumbnail);
+  };
 
   const applySettings = () => {
     audio.setSfx(progress.settings.sfx);
@@ -117,9 +228,15 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
     quit: openMenu,
     settingsChanged: applySettings,
     click: () => audio.click(),
-    thumbnail(world) {
-      if (!thumbnails.has(world)) thumbnails.set(world, renderThumbnail(stage.renderer, world));
-      return thumbnails.get(world) ?? null;
+    thumbnail(world, later) {
+      const made = thumbnails.get(world);
+      if (made !== undefined) return made;
+      wanted.push({ world, later });
+      if (!makingThumbnails) {
+        makingThumbnails = true;
+        requestAnimationFrame(makeThumbnail);
+      }
+      return null;
     },
   });
 
@@ -216,103 +333,15 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
         audio.holed();
         break;
       case 'cue':
-        if (event.name === 'launcherLoad') audio.cannonLoad();
-        else if (event.name === 'launcherFire') audio.cannonFire();
-        else if (event.name === 'gravityOn') audio.gravityShift(true);
-        else if (event.name === 'gravityOff') audio.gravityShift(false);
-        else if (event.name === 'tunnelEnter') audio.tunnelEnter();
-        else if (event.name === 'tunnelExit') audio.tunnelExit();
-        else if (event.name === 'cupOpen') audio.cupLid(true);
-        else if (event.name === 'cupShut') audio.cupLid(false);
-        else if (event.name === 'timerTick') audio.timerTick();
-        else if (event.name === 'timerWarn') audio.timerWarn();
-        else if (event.name === 'grow') audio.grow();
-        else if (event.name === 'shrink') audio.shrink();
-        else if (event.name === 'split') audio.split();
-        else if (event.name === 'freeze') audio.freeze();
-        else if (event.name === 'resume') audio.resume();
-        else if (event.name === 'strike') audio.strike();
-        else if (event.name === 'cupAppear') audio.cupAppear();
-        else if (event.name === 'plateDown') {
+        if (event.name === 'plateDown') {
           // A plate the shadow is standing on sounds different (SPEC v8 3.9).
           if (shadowOnPlate()) audio.shadowPlate();
           else audio.plate(true);
-        }
-        else if (event.name === 'plateUp') audio.plate(false);
-        else if (event.name === 'gateOpen') audio.gate(true);
-        else if (event.name === 'gateShut') audio.gate(false);
-        else if (event.name === 'stoneSlide') audio.stoneSlide();
-        else if (event.name === 'stoneBlocked') audio.stoneBlocked();
-        else if (event.name === 'stoneLand') audio.stoneLand();
-        else if (event.name === 'crystalTurn') audio.crystalTurn();
-        else if (event.name === 'beamLock') audio.beamLock();
-        else if (event.name === 'sliderStart') audio.sliderStart();
-        else if (event.name === 'sliderStop') audio.sliderStop();
-        else if (event.name === 'coin') audio.coin();
-        else if (event.name === 'bell') audio.bell();
-        else if (event.name === 'dragonStir') audio.dragonStir();
-        else if (event.name === 'fireOn') audio.fire();
-        else if (event.name === 'currentEnter') audio.current();
-        else if (event.name === 'bubbleCatch') audio.bubbleCatch();
-        else if (event.name === 'bubbleRelease') audio.bubbleRelease();
-        else if (event.name === 'gust') audio.gust();
-        else if (event.name === 'valveOpen') audio.valve(true);
-        else if (event.name === 'valveShut') audio.valve(false);
-        else if (event.name === 'waterRise') audio.waterMove(true);
-        else if (event.name === 'waterFall') audio.waterMove(false);
-        else if (event.name === 'waterSettle') audio.waterSettle();
-        else if (event.name === 'splash') audio.splash();
-        else if (event.name === 'slabCrack') audio.slabCrack();
-        else if (event.name === 'slabFall') audio.slabFall();
-        else if (event.name === 'leverOn') audio.lever(true);
-        else if (event.name === 'leverOff') audio.lever(false);
-        else if (event.name === 'beltTurn') audio.beltTurn();
-        else if (event.name === 'beltRun') audio.beltRun();
-        else if (event.name === 'armCatch') audio.armCatch();
-        else if (event.name === 'armLift') audio.armLift();
-        else if (event.name === 'armRelease') audio.armRelease();
-        else if (event.name === 'shutterOpen') audio.shutter(true);
-        else if (event.name === 'shutterShut') audio.shutter(false);
-        else if (event.name === 'drumBeat') audio.drumBeat();
-        else if (event.name === 'drumThrow') audio.drumThrow();
-        else if (event.name === 'dialTurn') audio.dialTurn();
-        else if (event.name === 'timeSlow') audio.timeShift(true);
-        else if (event.name === 'timeFast') audio.timeShift(false);
-        else if (event.name === 'tunnelTurn') audio.tunnelTurn();
-        else if (event.name === 'pointsSwitch') audio.points();
-        else if (event.name === 'trainBoard') audio.trainBoard();
-        else if (event.name === 'trainDepart') audio.trainDepart();
-        else if (event.name === 'trainArrive') audio.trainArrive();
-        else if (event.name === 'trainSetDown') audio.trainSetDown();
-        else if (event.name === 'coasterEnter') audio.coasterEnter();
-        else if (event.name === 'coasterLoop') audio.coasterLoop();
-        else if (event.name === 'coasterStall') audio.coasterStall();
-        else if (event.name === 'coasterExit') audio.coasterOut(true);
-        else if (event.name === 'coasterBack') audio.coasterOut(false);
-        else if (event.name === 'coasterHigh') audio.coasterFork(true);
-        else if (event.name === 'coasterLow') audio.coasterFork(false);
-        else if (event.name === 'rotorTurn') audio.rotorTurn();
-        else if (event.name === 'rotorStop') audio.rotorStop();
-        else if (event.name === 'wrap') audio.wrap();
-        else if (event.name === 'mirrorShot') audio.mirrorShot();
-        else if (event.name === 'shadowBack') audio.shadowBack();
-        else if (event.name === 'echoStart') audio.echoStart();
-        else if (event.name === 'echoPlateDown') audio.echoPlate(true);
-        else if (event.name === 'echoPlateUp') audio.echoPlate(false);
-        else if (event.name === 'realmGhost') audio.realmSwap(true);
-        else if (event.name === 'realmReal') audio.realmSwap(false);
-        else if (event.name === 'monsterStep' || event.name === 'bossStep') audio.monsterStep();
-        else if (event.name === 'caught') audio.caught();
-        else if (event.name === 'keyTake') audio.keyTake();
-        else if (event.name === 'doorOpen') audio.doorOpen();
-        else if (event.name === 'bossTurn') audio.bossTurn();
-        else if (event.name === 'bossHit') audio.bossHit();
-        else if (event.name === 'shieldHit') audio.shieldHit();
-        else if (event.name === 'shieldOpen') audio.shieldOpen();
-        else if (event.name === 'bossDown') audio.bossDown();
-        else if (event.name === 'dragonWake') {
+        } else if (event.name === 'dragonWake') {
           audio.dragonWake();
           if (stages.includes(game.world)) track('dragon_woke', { hole: hole.id });
+        } else {
+          CUE_SOUNDS[event.name]?.(audio);
         }
         break;
       case 'undo':
@@ -384,14 +413,28 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
 
   // Nothing moves, and no countdown runs, while the course cannot be seen: behind the
   // "rotate your device" notice, or in a tab the browser still ticks in the background.
-  const portrait = window.matchMedia('(orientation: portrait)');
+  // And while the game is paused the course is drawn only a few times a second: what is
+  // behind a menu stands still, and the blur over it is redone each time it is drawn.
+  game.offScreen = isPortrait();
+  onOrientationChange(() => {
+    game.offScreen = isPortrait();
+  });
+  let idle = 0;
   startLoop(
     () => {
-      if (!portrait.matches && !document.hidden) game.step();
+      if (!isPortrait() && !document.hidden) game.step();
     },
     (alpha, frameDt) => {
+      if (game.paused) {
+        idle += frameDt;
+        if (idle < PAUSED_FRAME_SECONDS) return;
+        game.render(alpha, idle);
+        idle = 0;
+        return;
+      }
+      idle = 0;
       game.render(alpha, frameDt);
-      if (!game.paused) quality.frame(frameDt);
+      quality.frame(frameDt);
     },
   );
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { dragRoom, dragToPull, fullDragPx, INPUT } from '../src/input/slingshot';
+import { RULES } from '../src/game/rules';
+import { classifyPress, dragRoom, dragToPull, fullDragPx, INPUT, slopFor, TAP } from '../src/input/slingshot';
 
 /** Landscape screens the game runs on, in CSS pixels. */
 const SCREENS = [
@@ -61,7 +62,54 @@ describe('dragToPull', () => {
   });
 });
 
+describe('the dead zone: a tap that wandered is not a stroke (SPEC v7 3.5)', () => {
+  const dead = TAP.touchSlopPx;
+
+  it('counts nothing for a drag within the slop', () => {
+    expect(dragToPull(0, dead, 230, 400, dead).power).toBe(0);
+    expect(dragToPull(0, 7, 230, 400, dead).power).toBe(0);
+  });
+
+  it('gives a drag just past the slop less than the weakest stroke there is', () => {
+    const full = fullDragPx(844, 390);
+    expect(dragToPull(0, dead + 1, full, 400, dead).power).toBeLessThan(RULES.minPower);
+    expect(dragToPull(0, dead + 1, full, dead + 1, dead).power).toBeLessThan(RULES.minPower);
+  });
+
+  it('still reaches full power at the full length, and where the room ends', () => {
+    expect(dragToPull(0, 230, 230, 400, dead).power).toBe(1);
+    expect(dragToPull(0, 134, 230, 134, dead).power).toBeCloseTo(1);
+    expect(dragToPull(0, 133, 230, 134, dead).power).toBeLessThan(1);
+  });
+
+  it('never loses power as the drag grows', () => {
+    let last = 0;
+    for (let length = 1; length <= 160; length++) {
+      const power = dragToPull(0, length, 230, 134, dead).power;
+      expect(power).toBeGreaterThanOrEqual(last);
+      last = power;
+    }
+  });
+});
+
+describe('a tap and a drag are told apart with a slop that fits the pointer', () => {
+  it('gives a finger more slop than a mouse', () => {
+    expect(slopFor('touch')).toBeGreaterThan(slopFor('mouse'));
+    expect(slopFor('pen')).toBe(slopFor('touch'));
+  });
+
+  it('reads a press that rolled a little under a thumb as a tap, and under a mouse as a drag', () => {
+    const rolled = TAP.slopPx + 2;
+    expect(classifyPress(rolled, 100, slopFor('mouse'))).toBe('drag');
+    expect(classifyPress(rolled, 100, slopFor('touch'))).toBe('tap');
+    expect(classifyPress(rolled, TAP.maxMs + 1, slopFor('touch'))).toBe('hold');
+    expect(classifyPress(slopFor('touch') + 1, 100, slopFor('touch'))).toBe('drag');
+  });
+});
+
 describe('full power is within reach', () => {
+  // On a phone every pull starts with the finger's slop, which counts for nothing.
+  const dead = TAP.touchSlopPx;
   for (const { name, width, height } of SCREENS) {
     const full = fullDragPx(width, height);
     const margin = INPUT.edgeMarginPx;
@@ -73,7 +121,7 @@ describe('full power is within reach', () => {
       const y = height * 0.8;
       const reach = height - margin - y;
       expect(reach).toBeLessThan(full);
-      expect(dragToPull(0, reach, full, dragRoom(x, y, 0, reach, width, height)).power).toBeCloseTo(1);
+      expect(dragToPull(0, reach, full, dragRoom(x, y, 0, reach, width, height), dead).power).toBeCloseTo(1);
     });
 
     it(`from any press point clear of the edges, in any direction, on ${name}`, () => {
@@ -86,9 +134,9 @@ describe('full power is within reach', () => {
             const dy = Math.sin(angle);
             const room = dragRoom(x, y, dx, dy, width, height);
             // Closer to an edge than this, the hair-trigger floor wins over reaching full power.
-            if (room < INPUT.minRoomFraction * full) continue;
+            if (room - dead < INPUT.minRoomFraction * (full - dead)) continue;
             const reach = Math.min(room, full);
-            expect(dragToPull(dx * reach, dy * reach, full, room).power).toBeCloseTo(1);
+            expect(dragToPull(dx * reach, dy * reach, full, room, dead).power).toBeCloseTo(1);
             // The finger is still on the glass, clear of the edge, when it gets there.
             const fx = x + dx * reach;
             const fy = y + dy * reach;

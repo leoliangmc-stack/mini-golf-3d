@@ -84,6 +84,8 @@ export class Game {
   session!: Session;
   /** Set by UI that is covering the course and must not let a stroke through. */
   inputBlocked = false;
+  /** The course cannot be seen at all (the "rotate your device" notice is up): no stroke may start. */
+  offScreen = false;
   /** Freezes the simulation, moving parts and countdown included. */
   paused = false;
   /** How far the frame last drawn was between two physics steps, 0..1: for sound that follows the game's clock. */
@@ -234,6 +236,9 @@ export class Game {
     this.stage.applyTheme(getTheme(world.theme));
     this.stage.fitShadows(this.session.compiled.bounds);
     this.camera.configure(hole.camera);
+    // Shaders for the see-through look are built now, under the intro card, not on the
+    // first frame something stands between the camera and the ball.
+    this.fader.warm(this.stage.renderer, this.stage.scene, this.camera.camera);
     this.explosions = 0;
     this.resetView();
     this.emit({ type: 'hole', intro });
@@ -553,7 +558,7 @@ export class Game {
     const { session } = this;
     const open = session.phase === 'aiming' || session.frozen;
     // Nor while a wall group is still swinging round: the stroke would not be played (SPEC v7 5).
-    return !this.inputBlocked && !this.paused && !session.replaying && open && !session.field?.turning;
+    return !this.inputBlocked && !this.offScreen && !this.paused && !session.replaying && open && !session.field?.turning;
   }
 
   private shotDirection(pull: Pull): XYZ {
