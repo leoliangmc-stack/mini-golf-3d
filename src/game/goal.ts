@@ -1,6 +1,5 @@
 import type { XYZ } from '../core/types';
 import { xyz } from '../core/types';
-import type { FieldDef } from '../level/field';
 import type { CupGoal, GoalDef, KnockdownGoal, PinDef } from '../level/schema';
 import { Pin, tiltCosine } from '../physics/props';
 import type { SurfaceMap } from '../physics/surfaces';
@@ -30,27 +29,6 @@ function pinsAnchor(pins: readonly PinDef[]): XYZ {
   });
   const n = Math.max(1, pins.length);
   return { x: sum.x / n, y: sum.y / n, z: sum.z / n };
-}
-
-/** Where a boss stands as the hole starts: the middle of its four cells, on the ground. */
-function bossStart(id: string, field?: FieldDef): XYZ {
-  const def = field?.parts.find((part) => part.kind === 'boss' && part.id === id);
-  const grid = field?.grid;
-  if (!def || def.kind !== 'boss' || !grid) return { x: 0, y: 0, z: 0 };
-  const cell = grid.cell ?? 1;
-  return { x: grid.origin[0] + (def.cell[0] + 0.5) * cell, y: grid.y ?? 0, z: grid.origin[1] + (def.cell[1] + 0.5) * cell };
-}
-
-/**
- * The point a goal is at, for the camera to keep in view with the ball: the middle of
- * a cup's track, the middle of a group of pins, the first step of a sequence, where a
- * boss starts (which needs the hole's works, `field`).
- */
-export function goalAnchor(goal: GoalDef, field?: FieldDef): XYZ {
-  if (goal.type === 'cup') return cupAnchor(goal);
-  if (goal.type === 'knockdown') return pinsAnchor(goal.pins);
-  if (goal.type === 'boss') return bossStart(goal.part, field);
-  return goal.steps.length > 0 ? goalAnchor(goal.steps[0], field) : { x: 0, y: 0, z: 0 };
 }
 
 /** What a goal with a boss in it asks the round about the boss, which is one of the hole's works. */

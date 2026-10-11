@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { goalAnchor, goalCups, goalPins } from '../src/game/goal';
+import { goalCups, goalPins } from '../src/game/goal';
 import { checkReplay, recordReplay } from '../src/game/replay';
 import { Session, type SessionEvent } from '../src/game/session';
 import type { GoalDef, HoleDef, PinDef } from '../src/level/schema';
@@ -49,7 +49,6 @@ describe('golf bowling (SPEC v3 2.5)', () => {
     const goal: GoalDef = { type: 'knockdown', pins: triangle(0, -6, 4) };
     expect(goalCups(goal)).toEqual([]);
     expect(goalPins(goal)).toHaveLength(10);
-    expect(goalAnchor(goal).z).toBeCloseTo(-6 - 0.3 * 0.866 * 2, 6);
     const session = new Session(alley(goal));
     expect(session.goal.cups).toHaveLength(0);
     expect(session.goal.pinsLeft).toBe(10);

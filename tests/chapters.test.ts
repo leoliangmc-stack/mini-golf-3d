@@ -73,4 +73,12 @@ describe('chapters (SPEC v2 2.1)', () => {
       }
     }
   });
+
+  it('has a picture of every stage for the menus, in both sizes, and none left over', () => {
+    const stages = CHAPTERS.flatMap(stagesOf).map((stage) => stage.id).sort();
+    const pictured = (files: Record<string, unknown>) =>
+      Object.keys(files).map((path) => path.slice(path.lastIndexOf('/') + 1, -'.webp'.length)).sort();
+    expect(pictured(import.meta.glob('../src/assets/worlds/card/*.webp'))).toEqual(stages);
+    expect(pictured(import.meta.glob('../src/assets/worlds/full/*.webp'))).toEqual(stages);
+  });
 });

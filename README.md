@@ -805,6 +805,7 @@ src/
              the mirror, the ghost world, the monsters, scenery, occlusion fading, quality tiers
   audio/     synthesised sound effects and generated music, and music that keeps a hole's beat
   ui/        HTML/CSS HUD and menus, all interface text (en / zh)
+  assets/    the picture of each world and finale that the menus show, in two sizes
   debug/     development panel, and the stroke search the reference solutions are found
              with (not included in production builds)
   data/      surfaces, themes, the thirty-eight worlds, the nine finales and the chapter
@@ -820,7 +821,8 @@ tests/       determinism, tunneling, seams, terrain, rules, scoring, movers, fie
              and the Chapter 8 holes (dimensions), the two worlds, monsters, keys, doors
              and the boss (quest) and the Chapter 9 holes (castle), reference solutions
 replays/     one reference solution per hole: its inputs and how the round ended
-scripts/     the replay command and the dev server's SAVE REPLAY endpoint
+scripts/     the replay command, the dev server's SAVE REPLAY endpoint, and the
+             command that sizes the world pictures
 ```
 
 ## Adding content
@@ -834,7 +836,12 @@ changes, except that it needs a reference solution in `replays/` (see below).
 `tests/worlds.test.ts` then checks it automatically.
 
 A **world** is a new file there plus one line in `src/data/chapters.ts`, and, if it
-wants its own look, entries in `src/data/themes.ts` and `src/data/surfaces.ts`.
+wants its own look, entries in `src/data/themes.ts` and `src/data/surfaces.ts`. It also
+needs its picture for the menus: the worlds screen shows one on each card, and a world's
+own page a large one over a blurred copy. They are drawn ahead of time in the design
+project, not rendered on the device. `python3 scripts/world-art.py <folder>` turns a
+folder of 16:10 PNGs named by world (`ice.png`) into the two WebP sizes under
+`src/assets/worlds/`, and `tests/chapters.test.ts` fails while a world has none.
 
 A **chapter** is one more entry in `src/data/chapters.ts`: its worlds and its finale,
 and, if it should open from a chapter other than the one before it, `after`. Menus,

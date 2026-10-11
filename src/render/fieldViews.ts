@@ -720,7 +720,7 @@ function fireView(def: FireDef): PartView {
     for (const [material, scale] of [[outer, 1], [inner, 0.55]] as const) {
       const mesh = new THREE.Mesh(new THREE.ConeGeometry(Math.min(0.3, across * 0.5) * scale, height * scale, 7), material);
       mesh.position.set(longX ? at : 0, (height * scale) / 2, longX ? 0 : at);
-      // Cold until the first frame says otherwise: a thumbnail shows the hole as it starts.
+      // Cold until the first frame says otherwise.
       mesh.visible = false;
       group.add(mesh);
       flames.push({ mesh, phase: i * 1.9 + scale, height: height * scale });
@@ -1287,7 +1287,7 @@ function linksView(): { object: THREE.Group; update(field: Field): void } {
 
 /**
  * Builds the picture of a hole's works from its data. Before the first `update` every
- * part is drawn the way the hole starts, which is all a thumbnail needs.
+ * part is drawn the way the hole starts.
  */
 export function buildFieldView(def: FieldDef, bounds?: Bounds): FieldView {
   const group = new THREE.Group();

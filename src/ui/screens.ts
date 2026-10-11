@@ -3,6 +3,7 @@ import { chapterOf, holeNumber, stagesOf } from '../level/chapters';
 import type { ChapterDef, WorldDef } from '../level/schema';
 import { byId, el } from './dom';
 import { getLang, onLangChange, setLang, TEXT, tr, type Lang } from './i18n';
+import { cardArt, pageArt } from './worldArt';
 
 export type ScreenId = 'menu' | 'worlds' | 'world' | 'settings' | 'pause';
 
@@ -17,12 +18,6 @@ export interface ScreenActions {
   settingsChanged(): void;
   /** Any button was pressed. */
   click(): void;
-  /**
-   * A picture of a world, as an image URL, if one is ready. Otherwise null now, and
-   * `later` is called with it once it has been made: a page of cards asks for several
-   * at once, and making them all before the page can show would stall a phone.
-   */
-  thumbnail(world: WorldDef, later: (url: string) => void): string | null;
 }
 
 export interface Screens {
@@ -54,8 +49,48 @@ export function createScreens(chapters: readonly ChapterDef[], progress: Progres
     return node;
   };
 
-  const header = (title: string, back: () => void) =>
-    el('header', { className: 'screen-header' }, button(`‹ ${TEXT.back()}`, back, 'ghost'), el('h2', { textContent: title }));
+  /** `aside` is what sits across from the back button: a star count, the language switch. */
+  const header = (title: string, back: () => void, ...aside: Node[]) =>
+    el(
+      'header',
+      { className: 'screen-header' },
+      button(`‹ ${TEXT.back()}`, back, 'ghost'),
+      el('h2', { textContent: title }),
+      el('div', { className: 'header-aside' }, ...aside),
+    );
+
+  /** Mutually exclusive choices, side by side. */
+  const segments = <T>(options: [T, string][], value: T, onPick: (value: T) => void) =>
+    el('div', { className: 'segments' }, ...options.map(([option, text]) => button(text, () => onPick(option), option === value ? 'on' : '')));
+
+  /** The page redraws itself through onLangChange. */
+  const pickLang = (lang: Lang) => {
+    progress.setSetting('lang', lang);
+    actions.settingsChanged();
+    setLang(lang);
+  };
+
+  /**
+   * A page that lies on a blurred picture of a world instead of on the hole behind:
+   * the picture fills the screen and the page scrolls over it.
+   */
+  const onArt = (world: WorldDef, ...content: Node[]) => {
+    const backdrop = el('div', { className: 'backdrop' });
+    const art = cardArt(world);
+    if (art) backdrop.style.backgroundImage = `url(${art})`;
+    return [backdrop, el('div', { className: 'page' }, ...content)];
+  };
+
+  const picture = (url: string | undefined, className: string, ...over: Node[]) =>
+    el('div', { className }, ...(url ? [el('img', { src: url, alt: '', decoding: 'async' })] : []), ...over);
+
+  /** A world's large picture. Its card's picture, already loaded, stands in until it arrives. */
+  const hero = (world: WorldDef, ...over: Node[]) => {
+    const node = picture(pageArt(world), 'world-hero', ...over);
+    const small = cardArt(world);
+    if (small) node.style.backgroundImage = `url(${small})`;
+    return node;
+  };
 
   const totalStars = () => worlds.reduce((sum, world) => sum + progress.worldStars(world), 0);
   const maxStars = () => worlds.reduce((sum, world) => sum + world.holes.length * 3, 0);
@@ -91,15 +126,10 @@ export function createScreens(chapters: readonly ChapterDef[], progress: Progres
     const open = progress.isUnlocked(world, 0);
     const card = button('', () => show('world', world), finale ? 'world-card finale' : 'world-card');
     card.disabled = !open;
-    const picture = el('div', { className: open ? 'world-picture' : 'world-picture locked' });
-    const showPicture = (url: string) => {
-      picture.style.backgroundImage = `url(${url})`;
-    };
-    const image = actions.thumbnail(world, showPicture);
-    if (image) showPicture(image);
-    if (!open) picture.append(el('span', { textContent: '🔒' }));
     card.append(
-      picture,
+      open
+        ? picture(cardArt(world), 'world-picture')
+        : picture(cardArt(world), 'world-picture locked', el('span', { textContent: '🔒' })),
       el('span', { className: 'world-number', textContent: badge }),
       el('strong', { textContent: finale ? `${TEXT.finale()} · ${tr(world.name)}` : tr(world.name) }),
       el('span', {
@@ -134,8 +164,14 @@ export function createScreens(chapters: readonly ChapterDef[], progress: Progres
       position > 0 && !progress.chapterUnlocked(chapter)
         ? [el('p', { className: 'chapter-locked', textContent: TEXT.chapterLocked(tr((progress.opener(chapter) ?? chapters[position - 1]).name)) })]
         : [];
-    return [
-      header(TEXT.worlds(), () => show(home)),
+    return onArt(
+      chapter.worlds[0],
+      header(
+        TEXT.worlds(),
+        () => show(home),
+        el('span', { className: 'star-count', textContent: TEXT.starCount(totalStars(), maxStars()) }),
+        segments<Lang>([['zh', '中'], ['en', 'EN']], getLang(), pickLang),
+      ),
       el('div', { className: 'tabs', role: 'tablist' }, ...tabs),
       ...locked,
       el(
@@ -144,66 +180,76 @@ export function createScreens(chapters: readonly ChapterDef[], progress: Progres
         ...chapter.worlds.map((world, i) => worldCard(world, String(worldsBefore + i + 1), false)),
         worldCard(chapter.finale, '⚑', true),
       ),
-    ];
+    );
   };
 
   const worldDetail = (world: WorldDef) => {
     const chapter = chapterOf(chapters, world);
+    const finale = chapter?.finale === world;
     // A finale goes by its number in the chapter: hole 19, not hole 1.
-    const number = (index: number) =>
-      chapter?.finale === world ? holeNumber(chapter, world, index) : index + 1;
-    return [
-      header(tr(world.name), () => show('worlds')),
-      el('p', { className: 'rule', textContent: tr(world.ruleCard) }),
-      el(
-        'div',
-        { className: 'hole-list' },
-        ...world.holes.map((hole, index) => {
-          const record = progress.record(hole.id);
-          const row = button('', () => actions.play({ world, index }), 'hole-row');
-          row.disabled = !progress.isUnlocked(world, index);
-          row.append(
-            el('strong', { textContent: TEXT.hole(number(index)) }),
-            el('span', { className: 'hole-par', textContent: TEXT.par(hole.par) }),
-            el('span', { className: 'hole-stars', textContent: row.disabled ? '🔒' : starString(record?.stars ?? 0) }),
-            el('span', { className: 'hole-best', textContent: record ? TEXT.best(record.strokes) : '' }),
-          );
-          return row;
-        }),
-      ),
-    ];
-  };
-
-  /** A row of mutually exclusive choices. */
-  const choice = <T>(label: string, options: [T, string][], value: T, onPick: (value: T) => void) =>
-    el(
+    const number = (index: number) => (chapter && finale ? holeNumber(chapter, world, index) : index + 1);
+    const holes = el(
       'div',
-      { className: 'setting' },
-      el('span', { textContent: label }),
+      { className: 'hole-list' },
+      ...world.holes.map((hole, index) => {
+        const record = progress.record(hole.id);
+        const row = button('', () => actions.play({ world, index }), 'hole-row');
+        row.disabled = !progress.isUnlocked(world, index);
+        row.append(
+          el('strong', { textContent: TEXT.hole(number(index)) }),
+          el('span', { className: 'hole-par', textContent: TEXT.par(hole.par) }),
+          el('span', { className: 'hole-stars', textContent: row.disabled ? '🔒' : starString(record?.stars ?? 0) }),
+          el('span', { className: 'hole-best', textContent: record ? TEXT.best(record.strokes) : '' }),
+        );
+        return row;
+      }),
+    );
+    return onArt(
+      world,
+      header(
+        finale ? `${TEXT.finale()} · ${tr(world.name)}` : tr(world.name),
+        () => show('worlds'),
+        el('span', { className: 'star-count', textContent: TEXT.starCount(progress.worldStars(world), world.holes.length * 3) }),
+      ),
       el(
         'div',
-        { className: 'segments' },
-        ...options.map(([option, text]) => button(text, () => onPick(option), option === value ? 'on' : '')),
+        { className: 'world-detail' },
+        el(
+          'div',
+          { className: 'world-face' },
+          hero(
+            world,
+            el(
+              'div',
+              { className: 'chips' },
+              ...(chapter ? [el('span', { className: 'chapter', textContent: tr(chapter.name) })] : []),
+              el('span', { textContent: tr(world.ruleTag) }),
+            ),
+          ),
+          el('p', { className: 'rule', textContent: tr(world.ruleCard) }),
+        ),
+        holes,
       ),
     );
+  };
+
+  /** A setting: its name, and its choices. */
+  const choice = <T>(label: string, options: [T, string][], value: T, onPick: (value: T) => void) =>
+    el('div', { className: 'setting' }, el('span', { textContent: label }), segments(options, value, onPick));
 
   const settings = () => {
     const s = progress.settings;
     const change = <K extends keyof typeof s>(key: K, value: (typeof s)[K]) => {
       progress.setSetting(key, value);
       actions.settingsChanged();
-      // A language change redraws through onLangChange; everything else redraws here.
-      if (key !== 'lang') show('settings');
+      show('settings');
     };
     return [
       header(TEXT.settings(), () => show(home)),
       el(
         'div',
         { className: 'settings' },
-        choice<Lang>(TEXT.language(), [['zh', '中文'], ['en', 'English']], getLang(), (lang) => {
-          change('lang', lang);
-          setLang(lang);
-        }),
+        choice<Lang>(TEXT.language(), [['zh', '中文'], ['en', 'English']], getLang(), pickLang),
         choice(TEXT.sound(), [[true, TEXT.on()], [false, TEXT.off()]], s.sfx, (on) => change('sfx', on)),
         choice(TEXT.music(), [[true, TEXT.on()], [false, TEXT.off()]], s.music, (on) => change('music', on)),
         choice<Quality>(
@@ -237,6 +283,15 @@ export function createScreens(chapters: readonly ChapterDef[], progress: Progres
               : settings();
     root.dataset.screen = current;
     root.replaceChildren(...content);
+    // The row of tabs scrolls sideways on a narrow screen: bring the open chapter's tab to
+    // its middle. Not scrollIntoView, which would also shift the page under the tabs.
+    const tabs = root.querySelector('.tabs');
+    const open = tabs?.querySelector('.on');
+    if (tabs && open) {
+      const row = tabs.getBoundingClientRect();
+      const tab = open.getBoundingClientRect();
+      tabs.scrollLeft += tab.left + tab.width / 2 - (row.left + row.width / 2);
+    }
   };
 
   function show(id: ScreenId, world?: WorldDef): void {

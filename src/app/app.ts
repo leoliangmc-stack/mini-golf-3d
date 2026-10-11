@@ -11,7 +11,6 @@ import { registerBuiltinDecor } from '../render/decor';
 import { registerBuiltinPartViews } from '../render/fieldViews';
 import { isHandheld, QualityController } from '../render/quality';
 import { createStage } from '../render/scene';
-import { renderThumbnail } from '../render/thumbnail';
 import { registerBuiltinZoneViews } from '../render/zoneViews';
 import { createHud } from '../ui/hud';
 import { setLang, TEXT, tr } from '../ui/i18n';
@@ -158,21 +157,6 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
   const quality = new QualityController(progress.settings.quality, (tier) => stage.applyQuality(tier));
   const game = new Game(stage, canvas, CHAPTERS, worlds);
   const audio = new AudioEngine();
-  const thumbnails = new Map<WorldDef, string | null>();
-  /** Worlds whose picture is wanted, made one per frame so that a page of cards never stalls. */
-  const wanted: { world: WorldDef; later: (url: string) => void }[] = [];
-  let makingThumbnails = false;
-  const makeThumbnail = () => {
-    makingThumbnails = false;
-    const next = wanted.shift();
-    if (!next) return;
-    if (!thumbnails.has(next.world)) thumbnails.set(next.world, renderThumbnail(stage.renderer, next.world));
-    const url = thumbnails.get(next.world);
-    if (url) next.later(url);
-    if (wanted.length === 0) return;
-    makingThumbnails = true;
-    requestAnimationFrame(makeThumbnail);
-  };
 
   const applySettings = () => {
     audio.setSfx(progress.settings.sfx);
@@ -228,16 +212,6 @@ export async function createApp(canvas: HTMLCanvasElement): Promise<App> {
     quit: openMenu,
     settingsChanged: applySettings,
     click: () => audio.click(),
-    thumbnail(world, later) {
-      const made = thumbnails.get(world);
-      if (made !== undefined) return made;
-      wanted.push({ world, later });
-      if (!makingThumbnails) {
-        makingThumbnails = true;
-        requestAnimationFrame(makeThumbnail);
-      }
-      return null;
-    },
   });
 
   createHud(game, {
