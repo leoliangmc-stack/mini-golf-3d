@@ -1,18 +1,28 @@
 import * as THREE from 'three';
 import type { Vec3 } from '../core/types';
 import type { TierSettings } from './quality';
+import { SCENERY_LAYER, type SceneryView } from './scenery/sceneryView';
 import type { ThemeDef } from './theme';
 
 export interface Stage {
   renderer: THREE.WebGLRenderer;
   scene: THREE.Scene;
+  /** The graphics tier in force. */
+  readonly quality: TierSettings;
   /** Registers a callback for viewport size changes; it is also called once immediately. */
   onResize(fn: (width: number, height: number) => void): void;
   applyTheme(theme: ThemeDef): void;
   /** Aims the shadow-casting light so its shadow map covers exactly this box. */
   fitShadows(bounds: { min: Vec3; max: Vec3 }): void;
   applyQuality(settings: TierSettings): void;
+  /** Puts a hole's scenery round the course, in place of the last; null for none. */
+  setScenery(view: SceneryView | null): void;
+  /** Draws a frame: the scenery, if there is any, then the course. */
+  render(camera: THREE.Camera): void;
 }
+
+/** The design's pictures are toned like film, a little under (src/render/scenery/design.js). */
+const SCENERY_EXPOSURE = 0.92;
 
 /** Direction the sunlight comes from. */
 const SUN_DIRECTION = new THREE.Vector3(8, 16, 10).normalize();
@@ -61,9 +71,17 @@ export function createStage(canvas: HTMLCanvasElement, { antialias }: StageOptio
   window.addEventListener('resize', resize);
   resize();
 
+  let quality: TierSettings | null = null;
+  let scenery: SceneryView | null = null;
+  let seaWanted = false;
+
   return {
     renderer,
     scene,
+    get quality() {
+      if (!quality) throw new Error('No graphics tier has been applied to the stage yet');
+      return quality;
+    },
     onResize(fn) {
       resizeListeners.push(fn);
       fn(window.innerWidth, window.innerHeight);
@@ -75,14 +93,55 @@ export function createStage(canvas: HTMLCanvasElement, { antialias }: StageOptio
       ambient.intensity = theme.ambientIntensity;
       sun.color.setHex(theme.sun);
       sun.intensity = theme.sunIntensity;
-      sea.visible = theme.sea !== undefined;
+      seaWanted = theme.sea !== undefined;
+      // Scenery with a ground of its own covers the sea.
+      sea.visible = seaWanted && !scenery?.floored;
       if (theme.sea) {
         sea.position.y = theme.sea.y;
         seaMaterial.color.setHex(theme.sea.color);
         seaMaterial.opacity = theme.sea.opacity ?? 1;
       }
     },
+    setScenery(view) {
+      if (scenery) scene.remove(scenery.group);
+      scenery = view;
+      if (view) scene.add(view.group);
+      sea.visible = seaWanted && !view?.floored;
+    },
+    render(camera) {
+      if (!scenery) {
+        renderer.render(scene, camera);
+        return;
+      }
+      // The scenery first, lit and toned as the design drew it, with its fog and the
+      // light of a room on it; then the course over it as it always was, keeping its
+      // depth so that a prop in front of the course still hides it.
+      const layers = camera.layers.mask;
+      const sky = scene.background;
+      camera.layers.set(SCENERY_LAYER);
+      scene.background = scenery.background;
+      scene.fog = scenery.fog;
+      scene.environment = scenery.environment;
+      scene.environmentIntensity = scenery.environmentIntensity;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = SCENERY_EXPOSURE;
+      renderer.render(scene, camera);
+
+      camera.layers.mask = layers;
+      scene.background = null;
+      scene.fog = null;
+      scene.environment = null;
+      renderer.toneMapping = THREE.NoToneMapping;
+      renderer.autoClear = false;
+      try {
+        renderer.render(scene, camera);
+      } finally {
+        renderer.autoClear = true;
+        scene.background = sky;
+      }
+    },
     applyQuality(settings) {
+      quality = settings;
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, settings.pixelRatio));
       renderer.setSize(window.innerWidth, window.innerHeight, false);
       sun.castShadow = settings.shadows;

@@ -625,6 +625,25 @@ body[data-portrait] #rotate {
   transition: filter 0.18s;
 }
 
+/*
+ * The finish the design project gives its pictures (src/render/scenery/design.js): a warm
+ * soft light over everything, and corners a little darker, so the eye goes to the middle.
+ */
+.grade {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+#warmth {
+  background: rgba(255, 190, 120, 0.16);
+  mix-blend-mode: soft-light;
+}
+
+#vignette {
+  background: radial-gradient(ellipse 62% 70% at 50% 48%, rgba(30, 15, 0, 0) 55%, rgba(30, 15, 0, 0.32) 100%);
+}
+
 body[data-frozen] #view {
   filter: saturate(0.22) contrast(1.06);
 }

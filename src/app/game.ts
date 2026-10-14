@@ -21,6 +21,7 @@ import { buildMoverView, updateMoverView } from '../render/moverView';
 import { OcclusionFader } from '../render/occlusion';
 import { buildCrateView, buildPinView, updatePropView } from '../render/propViews';
 import type { Stage } from '../render/scene';
+import { Scenery } from '../render/scenery/scenery';
 import { getTheme } from '../render/theme';
 import { buildZoneView, type ZoneView } from '../render/zoneViews';
 
@@ -67,6 +68,16 @@ const SHOWCASE_SECONDS = 1.4;
 /** A part this near the middle of the screen, as a share of it, needs no showing: it is in view already. */
 const IN_VIEW = 0.62;
 
+/**
+ * A hole opens on the picture of its world, as the design drew it, and the camera comes
+ * down from there to the course: it holds on the picture while the rule card is up, then
+ * takes this long. Seconds.
+ */
+const INTRO_HOLD = 0.6;
+const INTRO_SWEEP = 1.8;
+/** Scenery that is ready later than this after its hole opened gets no opening: the camera is not yanked away from play. */
+const INTRO_LATE = 0.8;
+
 /** The colour of everything that marks the shadow ball: its rim, its ring, its arrow. */
 const SHADOW_TINT = 0xb690ff;
 
@@ -100,6 +111,7 @@ export class Game {
   private readonly shadowAim = new AimIndicator(SHADOW_TINT);
   private readonly explosion = new Explosion();
   private readonly fader = new OcclusionFader();
+  private readonly scenery: Scenery;
   private holeView: HoleView | null = null;
   private moverViews: THREE.Object3D[] = [];
   private crateViews: THREE.Object3D[] = [];
@@ -109,6 +121,8 @@ export class Game {
   private fieldView: FieldView | null = null;
   /** Seconds this hole has been on screen. */
   private time = 0;
+  /** The opening sweep from the world's picture down to the course: seconds into it, or null when there is none. */
+  private intro: number | null = null;
   /** Parts that changed during the stroke under way, to be shown when the ball has stopped. */
   private toShow: string[] = [];
   /** Parts shown once already on this hole: each is shown only the first time. */
@@ -147,13 +161,18 @@ export class Game {
     readonly worlds: readonly WorldDef[],
   ) {
     stage.scene.add(this.aim.object, this.shadowAim.object, this.explosion.object);
+    this.scenery = new Scenery(stage);
+    this.scenery.preload();
     stage.onResize((w, h) => this.camera.setViewport(w, h));
     attachCameraGestures(canvas, this.camera);
     attachSlingshot(canvas, {
       canAim: () => this.canAim(),
       onAim: (pull) => {
         // Starting to aim is how the player says they have seen enough.
-        if (pull) this.endShowcase(true);
+        if (pull) {
+          this.endShowcase(true);
+          this.intro = null;
+        }
         this.pull = pull;
         this.emit({ type: 'aim', power: pull ? pull.power : null });
       },
@@ -191,6 +210,11 @@ export class Game {
   get holeNumber(): number {
     const chapter = this.chapter;
     return chapter && this.isFinale ? holeNumber(chapter, this.world, this.holeIndex) : this.holeIndex + 1;
+  }
+
+  /** True while the hole's opening shot is on: the camera is on its way down to the course. */
+  get introducing(): boolean {
+    return this.intro !== null;
   }
 
   /** True when the player has more than one ball to choose from for the next stroke. */
@@ -231,8 +255,10 @@ export class Game {
     if (this.fieldView) group.add(this.fieldView.group);
     this.shown.clear();
     this.time = 0;
+    this.intro = intro ? 0 : null;
     this.stage.scene.add(group);
     this.fader.setOccluders(this.holeView.occluders);
+    this.scenery.show(world, this.session.compiled, hole, this.holeNumber);
     this.stage.applyTheme(getTheme(world.theme));
     this.stage.fitShadows(this.session.compiled.bounds);
     this.camera.configure(hole.camera);
@@ -459,6 +485,7 @@ export class Game {
     }
     if (watched) this.camera.update(watched, watched, frameDt);
     else this.camera.update(this.focus, session.goal.focus(), frameDt, this.others);
+    this.playIntro(frameDt);
     this.fader.update(this.camera.camera.position, this.focus, frameDt);
     this.explosion.update(frameDt);
     const pull = this.pull;
@@ -469,7 +496,26 @@ export class Game {
     else this.aim.showReady(this.focus, radius, frameDt);
     this.drawShadowAim(pull, aiming, frameDt);
     for (const listener of this.frameListeners) listener();
-    this.stage.renderer.render(this.stage.scene, this.camera.camera);
+    this.stage.render(this.camera.camera);
+  }
+
+  /**
+   * The opening of a hole (INTRO_HOLD, INTRO_SWEEP): the picture's camera, set up round
+   * this hole by its scenery, eased into the camera that plays it. It waits while the
+   * rule card or a menu is over the course, and goes at the first pull.
+   */
+  private playIntro(frameDt: number): void {
+    if (this.intro === null) return;
+    const shot = this.scenery.view?.camera;
+    if (!shot) {
+      if (this.time > INTRO_LATE) this.intro = null;
+      return;
+    }
+    if (!this.inputBlocked && !this.paused) this.intro += frameDt;
+    const t = Math.min(1, Math.max(0, (this.intro - INTRO_HOLD) / INTRO_SWEEP));
+    const share = t * t * (3 - 2 * t);
+    this.camera.blendFrom(shot, share);
+    if (t >= 1) this.intro = null;
   }
 
   /**

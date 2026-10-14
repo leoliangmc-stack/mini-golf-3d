@@ -122,6 +122,7 @@ and pinch the camera; on a desktop, right-drag and the wheel do the same.
 | Q10 sound, music, text, save migration to version 9, the Chapter 9 tab | done; see "Not yet verified" below |
 | Q11 tune against the first playtest | not started |
 | S0 an analytics script on the page | not started: it needs a provider account |
+| D1 scenery from the design project round every hole: its 47 scenes, the course's look, the opening shot | done; not yet checked on a phone |
 
 SPEC v4 lists R0 (replay check) and R1 (`cup` -> `goal`) first. Both were already done
 as P0 and P1.
@@ -761,7 +762,59 @@ put off. It had shipped. The differences that follow from that come first.
   loop per world come from Web Audio code (`src/audio/`), so the game ships no audio
   files. Swap in recorded tracks by replacing `src/audio/music.ts`.
 - **No Kenney models.** Courses, obstacles, cannon, magnets and scenery are all built
-  from primitives in code. Chapter 1 has no scenery; `decor` arrived with Chapter 2.
+  from primitives in code. The scenery round every hole is the design project's own:
+  the three.js scene each world's picture was rendered from (`level-thumb.js` in its
+  export) is the art, kept as the design wrote it in `src/render/scenery/design.js`
+  and run by the game. See "Scenery" below. A hole's own `decor` (Chapter 2 on) stays
+  as it was, where it is part of the course: the canopy over a trunk, a mushroom cap.
+
+## Scenery
+
+Each world's picture in the menus was rendered by the design project from a scene of
+its own: a short straight demonstration course with the world's props, ground, sky and
+lights round it. The game runs the same scene code and sets it round each real hole
+(`src/render/scenery/`):
+
+- **The design's course is left out, and so is whatever stood on it or under it.** The
+  hole has its own course; the design's tells the game where its course was.
+- **Each side of the design's course maps to the same side of the hole** (`mapPoint`):
+  a prop one unit beyond its left rail stands two metres (`SCALE`) beyond the hole's
+  left edge, and keeps its share of the way along it. Pieces that touch move as one, so
+  a lamp keeps its bulb and a balloon its string. A prop is moved further out if it is
+  taller than its distance from the course (the camera looks down at about 52 degrees),
+  so scenery never hides the ball and is never faded: it is merged into one mesh per
+  material, about 20 to 80 draw calls a hole.
+- **Heights line up on the course,** not on the ground: what stands on the design's
+  ground stands on the scenery's ground, which lies just above where a falling ball is
+  out of bounds (one metre down on most holes), or as deep as the design's own lies
+  where its course is up on a table (Toy Factory) or a cliff (Canyon).
+- **The design's small props are also scattered close round the hole and into its
+  gaps,** where the play camera sees them: the design composed for a camera low at the
+  front, the game looks down from above.
+- **The scenery is drawn in a pass of its own,** lit and toned as the design drew it
+  (its lights, a room's reflections, film tone mapping, its fog), then the course over
+  it as it always was: the colours that tell a surface what it does do not change. The
+  page lays the pictures' finish over both: a warm soft light and darker corners.
+- **A hole opens on its world's picture.** The camera holds on the design's shot,
+  framed round the hole, while the rule card is up, then comes down to the course in
+  1.8 seconds; the first pull cuts it short.
+- **Each graphics tier draws less of it:** fewer segments to round shapes, no clear
+  coat or sheen below high, no lamps lighting their surroundings on low, and on low the
+  plainest shading. Glass is never drawn as glass (it needs a second picture of the
+  scene every frame): it is see-through instead.
+- **The course takes the pictures' look:** turf with a grain and mown stripes across
+  the way the hole runs (in place of the checker), wood grain on wooden rails, a post
+  with a brass cap where rails meet, a mat at the tee, a cloth flag, and the design's
+  sign by the tee with the hole's number on it.
+
+The scene code is a download of its own (about 50 kB compressed), fetched while the
+first hole loads; a world's scene is built the first time one of its holes is shown
+(30 to 200 ms on a laptop) and kept while the player stays in that world.
+
+To bring the scenery over again after the design project changes, export it and run
+`node scripts/world-sets.mjs <level-thumb.js from the export>`. The script makes a few
+checked changes (each must apply exactly once, or it stops) and writes `design.js`;
+`scripts/world-art.py` does the same for the pictures.
 - **Gravity zones lean gravity, they do not flip it.** Inside a zone "down" tilts
   sideways (or weakens), so the ball slides across the floor and along walls. There is
   no rolling on walls or ceilings.
@@ -802,7 +855,9 @@ src/
   input/     slingshot aiming, a tap told from a drag, and camera gestures on Pointer Events
   render/    Three.js scene, camera, course, ball, zone and mover views, the views of
              the works and the lines between them, the picture of a hall's far side,
-             the mirror, the ghost world, the monsters, scenery, occlusion fading, quality tiers
+             the mirror, the ghost world, the monsters, scenery, occlusion fading, quality
+             tiers, the course's look; scenery/ runs the design project's scene of each
+             world (design.js, generated) and sets it round each hole
   audio/     synthesised sound effects and generated music, and music that keeps a hole's beat
   ui/        HTML/CSS HUD and menus, all interface text (en / zh)
   assets/    the picture of each world and finale that the menus show, in two sizes
@@ -819,10 +874,11 @@ tests/       determinism, tunneling, seams, terrain, rules, scoring, movers, fie
              coasters (city), taps and wall groups (maze) and the Chapter 7 holes (town),
              bridges that come and go, joined edges, the shadow ball and echoes (strange)
              and the Chapter 8 holes (dimensions), the two worlds, monsters, keys, doors
-             and the boss (quest) and the Chapter 9 holes (castle), reference solutions
+             and the boss (quest) and the Chapter 9 holes (castle), reference solutions,
+             where scenery goes round a hole (scenery)
 replays/     one reference solution per hole: its inputs and how the round ended
-scripts/     the replay command, the dev server's SAVE REPLAY endpoint, and the
-             command that sizes the world pictures
+scripts/     the replay command, the dev server's SAVE REPLAY endpoint, the command
+             that sizes the world pictures, and the one that brings their scenes over
 ```
 
 ## Adding content
@@ -841,7 +897,10 @@ needs its picture for the menus: the worlds screen shows one on each card, and a
 own page a large one over a blurred copy. They are drawn ahead of time in the design
 project, not rendered on the device. `python3 scripts/world-art.py <folder>` turns a
 folder of 16:10 PNGs named by world (`ice.png`) into the two WebP sizes under
-`src/assets/worlds/`, and `tests/chapters.test.ts` fails while a world has none.
+`src/assets/worlds/`, and `tests/chapters.test.ts` fails while a world has none. Its
+scenery is the scene the picture was rendered from: export the design project and run
+`node scripts/world-sets.mjs <level-thumb.js>` (see "Scenery"). A world the design has
+no scene for is played with its theme's sky and sea, as before.
 
 A **chapter** is one more entry in `src/data/chapters.ts`: its worlds and its finale,
 and, if it should open from a chapter other than the one before it, `after`. Menus,

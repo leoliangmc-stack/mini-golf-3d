@@ -315,11 +315,15 @@ export function createHud(game: Game, actions: HudActions): void {
     refresh();
   };
 
+  /** Whether the hole's opening shot was on at the last frame. */
+  let introducing = false;
+
   const refresh = () => {
     strokes.textContent = TEXT.strokes(game.session.strokes, game.hole.par);
     const hinted = game.hole.hints?.includes('slingshot') ?? false;
     const wantsHint = !strokePlayed && (hinted || nudged) && game.session.phase === 'aiming';
-    const showHint = wantsHint && !aiming && !cardOpen;
+    // Not while the camera is still coming down to the course: the hand would slide across the screen with the ball.
+    const showHint = wantsHint && !aiming && !cardOpen && !game.introducing;
     hint.classList.toggle('show', showHint);
     // The power bar fills as the hand pulls. Both animations start on this same frame, so they keep step.
     power.classList.toggle('demo', showHint);
@@ -410,7 +414,11 @@ export function createHud(game: Game, actions: HudActions): void {
     const dt = now - lastFrame;
     lastFrame = now;
     const playable =
-      game.session.phase === 'aiming' && !game.paused && !game.offScreen && !game.inputBlocked && !document.hidden;
+      game.session.phase === 'aiming' && !game.paused && !game.offScreen && !game.inputBlocked && !document.hidden && !game.introducing;
+    if (game.introducing !== introducing) {
+      introducing = game.introducing;
+      refresh();
+    }
     idleMs = playable ? idleMs + dt : 0;
     const nudge = idleMs >= HAND.idleMs && !strokePlayed && game.chapter === game.chapters[0];
     if (nudge !== nudged) {

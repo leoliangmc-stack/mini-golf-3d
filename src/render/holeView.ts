@@ -7,6 +7,7 @@ import type { CompiledHole } from '../level/compile';
 import type { BallSize, CupDef, HoleDef } from '../level/schema';
 import { DEFAULT_BALL, sizedProps } from '../physics/ball';
 import { getSurface } from '../physics/surfaces';
+import { courseTextures, isWooden, longAxis, STRIPE_METRES, STRIPE_SHADE, TURF_METRES, wallEnds } from './courseLook';
 import { buildDecor } from './decor';
 import type { Occluder } from './occlusion';
 import { mirrorView } from './strangeViews';
@@ -36,6 +37,8 @@ export function buildHoleView(compiled: CompiledHole, hole: HoleDef): HoleView {
 
   for (const block of buildBlocks(compiled)) add(block);
   for (const solid of buildSolids(compiled)) add(solid);
+  for (const post of buildPosts(compiled)) group.add(post);
+  group.add(buildTeeMat(hole.tee));
   for (const decor of hole.decor ?? []) add(buildDecor(decor));
   // The mirror is see-through already: it is never faded out of the way.
   if (hole.mirror) group.add(mirrorView(hole.mirror));
@@ -73,10 +76,13 @@ function buildBlocks(compiled: CompiledHole): THREE.Mesh[] {
   if (!ground) return [];
   const { vertices, indices, triangleSurfaces, trianglePieces } = ground;
   const color = new THREE.Color();
+  const across = longAxis(compiled);
+  const { turf, turfBump } = courseTextures();
 
   return bodies.map((body, piece) => {
     const positions: number[] = [];
     const colors: number[] = [];
+    const uvs: number[] = [];
 
     for (let tri = 0; tri < triangleSurfaces.length; tri++) {
       if (trianglePieces[tri] !== piece) continue;
@@ -84,14 +90,15 @@ function buildBlocks(compiled: CompiledHole): THREE.Mesh[] {
         const v = indices[tri * 3 + k] * 3;
         return [vertices[v], vertices[v + 1], vertices[v + 2]] as const;
       });
-      // Two-tone checker (1 m squares) so the eye can read ball speed on a flat colour.
-      const cx = (corners[0][0] + corners[1][0] + corners[2][0]) / 3;
-      const cz = (corners[0][2] + corners[1][2] + corners[2][2]) / 3;
-      const dark = (Math.floor(cx) + Math.floor(cz)) & 1;
-      color.setHex(getSurface(triangleSurfaces[tri]).color).multiplyScalar(dark ? 0.93 : 1);
+      // Mown stripes across the way the hole runs (1 m wide), and the turf's grain, so
+      // the eye can read ball speed on a flat colour.
+      const centre = (corners[0][across] + corners[1][across] + corners[2][across]) / 3;
+      const dark = Math.floor(centre / STRIPE_METRES) & 1;
+      color.setHex(getSurface(triangleSurfaces[tri]).color).multiplyScalar(dark ? STRIPE_SHADE : 1);
       for (const c of corners) {
         positions.push(c[0], c[1], c[2]);
         colors.push(color.r, color.g, color.b);
+        uvs.push(c[0] / TURF_METRES, c[2] / TURF_METRES);
       }
     }
 
@@ -102,6 +109,7 @@ function buildBlocks(compiled: CompiledHole): THREE.Mesh[] {
       for (const p of [a, b, c, a, c, d]) {
         positions.push(p[0], p[1], p[2]);
         colors.push(color.r, color.g, color.b);
+        uvs.push((p[0] + p[2]) / TURF_METRES, p[1] / TURF_METRES);
       }
     };
     for (let i = 0; i < 4; i++) {
@@ -113,8 +121,12 @@ function buildBlocks(compiled: CompiledHole): THREE.Mesh[] {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.computeVertexNormals();
-    const mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    const mesh = new THREE.Mesh(
+      geometry,
+      new THREE.MeshLambertMaterial({ vertexColors: true, map: turf, bumpMap: turfBump, bumpScale: 0.7 }),
+    );
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     return mesh;
@@ -170,10 +182,62 @@ function buildSolids(compiled: CompiledHole): THREE.Mesh[] {
 }
 
 function solidMesh(geometry: THREE.BufferGeometry, surface: string, flat: boolean): THREE.Mesh {
-  const mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ color: getSurface(surface).color, flatShading: flat }));
+  const material = new THREE.MeshLambertMaterial({ color: getSurface(surface).color, flatShading: flat });
+  if (isWooden(surface)) {
+    const { grain, grainBump } = courseTextures();
+    material.map = grain;
+    material.bumpMap = grainBump;
+    material.bumpScale = 0.6;
+  }
+  const mesh = new THREE.Mesh(geometry, material);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
+}
+
+/**
+ * A round post where rails meet or end, as on the courses in the pictures; its brass cap
+ * is scenery (render/scenery/sceneryView.ts). One mesh per surface: a hole has dozens.
+ */
+function buildPosts(compiled: CompiledHole): THREE.Mesh[] {
+  const bySurface = new Map<string, THREE.BufferGeometry[]>();
+  for (const end of wallEnds(compiled)) {
+    const radius = end.half * 1.25;
+    // A little proud of the rails, for its cap to sit on.
+    const height = end.top + 0.05 - end.bottom;
+    const post = new THREE.CylinderGeometry(radius * 0.92, radius, height, 16);
+    post.translate(end.x, end.bottom + height / 2, end.z);
+    const list = bySurface.get(end.surface) ?? [];
+    list.push(post);
+    bySurface.set(end.surface, list);
+  }
+  return [...bySurface].map(([surface, parts]) => {
+    const merged = parts.length === 1 ? parts[0] : mergeGeometries(parts);
+    if (!merged) throw new Error(`The ${surface} posts of a hole could not be merged into one mesh`);
+    if (merged !== parts[0]) for (const part of parts) part.dispose();
+    return solidMesh(merged, surface, false);
+  });
+}
+
+/** The mat the ball is teed up on. */
+function buildTeeMat([x, y, z]: readonly number[]): THREE.Mesh {
+  const shape = new THREE.Shape();
+  const half = 0.5;
+  const round = 0.08;
+  shape.moveTo(-half + round, -half);
+  shape.lineTo(half - round, -half);
+  shape.quadraticCurveTo(half, -half, half, -half + round);
+  shape.lineTo(half, half - round);
+  shape.quadraticCurveTo(half, half, half - round, half);
+  shape.lineTo(-half + round, half);
+  shape.quadraticCurveTo(-half, half, -half, half - round);
+  shape.lineTo(-half, -half + round);
+  shape.quadraticCurveTo(-half, -half, -half + round, -half);
+  const mat = new THREE.Mesh(new THREE.ShapeGeometry(shape, 4), new THREE.MeshLambertMaterial({ map: courseTextures().mat }));
+  mat.rotation.x = -Math.PI / 2;
+  mat.position.set(x, y + 0.006, z);
+  mat.receiveShadow = true;
+  return mat;
 }
 
 /** A line on the ground along the path a moving cup follows, so the player can see where it is going. */
@@ -288,11 +352,14 @@ function buildCup(cup: CupDef): { group: THREE.Group; rim: THREE.MeshBasicMateri
   pole.position.y = 0.65;
   pole.castShadow = true;
 
-  const flagShape = new THREE.BufferGeometry();
-  flagShape.setAttribute(
-    'position',
-    new THREE.Float32BufferAttribute([0, 1.3, 0, 0, 1.0, 0, 0.42, 1.15, 0], 3),
-  );
+  // A cloth flag with a wave in it, as in the pictures.
+  const flagShape = new THREE.PlaneGeometry(0.5, 0.32, 10, 2);
+  const cloth = flagShape.attributes.position;
+  for (let i = 0; i < cloth.count; i++) {
+    const along = cloth.getX(i) + 0.25;
+    cloth.setZ(i, Math.sin(along * 9) * 0.035 * along * 3);
+  }
+  flagShape.translate(0.25, 1.13, 0);
   flagShape.computeVertexNormals();
   const flag = new THREE.Mesh(
     flagShape,

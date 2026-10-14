@@ -5,9 +5,10 @@ import { replayRecorder } from './scripts/replay-recorder.mjs';
 
 /**
  * Tells the browser about the engine before the start screen's script asks for it: the
- * game chunk (three.js and all) and the physics WASM are the whole download, and both
- * are only discovered by a dynamic import in `main.ts`, one round trip late. Build only;
- * the dev server serves modules as they are asked for.
+ * game chunk, the three.js chunk it shares with the scenery (src/render/scenery/) and
+ * the physics WASM are the whole download, and all are only discovered by a dynamic
+ * import in `main.ts`, one round trip late. Build only; the dev server serves modules as
+ * they are asked for.
  */
 function preloadEngine(): Plugin {
   return {
@@ -15,12 +16,15 @@ function preloadEngine(): Plugin {
     apply: 'build',
     transformIndexHtml: {
       order: 'post',
-      handler(_html, { bundle }) {
+      handler(html, { bundle }) {
         if (!bundle) return [];
         const tags: HtmlTagDescriptor[] = [];
         for (const item of Object.values(bundle)) {
           if (item.type === 'chunk' && item.facadeModuleId?.endsWith('/src/app/app.ts')) {
-            tags.push({ tag: 'link', attrs: { rel: 'modulepreload', href: `/${item.fileName}` }, injectTo: 'head' });
+            // Vite preloads what the start screen's own script imports already.
+            for (const file of [item.fileName, ...item.imports].filter((name) => !html.includes(name))) {
+              tags.push({ tag: 'link', attrs: { rel: 'modulepreload', href: `/${file}` }, injectTo: 'head' });
+            }
           } else if (item.type === 'asset' && item.fileName.endsWith('.wasm')) {
             tags.push({ tag: 'link', attrs: { rel: 'preload', as: 'fetch', href: `/${item.fileName}`, crossorigin: true }, injectTo: 'head' });
           }

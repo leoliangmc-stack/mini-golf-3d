@@ -15,6 +15,8 @@ export interface CameraParams {
 /** Used by every hole that does not override it. Mutable so the dev panel can tune it. */
 export const CAMERA_DEFAULTS: CameraParams = { pitch: 52, yaw: 0, minDistance: 9, maxDistance: 28 };
 
+/** Vertical field of view, in degrees. */
+const FOV = 42;
 /** Higher is snappier. The camera closes ~63% of the gap to its goal every 1/FOLLOW seconds. */
 const FOLLOW = 4;
 const RAD = Math.PI / 180;
@@ -34,7 +36,7 @@ const USABLE_BOTTOM = 0.8;
  * zooms as the ball moves, and never rotates on its own.
  */
 export class FollowCamera {
-  readonly camera = new THREE.PerspectiveCamera(42, 1, 0.1, 300);
+  readonly camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 300);
   params: CameraParams = { ...CAMERA_DEFAULTS };
   /** Player zoom on top of the automatic framing: below 1 is closer. */
   zoom = 1;
@@ -42,6 +44,7 @@ export class FollowCamera {
   private turnGoal = 0;
   private turn = 0;
   private readonly look = new THREE.Vector3();
+  private readonly blendTarget = new THREE.Vector3();
   private readonly goal = new THREE.Vector3();
   private distance = CAMERA_DEFAULTS.minDistance;
 
@@ -52,6 +55,31 @@ export class FollowCamera {
     this.params = { ...CAMERA_DEFAULTS, ...params };
     this.zoom = 1;
     this.turnGoal = this.turn = 0;
+  }
+
+  /** The point the camera looks at. */
+  get target(): THREE.Vector3 {
+    return this.look;
+  }
+
+  /**
+   * Draws this frame from somewhere else: `share` of the way from `from` to where the
+   * camera is now (1 is all the way, and changes nothing). The camera keeps following as
+   * before; only the picture is taken from the mix.
+   */
+  blendFrom(from: { position: THREE.Vector3; target: THREE.Vector3; fov: number }, share: number): void {
+    if (share >= 1) {
+      if (this.camera.fov !== FOV) {
+        this.camera.fov = FOV;
+        this.camera.updateProjectionMatrix();
+      }
+      return;
+    }
+    this.blendTarget.copy(from.target).lerp(this.look, share);
+    this.camera.position.lerpVectors(from.position, this.camera.position, share);
+    this.camera.lookAt(this.blendTarget);
+    this.camera.fov = from.fov + (FOV - from.fov) * share;
+    this.camera.updateProjectionMatrix();
   }
 
   /** Turns the view around the course. Only ever called for the player; the camera never turns by itself. */
@@ -114,7 +142,8 @@ export class FollowCamera {
   private frame(ball: XYZ, cup: XYZ, others: readonly XYZ[]): number {
     const pitch = this.params.pitch * RAD;
     const yaw = this.yaw;
-    const halfFov = (this.camera.fov * RAD) / 2;
+    // The play camera's own, not the one an opening shot may be lending it (blendFrom).
+    const halfFov = (FOV * RAD) / 2;
     const fx = -Math.sin(yaw);
     const fz = -Math.cos(yaw);
     const rx = Math.cos(yaw);

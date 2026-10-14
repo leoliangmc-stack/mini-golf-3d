@@ -7,12 +7,19 @@ export interface TierSettings {
   pixelRatio: number;
   shadows: boolean;
   shadowMapSize: number;
+  /**
+   * How much of the design's scenery (render/scenery/) to draw: the share of the segments
+   * of its round shapes, clear coat and sheen, bump maps, the plainest shading there is
+   * (`flat`: no shine, and the cheapest pixels), and how many of its lamps light their
+   * surroundings.
+   */
+  scenery: { detail: number; physical: boolean; bumps: boolean; flat: boolean; lamps: number };
 }
 
 export const TIERS: Record<Tier, TierSettings> = {
-  low: { pixelRatio: 1, shadows: false, shadowMapSize: 512 },
-  medium: { pixelRatio: 1.5, shadows: true, shadowMapSize: 1024 },
-  high: { pixelRatio: 2, shadows: true, shadowMapSize: 2048 },
+  low: { pixelRatio: 1, shadows: false, shadowMapSize: 512, scenery: { detail: 0.4, physical: false, bumps: false, flat: true, lamps: 0 } },
+  medium: { pixelRatio: 1.5, shadows: true, shadowMapSize: 1024, scenery: { detail: 0.6, physical: false, bumps: true, flat: false, lamps: 2 } },
+  high: { pixelRatio: 2, shadows: true, shadowMapSize: 2048, scenery: { detail: 1, physical: true, bumps: true, flat: false, lamps: 4 } },
 };
 
 const ORDER: Tier[] = ['low', 'medium', 'high'];
